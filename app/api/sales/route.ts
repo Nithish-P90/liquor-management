@@ -1,0 +1,167 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { Prisma, PrismaClient } from '@prisma/client'
+import { authOptions } from '@/lib/auth'
+import prisma from '@/lib/prisma'
+import { toUtcNoonDate } from '@/lib/date-utils'
+
+type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+
+async function getAvailableStock(tx: TxClient, productSizeId: number): Promise<number> {
+  const latestSession = await tx.inventorySession.findFirst({ orderBy: { periodStart: 'desc' } })
+
+  const opening = latestSession
+    ? await tx.stockEntry.findUnique({
+        where: {
+          sessionId_productSizeId_entryType: {
+            sessionId: latestSession.id,
+            productSizeId,
+            entryType: 'OPENING',
+          },
+        },
+      })
+    : null
+
+  if (opening) {
+    const [receiptAgg, salesAgg, adjAgg] = await Promise.all([
+      tx.receiptItem.aggregate({
+        where: {
+          productSizeId,
+          receipt: { receivedDate: { gte: latestSession!.periodStart } },
+        },
+        _sum: { totalBottles: true },
+      }),
+      tx.sale.aggregate({
+        where: {
+          productSizeId,
+          saleDate: { gte: latestSession!.periodStart },
+        },
+        _sum: { quantityBottles: true },
+      }),
+      tx.stockAdjustment.aggregate({
+        where: {
+          productSizeId,
+          approved: true,
+          adjustmentDate: { gte: latestSession!.periodStart },
+        },
+        _sum: { quantityBottles: true },
+      }),
+    ])
+
+    return (
+      (opening.totalBottles ?? 0) +
+      (receiptAgg._sum.totalBottles ?? 0) +
+      (adjAgg._sum.quantityBottles ?? 0) -
+      (salesAgg._sum.quantityBottles ?? 0)
+    )
+  }
+
+  const [receiptAgg, salesAgg, adjAgg] = await Promise.all([
+    tx.receiptItem.aggregate({
+      where: { productSizeId },
+      _sum: { totalBottles: true },
+    }),
+    tx.sale.aggregate({
+      where: { productSizeId },
+      _sum: { quantityBottles: true },
+    }),
+    tx.stockAdjustment.aggregate({
+      where: { productSizeId, approved: true },
+      _sum: { quantityBottles: true },
+    }),
+  ])
+
+  return (
+    (receiptAgg._sum.totalBottles ?? 0) +
+    (adjAgg._sum.quantityBottles ?? 0) -
+    (salesAgg._sum.quantityBottles ?? 0)
+  )
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const dateStr = searchParams.get('date')
+  const staffId = searchParams.get('staffId')
+  const limit = parseInt(searchParams.get('limit') ?? '50')
+
+  const where: any = {}
+  if (dateStr) where.saleDate = toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
+  if (staffId) where.staffId = parseInt(staffId)
+
+  const sales = await prisma.sale.findMany({
+    where,
+    include: {
+      productSize: { include: { product: true } },
+      staff: { select: { id: true, name: true } },
+    },
+    orderBy: { saleTime: 'desc' },
+    take: limit,
+  })
+  return NextResponse.json(sales)
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const {
+    productSizeId, quantityBottles, paymentMode, scanMethod,
+    customerName, isManualOverride, overrideReason, staffId,
+    cashAmount, cardAmount, upiAmount,
+  } = body
+
+  const requestedQuantity = Number(quantityBottles)
+  if (!Number.isInteger(requestedQuantity) || requestedQuantity <= 0) {
+    return NextResponse.json({ error: 'quantityBottles must be a positive integer' }, { status: 400 })
+  }
+
+  const productSize = await prisma.productSize.findUnique({ where: { id: productSizeId } })
+  if (!productSize) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+  const now = new Date()
+  const saleDate = toUtcNoonDate(now)
+
+  try {
+    const sale = await prisma.$transaction(async tx => {
+      const availableStock = await getAvailableStock(tx, productSizeId)
+      if (requestedQuantity > availableStock) {
+        throw new Error(`Only ${availableStock} bottles are available for this item`)
+      }
+
+      return tx.sale.create({
+        data: {
+          saleDate,
+          saleTime: now,
+          staffId: staffId ?? parseInt((session.user as any).id),
+          productSizeId,
+          quantityBottles: requestedQuantity,
+          sellingPrice: productSize.sellingPrice,
+          totalAmount: Number(productSize.sellingPrice) * requestedQuantity,
+          paymentMode,
+          cashAmount: cashAmount != null ? Number(cashAmount) : null,
+          cardAmount: cardAmount != null ? Number(cardAmount) : null,
+          upiAmount: upiAmount != null ? Number(upiAmount) : null,
+          scanMethod: scanMethod ?? 'MANUAL',
+          customerName: customerName || null,
+          isManualOverride: isManualOverride ?? false,
+          overrideReason: overrideReason || null,
+        },
+        include: {
+          productSize: { include: { product: true } },
+          staff: { select: { id: true, name: true } },
+        },
+      })
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
+
+    return NextResponse.json(sale)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to record sale'
+    if (message.startsWith('Only ')) {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
