@@ -54,11 +54,22 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL
+    let pdfPath = ''
 
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'indents')
-    await mkdir(uploadsDir, { recursive: true })
-    const filename = `${Date.now()}-${file.name.replace(/[^\w.\- ]/g, '_')}`
-    await writeFile(path.join(uploadsDir, filename), buffer)
+    if (isVercel) {
+      // On Vercel, we can't write to the filesystem. Use a Data URL as the "path".
+      // This will be stored in the DB and rendered in the frontend iframe.
+      const base64 = buffer.toString('base64')
+      pdfPath = `data:application/pdf;base64,${base64}`
+    } else {
+      // Local development: use the filesystem
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'indents')
+      await mkdir(uploadsDir, { recursive: true })
+      const filename = `${Date.now()}-${file.name.replace(/[^\w.\- ]/g, '_')}`
+      await writeFile(path.join(uploadsDir, filename), buffer)
+      pdfPath = `uploads/indents/${filename}`
+    }
 
     const parsed = await parseIndentPdf(buffer)
 
@@ -135,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       parsed: { header: parsed.header, items: enrichedItems, totals },
-      pdfPath: `uploads/indents/${filename}`,
+      pdfPath,
       ocrText: parsed.rawText ?? ''
     })
   } catch (error) {

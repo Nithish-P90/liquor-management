@@ -15,18 +15,37 @@ export async function POST(req: NextRequest) {
     const { pdfPath } = await req.json()
     if (!pdfPath) return NextResponse.json({ error: 'Missing pdfPath' }, { status: 400 })
 
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'indents')
-    const safePath = path.join(process.cwd(), pdfPath.replace(/^\/+/, ''))
-    if (!safePath.startsWith(uploadsDir)) return NextResponse.json({ error: 'Invalid path' }, { status: 403 })
+    let buffer: Buffer
+    let tempPdfPath: string | null = null
+
+    if (pdfPath.startsWith('data:')) {
+      // Handle Base64 Data URL
+      const base64Data = pdfPath.split(',')[1]
+      buffer = Buffer.from(base64Data, 'base64')
+      // pdftoppm needs a file on disk. Use /tmp
+      tempPdfPath = path.join(os.tmpdir(), `reocr-${Date.now()}.pdf`)
+      const { writeFile } = await import('fs/promises')
+      await writeFile(tempPdfPath, buffer)
+    } else {
+      // Handle local file path
+      const safePath = path.join(process.cwd(), pdfPath.replace(/^\/+/, ''))
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'indents')
+      if (!safePath.startsWith(uploadsDir)) return NextResponse.json({ error: 'Invalid path' }, { status: 403 })
+      buffer = await readFile(safePath)
+      tempPdfPath = safePath
+    }
 
     // Use pdftoppm (poppler) to rasterize first page to PNG
     const tmpPrefix = path.join(os.tmpdir(), `ocr-${Date.now()}`)
     const pngPath = `${tmpPrefix}.png`
     try {
-      await execFileAsync('pdftoppm', ['-r', '300', '-png', '-singlefile', safePath, tmpPrefix])
+      await execFileAsync('pdftoppm', ['-r', '300', '-png', '-singlefile', tempPdfPath, tmpPrefix])
     } catch (err) {
+      if (pdfPath.startsWith('data:') && tempPdfPath) try { await unlink(tempPdfPath) } catch {}
       return NextResponse.json({ error: 'pdftoppm not available or conversion failed. Install poppler: `brew install poppler`' }, { status: 500 })
     }
+
+    if (pdfPath.startsWith('data:') && tempPdfPath) try { await unlink(tempPdfPath) } catch {}
 
     let Tesseract
     try {
