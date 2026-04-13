@@ -38,7 +38,6 @@
     "lucide-react": "^1.8.0",
     "next": "14.2.35",
     "next-auth": "^4.24.13",
-    "node-hid": "^3.3.0",
     "pdf-parse": "^1.1.1",
     "pg": "^8.20.0",
     "prisma": "^5.22.0",
@@ -46,8 +45,11 @@
     "react-dom": "^18",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
-    "usb": "^2.17.0",
     "xlsx": "^0.18.5"
+  },
+  "optionalDependencies": {
+    "node-hid": "^3.3.0",
+    "usb": "^2.17.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
