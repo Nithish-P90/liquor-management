@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const { periodStart, periodEnd } = body
-  const staffId = parseInt((session.user as any).id)
+  const staffId = parseInt(((session.user as { id?: string } | undefined)?.id) ?? '0')
 
   const inv = await prisma.inventorySession.create({
     data: {

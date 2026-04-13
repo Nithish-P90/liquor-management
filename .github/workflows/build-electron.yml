@@ -1,0 +1,92 @@
+name: Build & Release Windows POS
+
+on:
+  push:
+    tags:
+      - 'pos-v*'           # push tag like "pos-v1.2.3" to trigger a release
+  workflow_dispatch:       # allow manual trigger from GitHub Actions UI
+    inputs:
+      draft:
+        description: 'Create as draft release?'
+        required: false
+        default: 'false'
+
+jobs:
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: electron-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Rebuild native modules for Electron
+        working-directory: electron-app
+        run: npx electron-rebuild -f -w better-sqlite3
+
+      - name: Build renderer + main process
+        working-directory: electron-app
+        run: npm run build
+
+      - name: Package Windows installer
+        working-directory: electron-app
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: electron-app/release/*.exe
+          if-no-files-found: warn
+
+  verify-web:
+    name: Verify Next.js Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: liquor-management/package-lock.json
+
+      - name: Install dependencies
+        working-directory: liquor-management
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: liquor-management
+        run: npx prisma generate
+        env:
+          DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+
+      - name: TypeScript check
+        working-directory: liquor-management
+        run: npx tsc --noEmit
+
+      - name: Next.js build check
+        working-directory: liquor-management
+        run: npm run build
+        env:
+          DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+          NEXTAUTH_SECRET: 'ci-secret-value'
+          NEXTAUTH_URL: 'http://localhost:3000'
+          SYNC_TOKEN: 'ci-token'
+          SKIP_ENV_VALIDATION: '1'

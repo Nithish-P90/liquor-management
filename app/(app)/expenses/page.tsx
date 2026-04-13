@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 const CATEGORIES = ['WAGES', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'KSBCL_PAYMENT', 'OTHER']
 
@@ -11,11 +11,12 @@ export default function ExpensesPage() {
   const [fromDate, setFromDate] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10) })
   const [toDate, setToDate] = useState(new Date().toISOString().slice(0,10))
 
-  async function load() {
+  const load = useCallback(async () => {
     const data = await fetch(`/api/expenses?from=${fromDate}&to=${toDate}`).then(r => r.json())
     setExpenses(data); setLoading(false)
-  }
-  useEffect(() => { load() }, [fromDate, toDate])
+  }, [fromDate, toDate])
+
+  useEffect(() => { load() }, [load])
 
   async function addExpense(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)

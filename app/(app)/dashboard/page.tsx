@@ -3,13 +3,22 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
-const BarChart = dynamic(() => import('recharts').then(m => m.BarChart as any), { ssr: false })
-const Bar = dynamic(() => import('recharts').then(m => m.Bar as any), { ssr: false })
-const XAxis = dynamic(() => import('recharts').then(m => m.XAxis as any), { ssr: false })
-const YAxis = dynamic(() => import('recharts').then(m => m.YAxis as any), { ssr: false })
-const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid as any), { ssr: false })
-const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip as any), { ssr: false })
-const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer as any), { ssr: false })
+type RechartsModule = typeof import('recharts')
+type BarChartType = RechartsModule['BarChart']
+type BarType = RechartsModule['Bar']
+type XAxisType = RechartsModule['XAxis']
+type YAxisType = RechartsModule['YAxis']
+type CartesianGridType = RechartsModule['CartesianGrid']
+type TooltipType = RechartsModule['Tooltip']
+type ResponsiveContainerType = RechartsModule['ResponsiveContainer']
+
+const BarChart = dynamic(() => import('recharts').then(m => m.BarChart), { ssr: false }) as unknown as BarChartType
+const Bar = dynamic(() => import('recharts').then(m => m.Bar), { ssr: false }) as unknown as BarType
+const XAxis = dynamic(() => import('recharts').then(m => m.XAxis), { ssr: false }) as unknown as XAxisType
+const YAxis = dynamic(() => import('recharts').then(m => m.YAxis), { ssr: false }) as unknown as YAxisType
+const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid), { ssr: false }) as unknown as CartesianGridType
+const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false }) as unknown as TooltipType
+const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false }) as unknown as ResponsiveContainerType
 
 type DashboardData = {
   todaySales: { total: number; bottles: number; cash: number; card: number; upi: number; credit: number }
@@ -82,12 +91,6 @@ export default function DashboardPage() {
             Open POS
           </button>
           <button
-            onClick={() => router.push('/close-day')}
-            className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 transition-colors"
-          >
-            Close Day
-          </button>
-          <button
             onClick={() => router.push('/indents/upload')}
             className="px-4 py-2 bg-slate-700 text-white text-sm font-semibold rounded-lg hover:bg-slate-600 transition-colors"
           >
@@ -105,9 +108,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Alerts + indents */}
-      <div className="grid grid-cols-3 gap-4">
-        <SummaryCard label="High Variance Alerts" value={data.alerts.high} color="red" onClick={() => router.push('/alerts')} />
-        <SummaryCard label="Low Variance Alerts" value={data.alerts.total - data.alerts.high} color="amber" onClick={() => router.push('/alerts')} />
+      <div className="grid grid-cols-1 gap-4">
         <SummaryCard label="Pending Indents" value={data.pendingIndents} color="blue" onClick={() => router.push('/indents')} />
       </div>
 
@@ -162,12 +163,12 @@ export default function DashboardPage() {
               <BarChart data={data.weeklySales} barSize={24}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }}
-                  tickFormatter={d => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  tickFormatter={(d: unknown) => new Date(String(d)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                   axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }}
-                  tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={(v: unknown) => `₹${(Number(v) / 1000).toFixed(0)}k`}
                   axisLine={false} tickLine={false} width={40} />
-                <Tooltip formatter={(v) => [rupee(Number(v)), 'Revenue']}
+                <Tooltip formatter={(v: unknown) => [rupee(Number(v)), 'Revenue']}
                   contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} />
                 <Bar dataKey="amount" fill="#2563eb" radius={[4, 4, 0, 0]} />
               </BarChart>

@@ -20,7 +20,6 @@ const BEER_CASE_LABELS: Record<number, string> = {
 }
 
 // Beverage sizes
-const BEV_SIZES = [2000, 1000, 600, 500, 250] as const
 const BEV_LABELS: Record<number, string> = {
   2000: '2 LTRS', 1000: '1 LTRS', 600: '500-600 ML', 500: '500-600 ML', 250: '250 ML',
 }
@@ -28,12 +27,7 @@ const BEV_LABELS: Record<number, string> = {
 // IML categories (non-beer, non-beverage)
 const IML_CATEGORIES = ['BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX']
 
-function splitToCV(totalBottles: number, bottlesPerCase: number): { cases: number; bottles: number } {
-  return {
-    cases: Math.floor(totalBottles / bottlesPerCase),
-    bottles: totalBottles % bottlesPerCase,
-  }
-}
+// helper: convert bottles to cases+bottles when needed
 
 export async function generateStockSheet(sessionId: number) {
   const session = await prisma.inventorySession.findUnique({
@@ -61,7 +55,7 @@ export async function generateStockSheet(sessionId: number) {
     orderBy: { name: 'asc' },
   })
 
-  const dateStr = `${session.periodStart.toLocaleDateString('en-IN')} To ${session.periodEnd.toLocaleDateString('en-IN')}`
+  // date range string (unused in workbook filenames)
 
   // ── Receipts data ─────────────────────────────────────────────────────────
   const receipts = await prisma.receiptItem.findMany({

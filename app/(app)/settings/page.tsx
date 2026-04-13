@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
-  const user = session?.user as any
+  const user = session?.user as { id?: string; name?: string; role?: string } | undefined
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -41,7 +41,13 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <button onClick={() => window.location.href='/settings/barcodes'}
+          className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-all uppercase tracking-widest shadow-lg">
+          Master Barcode Importer
+        </button>
+      </div>
 
       {saved && <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 font-medium"> Settings saved!</div>}
 

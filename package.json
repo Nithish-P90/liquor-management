@@ -8,7 +8,11 @@
     "start": "next start",
     "serve": "next build && next start",
     "lint": "next lint",
-    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
+    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "simulate": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/simulate.ts",
+    "fingerprint-bridge": "node scripts/fingerprint-bridge.js",
+    "fingerprint-list": "node scripts/fingerprint-bridge.js --list",
+    "fingerprint-probe": "node scripts/fingerprint-bridge.js --probe"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -34,6 +38,7 @@
     "lucide-react": "^1.8.0",
     "next": "14.2.35",
     "next-auth": "^4.24.13",
+    "node-hid": "^3.3.0",
     "pdf-parse": "^1.1.1",
     "pg": "^8.20.0",
     "prisma": "^5.22.0",
@@ -41,6 +46,7 @@
     "react-dom": "^18",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
+    "usb": "^2.17.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

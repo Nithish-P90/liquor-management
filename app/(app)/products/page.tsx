@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { WebcamBarcodeScanner } from '@/components/WebcamBarcodeScanner'
 
 const CATEGORIES = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE']
@@ -14,15 +14,15 @@ export default function ProductsPage() {
   const [editBarcode, setEditBarcode] = useState<{ productSizeId: number; barcode: string } | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     const params = new URLSearchParams()
     if (search) params.set('q', search)
     if (category !== 'ALL') params.set('category', category)
     const data = await fetch(`/api/products?${params}`).then(r => r.json())
     setProducts(data); setLoading(false)
-  }
+  }, [search, category])
 
-  useEffect(() => { load() }, [search, category])
+  useEffect(() => { load() }, [load])
 
   async function updateBarcode() {
     if (!editBarcode) return

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.items.length || parsed.header.indentNumber === 'UNKNOWN') {
       return NextResponse.json({
         error: 'Could not read this indent PDF. Please verify it is a KSBCL indent PDF and try again.',
+        ocrText: parsed.rawText ?? ''
       }, { status: 422 })
     }
 
@@ -133,6 +134,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       parsed: { header: parsed.header, items: enrichedItems, totals },
       pdfPath: `uploads/indents/${filename}`,
+      ocrText: parsed.rawText ?? ''
     })
   } catch (error) {
     console.error('Indent upload failed', error)

@@ -78,10 +78,10 @@ export async function runReconciliation(date: Date, sessionId: number) {
 
     let severity: Severity = 'OK'
     if (Math.abs(variance) > HIGH_THRESHOLD) severity = 'HIGH'
-    else if (Math.abs(variance) > 0) severity = 'LOW'
+    else if (Math.abs(variance) > LOW_THRESHOLD) severity = 'LOW'
 
     // Upsert variance record
-    const record = await prisma.varianceRecord.upsert({
+    await prisma.varianceRecord.upsert({
       where: {
         recordDate_productSizeId: {
           recordDate: dateOnly,

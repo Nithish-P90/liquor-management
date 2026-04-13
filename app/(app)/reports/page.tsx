@@ -5,7 +5,7 @@ export default function ReportsPage() {
   const [sessions, setSessions] = useState<any[]>([])
   const [selectedSession, setSelectedSession] = useState<number | null>(null)
   const [downloading, setDownloading] = useState(false)
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0,10))
+  const [reportDate] = useState(new Date().toISOString().slice(0,10))
 
   useEffect(() => {
     fetch('/api/inventory/sessions').then(r => r.json()).then(s => {

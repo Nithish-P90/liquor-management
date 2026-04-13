@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
         data: {
           saleDate,
           saleTime: now,
-          staffId: staffId ?? parseInt((session.user as any).id),
+          staffId: staffId ?? parseInt(((session.user as { id?: string } | undefined)?.id) ?? '0'),
           productSizeId,
           quantityBottles: requestedQuantity,
           sellingPrice: productSize.sellingPrice,

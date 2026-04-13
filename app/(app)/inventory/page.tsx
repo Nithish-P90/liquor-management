@@ -16,7 +16,10 @@ export default function InventoryPage() {
     ]).then(([s, sess]) => { setStock(s); setSessions(sess); setLoading(false) })
   }, [])
 
-  const filtered = stock.filter(s => s.productName.toLowerCase().includes(search.toLowerCase()))
+  const filtered = stock
+    .filter(s => s.productName.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (b.currentStock > 0 ? 1 : 0) - (a.currentStock > 0 ? 1 : 0) || b.currentStock - a.currentStock)
+
   const lowStock = stock.filter(s => s.currentStock >= 0 && s.currentStock <= 6).length
   const currentSession = sessions[0]
 

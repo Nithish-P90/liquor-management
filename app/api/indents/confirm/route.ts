@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const staffId = parseInt((session.user as any).id)
+  const staffId = parseInt(((session.user as { id?: string } | undefined)?.id) ?? '0')
   const body = await req.json()
   const { header, items, pdfPath } = body
 

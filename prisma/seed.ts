@@ -119,8 +119,9 @@ async function main() {
       name: 'Admin',
       email: 'admin@mv.com',
       passwordHash: adminHash,
-      pin: '0000',
       role: 'ADMIN',
+      payrollType: 'SALARY',
+      monthlySalary: 30000,
     },
   })
   console.log('✓ Admin staff created:', admin.email)
@@ -135,7 +136,9 @@ async function main() {
       email: 'staff1@mv.com',
       passwordHash: staffHash,
       pin: '1234',
-      role: 'STAFF',
+      role: 'CASHIER',
+      payrollType: 'SALARY',
+      monthlySalary: 15000,
     },
   })
 
@@ -146,8 +149,9 @@ async function main() {
       name: 'Suresh Babu',
       email: 'staff2@mv.com',
       passwordHash: staffHash,
-      pin: '5678',
-      role: 'STAFF',
+      role: 'CLEANER',
+      payrollType: 'DAILY',
+      dailyWage: 600,
     },
   })
   console.log('✓ Staff created')
@@ -204,8 +208,8 @@ async function main() {
   console.log('\n✅ Database seeded successfully!')
   console.log('\nLogin credentials:')
   console.log('  Admin: admin@mv.com / admin123')
-  console.log('  Staff PIN: 1234 (Ravi Kumar), 5678 (Suresh Babu)')
-  console.log('  Admin PIN: 0000')
+  console.log('  Staff PIN: 1234 (Ravi Kumar)')
+  console.log('  Admin: admin@mv.com (email/password login)')
 }
 
 main()

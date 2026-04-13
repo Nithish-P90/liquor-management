@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const { indentId, items, notes } = body
   // items: [{ indentItemId, productSizeId, casesReceived, bottlesReceived }]
 
-  const staffId = parseInt((session.user as any).id)
+  const staffId = parseInt(((session.user as { id?: string } | undefined)?.id) ?? '0')
   const today = toUtcNoonDate(new Date())
 
   const receipt = await prisma.$transaction(async tx => {

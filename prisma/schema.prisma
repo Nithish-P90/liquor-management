@@ -23,9 +23,18 @@ enum Category {
 
 enum Role {
   ADMIN
-  STAFF
+  CASHIER
+  HELPER
+  LOADER
+  COLLECTOR
+  CLEANER
+  OTHER
 }
 
+enum PayrollType {
+  SALARY
+  DAILY
+}
 enum StockEntryType {
   OPENING
   CLOSING
@@ -102,10 +111,13 @@ model ProductSize {
 model Staff {
   id           Int                @id @default(autoincrement())
   name         String
-  email        String             @unique
-  passwordHash String
-  pin          String
+  email        String?            @unique
+  passwordHash String?
+  pin          String?            @unique
   role         Role
+  payrollType  PayrollType        @default(SALARY)
+  monthlySalary Decimal?         @db.Decimal(12, 2)
+  dailyWage     Decimal?         @db.Decimal(10, 2)
   active             Boolean            @default(true)
   fingerprintTemplate String?           @db.Text
   sales              Sale[]

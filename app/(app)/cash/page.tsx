@@ -147,7 +147,7 @@ export default function CashPage() {
   // Computed values
   const expectedClosing = form.openingRegister + form.cashSales - form.expenses - form.cashToLocker
   const registerVar = form.closingRegister - expectedClosing
-  const systemSales = summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0 }
+  const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0 }, [summary])
   const totalSales = form.cashSales + form.cardSales + form.upiSales + form.creditSales
   const systemTotal = systemSales.cash + systemSales.card + systemSales.upi + systemSales.credit
   const verifyDiff = useMemo(
