@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "liquor-management",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-04-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" }
+}
