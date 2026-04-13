@@ -54,7 +54,7 @@ export default function InventoryPage() {
 
       {!currentSession && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-          <p className="text-yellow-800 font-medium">No active inventory session. <button onClick={() => router.push('/inventory/opening')} className="underline text-blue-600">Start a new session</button></p>
+          <p className="text-yellow-800 font-medium">No active inventory session. Sessions roll over automatically at midnight IST.</p>
         </div>
       )}
 

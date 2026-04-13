@@ -15,7 +15,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.pin) return null
         const staff = await prisma.staff.findFirst({
-          where: { pin: credentials.pin, active: true },
+          where: { pin: credentials.pin, active: true, role: { in: ['ADMIN', 'CASHIER'] } },
         })
         if (!staff) return null
         return { id: String(staff.id), name: staff.name, email: staff.email, role: staff.role }

@@ -83,20 +83,6 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push('/pos')}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Open POS
-          </button>
-          <button
-            onClick={() => router.push('/indents/upload')}
-            className="px-4 py-2 bg-slate-700 text-white text-sm font-semibold rounded-lg hover:bg-slate-600 transition-colors"
-          >
-            Upload Indent
-          </button>
-        </div>
       </div>
 
       {/* Today's stats */}
@@ -241,22 +227,11 @@ export default function DashboardPage() {
 
       {/* Quick actions */}
       <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: '⚡ Open POS', href: '/pos', desc: 'Sell bottles' },
-          { label: '📦 Auto-Close Day', href: '/close-day', desc: 'End day & carry forward' },
-          { label: '📋 Stock Sheet', href: '/reports', desc: 'Download Excel' },
-          { label: '📄 Upload Indent', href: '/indents/upload', desc: 'KSBCL receipt' },
-          { label: '💰 Cash Register', href: '/cash', desc: 'Galla → Locker → Bank' },
-          { label: '📝 Expenditure', href: '/expenses', desc: 'Wages, rent, etc.' },
-        ].map(a => (
-          <button key={a.href} onClick={() => {
-              router.push(a.href)
-          }}
-            className="p-4 bg-white border border-slate-200 rounded-xl text-left hover:border-blue-300 hover:bg-blue-50 transition-all">
-            <div className="text-sm font-semibold text-slate-700">{a.label}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">{a.desc}</div>
-          </button>
-        ))}
+        <button onClick={() => router.push('/inventory/closing')}
+          className="p-4 bg-white border border-slate-200 rounded-xl text-left hover:border-blue-300 hover:bg-blue-50 transition-all">
+          <div className="text-sm font-semibold text-slate-700">📦 Auto-Close Day</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">End day & carry forward</div>
+        </button>
       </div>
     </div>
   )

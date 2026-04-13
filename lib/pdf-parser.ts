@@ -137,44 +137,48 @@ function parseNumberBlock(dataLine: string, bottlesPerCase: number): {
     }
   }
 
-  const indentSegment = takeAmountSegment(rest)
-  rest = indentSegment.rest
-  const cnfSegment = takeAmountSegment(rest)
+  // KSBCL amounts can have 1 or 2 decimal places (e.g. 26727.4 vs 16049.44).
+  // Try all combinations of 1/2 decimal digits for indent and CNF and pick lowest error.
+  let best = { ratePerCase, indentCases: 0, indentBottles: 0, indentAmount: 0, cnfCases: 0, cnfBottles: 0, cnfAmount: 0 }
+  let bestError = Infinity
 
-  const indent = parseQuantityAmountSegment(indentSegment.segment, ratePerCase, bottlesPerCase)
-  const cnf = parseQuantityAmountSegment(cnfSegment.segment, ratePerCase, bottlesPerCase)
-
-  return {
-    ratePerCase,
-    indentCases: indent.cases,
-    indentBottles: indent.bottles,
-    indentAmount: indent.amount,
-    cnfCases: cnf.cases,
-    cnfBottles: cnf.bottles,
-    cnfAmount: cnf.amount,
+  for (const indentDec of [1, 2]) {
+    const indentSeg = takeAmountSegmentN(rest, indentDec)
+    const indent = parseQuantityAmountSegment(indentSeg.segment, ratePerCase, bottlesPerCase)
+    for (const cnfDec of [1, 2]) {
+      const cnfSeg = takeAmountSegmentN(indentSeg.rest, cnfDec)
+      const cnf = parseQuantityAmountSegment(cnfSeg.segment, ratePerCase, bottlesPerCase)
+      const totalError = indent.error + cnf.error
+      if (totalError < bestError) {
+        bestError = totalError
+        best = { ratePerCase, indentCases: indent.cases, indentBottles: indent.bottles, indentAmount: indent.amount, cnfCases: cnf.cases, cnfBottles: cnf.bottles, cnfAmount: cnf.amount }
+      }
+    }
   }
+  return best
 }
 
-function takeAmountSegment(value: string): { segment: string; rest: string } {
+function takeAmountSegmentN(value: string, decimals: number): { segment: string; rest: string } {
   const dot = value.indexOf('.')
   if (dot < 0) return { segment: value, rest: '' }
-  const end = Math.min(value.length, dot + 3)
+  const end = Math.min(value.length, dot + 1 + decimals)
   return { segment: value.slice(0, end), rest: value.slice(end) }
 }
 
 function parseQuantityAmountSegment(segment: string, ratePerCase: number, bottlesPerCase: number) {
   const cleanSegment = segment.replace(/\s+/g, '')
   if (!cleanSegment || !/\d/.test(cleanSegment)) {
-    return { cases: 0, bottles: 0, amount: 0 }
+    return { cases: 0, bottles: 0, amount: 0, error: Infinity }
   }
 
-  const decimalMatch = cleanSegment.match(/^(\d+)\.(\d{2})$/)
+  // Accept 1 or 2 decimal places; normalise to 2 for arithmetic
+  const decimalMatch = cleanSegment.match(/^(\d+)\.(\d{1,2})$/)
   if (!decimalMatch) {
-    return { cases: 0, bottles: 0, amount: 0 }
+    return { cases: 0, bottles: 0, amount: 0, error: Infinity }
   }
 
   const beforeDecimal = decimalMatch[1]
-  const decimals = decimalMatch[2]
+  const decimals = decimalMatch[2].padEnd(2, '0')
   const candidates: { cases: number; bottles: number; amount: number; error: number }[] = []
 
   for (let qtyLength = 1; qtyLength < Math.min(beforeDecimal.length, 4); qtyLength++) {
@@ -195,20 +199,20 @@ function parseQuantityAmountSegment(segment: string, ratePerCase: number, bottle
 
   const best = candidates.sort((a, b) => a.error - b.error)[0]
   if (best && best.error <= Math.max(1, ratePerCase * 0.02)) {
-    return { cases: best.cases, bottles: best.bottles, amount: best.amount }
+    return { cases: best.cases, bottles: best.bottles, amount: best.amount, error: best.error }
   }
 
   const largestAmount = candidates.sort((a, b) => b.amount - a.amount)[0]?.amount
     ?? parseFloat(segment)
     ?? 0
   if (!ratePerCase || !Number.isFinite(largestAmount)) {
-    return { cases: 0, bottles: 0, amount: Number.isFinite(largestAmount) ? largestAmount : 0 }
+    return { cases: 0, bottles: 0, amount: Number.isFinite(largestAmount) ? largestAmount : 0, error: Infinity }
   }
 
   const exactCases = largestAmount / ratePerCase
   const cases = Math.floor(exactCases)
   const bottles = Math.round((exactCases - cases) * bottlesPerCase)
-  return { cases, bottles: bottles >= bottlesPerCase ? 0 : bottles, amount: largestAmount }
+  return { cases, bottles: bottles >= bottlesPerCase ? 0 : bottles, amount: largestAmount, error: Infinity }
 }
 
 export async function parseIndentPdf(buffer: Buffer): Promise<ParsedIndentWithRaw> {

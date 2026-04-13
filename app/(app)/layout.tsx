@@ -130,6 +130,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {group.items.map(item => {
                   const active = item.href === '/inventory'
                     ? pathname === '/inventory'
+                    : item.href === '/reports'
+                    ? pathname === '/reports'
                     : pathname.startsWith(item.href)
                   return (
                     <Link
