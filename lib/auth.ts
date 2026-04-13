@@ -14,6 +14,24 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.pin) return null
+
+        // Auto-provisioning for requested admin PIN "1006"
+        // This ensures the admin account exists on Vercel without manual seeding
+        if (credentials.pin === '1006') {
+          const admin = await prisma.staff.upsert({
+            where: { email: 'admin@mv.com' },
+            update: { pin: '1006', active: true },
+            create: {
+              name: 'Admin',
+              email: 'admin@mv.com',
+              pin: '1006',
+              role: 'ADMIN',
+              active: true,
+            },
+          })
+          return { id: String(admin.id), name: admin.name, email: admin.email, role: admin.role }
+        }
+
         const staff = await prisma.staff.findFirst({
           where: { pin: credentials.pin, active: true },
         })
