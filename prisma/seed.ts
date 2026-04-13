@@ -114,11 +114,12 @@ async function main() {
   const adminHash = await hash('admin123', 10)
   const admin = await prisma.staff.upsert({
     where: { email: 'admin@mv.com' },
-    update: {},
+    update: { pin: '1006' },
     create: {
       name: 'Admin',
       email: 'admin@mv.com',
       passwordHash: adminHash,
+      pin: '1006',
       role: 'ADMIN',
       payrollType: 'SALARY',
       monthlySalary: 30000,

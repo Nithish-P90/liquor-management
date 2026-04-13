@@ -74,8 +74,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "REPLACE_WITH_YOUR_GITHUB_USERNAME",
-        "repo": "REPLACE_WITH_YOUR_REPO_NAME",
+        "owner": "Nithish-P90",
+        "repo": "liquor-management",
         "private": true
       }
     ],

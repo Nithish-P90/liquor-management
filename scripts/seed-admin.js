@@ -7,11 +7,11 @@ async function main() {
       name: 'Admin',
       email: 'admin@mv.com',
       role: 'ADMIN',
-      pin: '1111',
+      pin: '1006',
       active: true,
     }
   });
-  console.log('Admin account created with PIN: 1111');
+  console.log('Admin account created with PIN: 1006');
 }
 
 main()
