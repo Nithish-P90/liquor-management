@@ -7,6 +7,8 @@ import {
 } from '@/lib/fingerprint-matcher'
 import { toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 // ── GET /api/attendance?date=YYYY-MM-DD ────────────────────────────────────────
 // Returns all active staff with their attendance status for the given date.
 // Defaults to today if no date param.

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const staff = await prisma.staff.findMany({
     select: { id: true, name: true, email: true, role: true, active: true, pin: true, createdAt: true, fingerprintTemplate: true, payrollType: true, monthlySalary: true, dailyWage: true },

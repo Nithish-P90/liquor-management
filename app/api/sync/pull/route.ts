@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 function validateToken(req: NextRequest): boolean {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
   const expected = process.env.SYNC_TOKEN

@@ -357,3 +357,4 @@ export function parseIndentFromText(text: string): ParsedIndentWithRaw {
   }
 
   return { header, items, totals, rawText: text }
+}

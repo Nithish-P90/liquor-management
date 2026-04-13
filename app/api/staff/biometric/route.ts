@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { extractTemplateFromXml, normaliseAllTemplates } from '@/lib/fingerprint-matcher'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/staff/biometric
  *

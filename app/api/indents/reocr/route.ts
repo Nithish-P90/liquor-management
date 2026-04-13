@@ -6,6 +6,8 @@ import { readFile, unlink } from 'fs/promises'
 import os from 'os'
 import { parseIndentFromText } from '@/lib/pdf-parser'
 
+export const dynamic = 'force-dynamic'
+
 const execFileAsync = promisify(execFile)
 
 export async function POST(req: NextRequest) {

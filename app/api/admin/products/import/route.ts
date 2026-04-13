@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { Category } from '@prisma/client'
 
+export const dynamic = 'force-dynamic'
+
 // Simple CSV parser that handles quotes and multiple lines
 function parseCSV(text: string) {
   const rows: string[][] = []

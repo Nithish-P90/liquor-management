@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
 async function getAvailableStock(tx: TxClient, productSizeId: number): Promise<number> {

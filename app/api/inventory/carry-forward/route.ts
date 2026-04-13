@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/inventory/carry-forward
  *

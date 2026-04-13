@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 // Confirm parsed indent → save to database AND immediately receive stock at CNF quantities
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)

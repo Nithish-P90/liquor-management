@@ -13,6 +13,8 @@ import prisma from '@/lib/prisma'
 import { Prisma, PrismaClient } from '@prisma/client'
 import { toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
 function validateToken(req: NextRequest): boolean {

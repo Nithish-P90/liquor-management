@@ -5,6 +5,8 @@ import { Category } from '@prisma/client'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
+export const dynamic = 'force-dynamic'
+
 function safeNumber(value: number, fallback = 0) {
   return Number.isFinite(value) ? value : fallback
 }
