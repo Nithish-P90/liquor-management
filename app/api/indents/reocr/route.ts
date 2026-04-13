@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
     let Tesseract
     try {
       // dynamic import so deployment doesn't fail if package missing
-      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-      Tesseract = require('tesseract.js')
+      // eslint-disable-next-line no-eval
+      Tesseract = eval('require')('tesseract.js')
     } catch (e) {
       return NextResponse.json({ error: 'tesseract.js not installed. Run `npm install tesseract.js`' }, { status: 500 })
     }

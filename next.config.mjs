@@ -8,6 +8,7 @@ const nextConfig = {
   },
   reactStrictMode: false,
   swcMinify: true,
+  serverExternalPackages: ['tesseract.js', 'node-hid', 'usb'],
 }
 
 export default nextConfig
