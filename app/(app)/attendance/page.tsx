@@ -82,13 +82,26 @@ export default function AttendancePage() {
     setScanResult(null)
 
     try {
-      // Port scan using plain GET (avoids CORS preflight on non-standard methods)
-      let activePort = null
-      for (let port = 11100; port <= 11105; port++) {
-        try {
-          const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
-          if (check.ok) { activePort = port; break }
-        } catch { continue }
+      // Port detection: prefer developer-set port in localStorage, else scan 11100–11105
+      let activePort: number | null = null
+      try {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem('FP_BRIDGE_PORT') : null
+        if (stored) {
+          const p = Number(stored)
+          try {
+            const check = await fetch(`http://127.0.0.1:${p}/rd/info`)
+            if (check.ok) activePort = p
+          } catch { /* stored port not reachable */ }
+        }
+      } catch { /* ignore */ }
+
+      if (!activePort) {
+        for (let port = 11100; port <= 11105; port++) {
+          try {
+            const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
+            if (check.ok) { activePort = port; break }
+          } catch { continue }
+        }
       }
 
       if (!activePort) {

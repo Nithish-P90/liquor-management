@@ -56,6 +56,18 @@ export default function Attendance() {
   }, [loadData])
 
   async function checkRdService() {
+    // Respect a stored developer override first, else try default and scan 11100–11105
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('FP_BRIDGE_PORT') : null
+      if (stored) {
+        const url = `http://127.0.0.1:${Number(stored)}`
+        try {
+          const r = await fetch(`${url}/rd/info`, { signal: AbortSignal.timeout(1200) })
+          if (r.ok) { setRdBaseUrl(url); setRdAvailable(true); return }
+        } catch {}
+      }
+    } catch {}
+
     // Try default port first, then scan 11100–11105 and pick the first working one
     try {
       const res = await fetch(`${DEFAULT_RD_URL}/rd/info`, { signal: AbortSignal.timeout(1500) })

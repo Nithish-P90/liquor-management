@@ -115,14 +115,27 @@ export default function StaffPage() {
   async function registerFingerprint(staffId: number) {
     setEnrollStatus(prev => ({ ...prev, [staffId]: { status: 'scanning', msg: 'Place finger on scanner…' } }))
     try {
-      // Step 1 — capture from bridge (scan common ports 11100–11105)
+      // Step 1 — capture from bridge (use localStorage override or scan common ports 11100–11105)
       let captureRes: Response
       let activePort: number | null = null
-      for (let port = 11100; port <= 11105; port++) {
-        try {
-          const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
-          if (check.ok) { activePort = port; break }
-        } catch { continue }
+      try {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem('FP_BRIDGE_PORT') : null
+        if (stored) {
+          const p = Number(stored)
+          try {
+            const check = await fetch(`http://127.0.0.1:${p}/rd/info`)
+            if (check.ok) activePort = p
+          } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+
+      if (!activePort) {
+        for (let port = 11100; port <= 11105; port++) {
+          try {
+            const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
+            if (check.ok) { activePort = port; break }
+          } catch { continue }
+        }
       }
 
       if (!activePort) throw new Error('Bridge not reachable — run: npm run fingerprint-bridge')
