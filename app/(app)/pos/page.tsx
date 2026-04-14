@@ -72,8 +72,6 @@ export default function POSPage() {
   const [showPayment, setShowPayment] = useState(false)
 
   const scanRef = useRef<HTMLInputElement>(null)
-  const barcodeBuffer = useRef('')
-  const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Load Data ──────────────────────────────────────────────────────────────
   const loadProducts = useCallback(async () => {
@@ -104,56 +102,6 @@ export default function POSPage() {
     })
   }, [loadProducts, loadRecent, user?.id])
 
-  // ── USB Barcode Scanner ────────────────────────────────────────────────────
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement
-
-      // Hotkeys (Global)
-      if (e.key === 'F2') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('CASH')
-        return
-      }
-      if (e.key === 'F4') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('CARD')
-        return
-      }
-
-      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
-        if (e.key === 'Enter') {
-            // Trigger complete sale if hitting enter while entering cash amount
-            if (showPayment) { completeSale(); return }
-        }
-        return
-      }
-
-      if (e.key === 'Enter') {
-        if (showPayment) {
-          completeSale()
-          return
-        } else if (cart.length > 0) {
-           setShowPayment(true); setPayMode('CASH')
-           return
-        }
-
-        const code = barcodeBuffer.current.trim()
-        if (code.length >= 4) handleScan(code)
-        barcodeBuffer.current = ''
-        if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
-        return
-      }
-      
-      if (e.key.length === 1) {
-        barcodeBuffer.current += e.key
-        if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
-        barcodeTimer.current = setTimeout(() => { barcodeBuffer.current = '' }, 120)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scan Handler ───────────────────────────────────────────────────────────
   function handleScan(code: string) {
@@ -309,14 +257,6 @@ export default function POSPage() {
           <div className="flex-1 max-w-md relative">
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input ref={scanRef} value={search} onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && search.trim()) {
-                  const code = search.trim()
-                  const found = products.find(p => p.barcode === code || p.product.itemCode === code)
-                  if (found) { addToCart(found); setSearch(''); flash(`${found.product.name} added`, 'ok') }
-                  else if (filtered.length === 1) { addToCart(filtered[0]); setSearch('') }
-                }
-              }}
               placeholder="Scan barcode or type name..."
               className="w-full pl-11 pr-4 py-2.5 bg-slate-50 text-slate-900 placeholder-slate-400 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 border border-transparent focus:border-blue-500 transition-all shadow-inner" />
           </div>
