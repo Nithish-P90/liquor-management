@@ -33,7 +33,8 @@ const DEVICE_CONFIG = {
   productId: null,   // e.g. 0x0100
 }
 
-const PORT = 11100
+// Allow overriding the listening port via environment (FP_BRIDGE_PORT or PORT)
+const PORT = Number(process.env.FP_BRIDGE_PORT || process.env.PORT || 11100)
 const CAPTURE_TIMEOUT_MS = 12_000  // how long to wait for a finger
 
 // ── Known fingerprint device profiles ───────────────────────────────────────

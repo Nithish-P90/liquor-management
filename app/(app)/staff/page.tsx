@@ -115,18 +115,24 @@ export default function StaffPage() {
   async function registerFingerprint(staffId: number) {
     setEnrollStatus(prev => ({ ...prev, [staffId]: { status: 'scanning', msg: 'Place finger on scanner…' } }))
     try {
-      // Step 1 — capture from bridge
+      // Step 1 — capture from bridge (scan common ports 11100–11105)
       let captureRes: Response
-      try {
-        const xml = `<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" otp="" wadh="" posh=""/></PidOptions>`
-        captureRes = await fetch('http://127.0.0.1:11100/rd/capture', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: xml,
-        })
-      } catch {
-        throw new Error('Bridge not reachable — run: npm run fingerprint-bridge')
+      let activePort: number | null = null
+      for (let port = 11100; port <= 11105; port++) {
+        try {
+          const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
+          if (check.ok) { activePort = port; break }
+        } catch { continue }
       }
+
+      if (!activePort) throw new Error('Bridge not reachable — run: npm run fingerprint-bridge')
+
+      const xml = `<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" otp="" wadh="" posh=""/></PidOptions>`
+      captureRes = await fetch(`http://127.0.0.1:${activePort}/rd/capture`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: xml,
+      })
 
       const template = await captureRes.text()
 

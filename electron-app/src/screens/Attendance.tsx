@@ -11,7 +11,7 @@ import type { Staff, AttendanceRecord } from '../types'
 
 type ScannerStatus = 'idle' | 'scanning' | 'ok' | 'err'
 
-const RD_URL = 'http://127.0.0.1:11100'
+const DEFAULT_RD_URL = 'http://127.0.0.1:11100'
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—'
@@ -33,6 +33,7 @@ export default function Attendance() {
   const [scanStatus, setScanStatus]       = useState<ScannerStatus>('idle')
   const [scanMessage, setScanMessage]     = useState('')
   const [rdAvailable, setRdAvailable]     = useState<boolean | null>(null)
+  const [rdBaseUrl, setRdBaseUrl]         = useState<string>(DEFAULT_RD_URL)
   const [isChecking, setIsChecking]       = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [pinInput, setPinInput]           = useState('')
@@ -55,18 +56,28 @@ export default function Attendance() {
   }, [loadData])
 
   async function checkRdService() {
+    // Try default port first, then scan 11100–11105 and pick the first working one
     try {
-      const res = await fetch(`${RD_URL}/rd/info`, { signal: AbortSignal.timeout(2000) })
-      setRdAvailable(res.ok)
-    } catch {
-      setRdAvailable(false)
+      const res = await fetch(`${DEFAULT_RD_URL}/rd/info`, { signal: AbortSignal.timeout(1500) })
+      if (res.ok) { setRdBaseUrl(DEFAULT_RD_URL); setRdAvailable(true); return }
+    } catch {}
+
+    let found: string | null = null
+    for (let port = 11100; port <= 11105; port++) {
+      try {
+        const url = `http://127.0.0.1:${port}`
+        const res = await fetch(`${url}/rd/info`, { signal: AbortSignal.timeout(1000) })
+        if (res.ok) { found = url; break }
+      } catch { continue }
     }
+    if (found) { setRdBaseUrl(found); setRdAvailable(true) }
+    else { setRdAvailable(false) }
   }
 
   // ── Fingerprint capture via Windows RD Service ────────────────────────────
   async function captureFingerprint(): Promise<string | null> {
     try {
-      const res = await fetch(`${RD_URL}/rd/capture`, {
+      const res = await fetch(`${rdBaseUrl}/rd/capture`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: '<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>',
