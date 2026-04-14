@@ -1,8 +1,17 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import prisma from './prisma'
+import crypto from 'crypto'
+
+// Ensure NextAuth has a secret in production. Prefer process.env.NEXTAUTH_SECRET,
+// fall back to other environment values or generate a stable per-process secret.
+const _runtimeSecret = process.env.NEXTAUTH_SECRET || process.env.SESSION_SECRET || process.env.SECRET || process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || undefined
+const NEXTAUTH_SECRET_FALLBACK = _runtimeSecret
+  ? crypto.createHash('sha256').update(String(_runtimeSecret)).digest('hex')
+  : ((global as any).__NEXTAUTH_FALLBACK_SECRET ||= crypto.randomBytes(32).toString('hex'))
 
 export const authOptions: NextAuthOptions = {
+  secret: NEXTAUTH_SECRET_FALLBACK,
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   providers: [
