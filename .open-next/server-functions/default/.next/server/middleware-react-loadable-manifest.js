@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"app/(app)/dashboard/page.tsx -> recharts":{"id":6929,"files":["static/chunks/929.2eb47b8d8ab8b73e.js"]},"components/WebcamBarcodeScanner.tsx -> html5-qrcode":{"id":791,"files":["static/chunks/7cb1fa1f.8aa99c163dd14371.js","static/chunks/791.4f9155bd656784ec.js"]}}';

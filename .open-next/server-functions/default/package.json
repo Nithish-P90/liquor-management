@@ -1,0 +1,70 @@
+{
+  "name": "liquor-management",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "serve": "next build && next start",
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "simulate": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/simulate.ts",
+    "fingerprint-bridge": "node scripts/fingerprint-bridge.js",
+    "fingerprint-list": "node scripts/fingerprint-bridge.js --list",
+    "fingerprint-probe": "node scripts/fingerprint-bridge.js --probe"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-neon": "^6.6.0",
+    "@prisma/client": "^6.6.0",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toast": "^1.2.15",
+    "@types/pdf-parse": "^1.1.5",
+    "bcryptjs": "^3.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^1.8.0",
+    "next": "14.2.35",
+    "next-auth": "^4.24.13",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.20.0",
+    "prisma": "^6.6.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "xlsx": "^0.18.5"
+  },
+  "optionalDependencies": {
+    "node-hid": "^3.3.0",
+    "usb": "^2.17.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "dotenv": "^17.4.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
+  }
+}
