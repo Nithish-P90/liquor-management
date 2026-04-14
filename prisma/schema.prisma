@@ -357,3 +357,34 @@ model Setting {
   key   String @unique
   value String
 }
+
+// ─── MISC SALE (Cigarettes / Snacks / Cups) ───────────────────────────────────
+
+enum MiscCategory {
+  CIGARETTES
+  SNACKS
+  CUPS
+}
+
+model MiscItem {
+  id        Int          @id @default(autoincrement())
+  barcode   String       @unique
+  name      String
+  category  MiscCategory
+  price     Decimal      @db.Decimal(10, 2)
+  sales     MiscSale[]
+  createdAt DateTime     @default(now())
+}
+
+model MiscSale {
+  id          Int          @id @default(autoincrement())
+  item        MiscItem     @relation(fields: [itemId], references: [id])
+  itemId      Int
+  saleDate    DateTime     @db.Date
+  saleTime    DateTime
+  quantity    Int
+  unitPrice   Decimal      @db.Decimal(10, 2)
+  totalAmount Decimal      @db.Decimal(10, 2)
+  paymentMode PaymentMode
+  createdAt   DateTime     @default(now())
+}
