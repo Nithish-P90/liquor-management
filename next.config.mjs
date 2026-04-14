@@ -8,9 +8,9 @@ const nextConfig = {
   },
   reactStrictMode: false,
   swcMinify: true,
-  serverExternalPackages: ['tesseract.js', 'node-hid', 'usb'],
+  // serverExternalPackages is Next.js 15+; use experimental.serverComponentsExternalPackages for 14
   experimental: {
-    // Reduces memory usage during build by processing pages one at a time
+    serverComponentsExternalPackages: ['tesseract.js', 'node-hid', 'usb'],
     workerThreads: false,
     cpus: 1,
   },
