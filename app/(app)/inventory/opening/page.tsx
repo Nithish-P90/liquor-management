@@ -13,12 +13,17 @@ type StockItem = {
   totalBottles: number
 }
 
+type Edits = Record<number, { cases: string; bottles: string }>
+
 export default function OpeningStockPage() {
   const router = useRouter()
-  const [stock,   setStock]   = useState<StockItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
+  const [stock,    setStock]    = useState<StockItem[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [search,   setSearch]   = useState('')
   const [hideZero, setHideZero] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [edits,    setEdits]    = useState<Edits>({})
+  const [saving,   setSaving]   = useState(false)
 
   useEffect(() => {
     fetch('/api/inventory/opening')
@@ -33,7 +38,6 @@ export default function OpeningStockPage() {
     return matchSearch && matchZero
   })
 
-  // Group by category
   const grouped = filtered.reduce<Record<string, StockItem[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = []
     acc[s.category].push(s)
@@ -42,6 +46,39 @@ export default function OpeningStockPage() {
 
   const totalBottles = filtered.reduce((s, r) => s + r.totalBottles, 0)
   const nonZeroCount = stock.filter(s => s.totalBottles > 0).length
+
+  function enterEditMode() {
+    const initial: Edits = {}
+    stock.forEach(s => {
+      initial[s.id] = {
+        cases:   s.cases   > 0 ? String(s.cases)   : '',
+        bottles: s.bottles > 0 ? String(s.bottles) : '',
+      }
+    })
+    setEdits(initial)
+    setEditMode(true)
+  }
+
+  async function saveEdits() {
+    setSaving(true)
+    const entries = stock.map(s => ({
+      productSizeId: s.id,
+      cases:   parseInt(edits[s.id]?.cases   || '0') || 0,
+      bottles: parseInt(edits[s.id]?.bottles || '0') || 0,
+    })).filter(e => e.cases > 0 || e.bottles > 0)
+
+    const res = await fetch('/api/inventory/opening', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries }),
+    })
+    if (res.ok) {
+      const fresh = await fetch('/api/inventory/opening').then(r => r.json())
+      setStock(fresh)
+      setEditMode(false)
+    }
+    setSaving(false)
+  }
 
   if (loading) {
     return (
@@ -59,26 +96,56 @@ export default function OpeningStockPage() {
           ← Back
         </button>
         <h1 className="text-2xl font-bold text-gray-900">Today's Opening Stock</h1>
+        <div className="ml-auto flex gap-2">
+          {editMode ? (
+            <>
+              <button
+                onClick={() => setEditMode(false)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdits}
+                disabled={saving}
+                className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save Opening Stock'}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={enterEditMode}
+              className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl"
+            >
+              Enter / Edit Opening Stock
+            </button>
+          )}
+        </div>
       </div>
 
+      {editMode && (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 text-sm">
+          Enter cases and loose bottles for each product. Leave blank for zero. Only non-zero entries will be saved.
+        </div>
+      )}
+
       {/* Info banner */}
-      <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl flex items-start gap-3">
-        <svg className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4h8z"/>
-        </svg>
-        <div className="flex-1">
-          <h2 className="font-bold text-blue-900 text-sm mb-1">Fixed Database Ledger — Full Inventory Snapshot</h2>
-          <p className="text-blue-800 text-xs leading-relaxed">
-            Showing all {stock.length} products. {nonZeroCount} have opening stock (yesterday's closing rolled forward).
-            Products showing 0 were not in stock when the day started.
-          </p>
+      {!editMode && (
+        <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl flex items-start gap-3">
+          <div className="flex-1">
+            <h2 className="font-bold text-blue-900 text-sm mb-1">Fixed Database Ledger — Full Inventory Snapshot</h2>
+            <p className="text-blue-800 text-xs leading-relaxed">
+              Showing all {stock.length} products. {nonZeroCount} have opening stock (yesterday's closing rolled forward).
+              Products showing 0 were not in stock when the day started.
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-2xl font-black text-blue-700">{totalBottles.toLocaleString('en-IN')}</div>
+            <div className="text-xs text-blue-500 font-semibold">total bottles</div>
+          </div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-2xl font-black text-blue-700">{totalBottles.toLocaleString('en-IN')}</div>
-          <div className="text-xs text-blue-500 font-semibold">total bottles</div>
-        </div>
-      </div>
+      )}
 
       {/* Controls */}
       <div className="flex items-center gap-3">
@@ -88,15 +155,17 @@ export default function OpeningStockPage() {
           placeholder="Search by product or category…"
           className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-80 shadow-sm"
         />
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={hideZero}
-            onChange={e => setHideZero(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          Hide zero-stock items
-        </label>
+        {!editMode && (
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideZero}
+              onChange={e => setHideZero(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            Hide zero-stock items
+          </label>
+        )}
         <div className="ml-auto text-sm text-gray-400">
           {filtered.length} of {stock.length} items
         </div>
@@ -110,10 +179,16 @@ export default function OpeningStockPage() {
       ) : (
         <div className="space-y-4">
           {Object.entries(grouped).map(([category, items]) => {
-            const catTotal = items.reduce((s, r) => s + r.totalBottles, 0)
+            const catTotal = editMode
+              ? items.reduce((s, r) => {
+                  const c = parseInt(edits[r.id]?.cases || '0') || 0
+                  const b = parseInt(edits[r.id]?.bottles || '0') || 0
+                  return s + c * r.bottlesPerCase + b
+                }, 0)
+              : items.reduce((s, r) => s + r.totalBottles, 0)
+
             return (
               <div key={category} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                {/* Category header */}
                 <div className="bg-gray-50 px-6 py-2.5 border-b border-gray-200 flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{category}</span>
                   <span className="text-xs text-gray-400 font-semibold">{catTotal.toLocaleString('en-IN')} btls · {items.length} SKUs</span>
@@ -129,30 +204,56 @@ export default function OpeningStockPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {items.map(s => (
-                      <tr
-                        key={s.id}
-                        className={`transition-colors ${
-                          s.totalBottles > 0
-                            ? 'hover:bg-blue-50/30'
-                            : 'opacity-40 hover:opacity-60'
-                        }`}
-                      >
-                        <td className="px-6 py-2.5">
-                          <span className="font-medium text-gray-900">{s.productName}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center text-gray-500">{s.sizeMl}ml</td>
-                        <td className="px-4 py-2.5 text-center text-gray-600">{s.cases}</td>
-                        <td className="px-4 py-2.5 text-center text-gray-600">{s.bottles}</td>
-                        <td className="px-6 py-2.5 text-right">
-                          {s.totalBottles > 0 ? (
-                            <span className="font-black text-blue-700 text-base">{s.totalBottles}</span>
-                          ) : (
-                            <span className="text-gray-300 font-semibold">0</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map(s => {
+                      const editCases   = edits[s.id]?.cases   ?? ''
+                      const editBottles = edits[s.id]?.bottles ?? ''
+                      const previewTotal = editMode
+                        ? (parseInt(editCases || '0') || 0) * s.bottlesPerCase + (parseInt(editBottles || '0') || 0)
+                        : s.totalBottles
+
+                      return (
+                        <tr
+                          key={s.id}
+                          className={`transition-colors ${
+                            previewTotal > 0 ? 'hover:bg-blue-50/30' : 'opacity-40 hover:opacity-60'
+                          }`}
+                        >
+                          <td className="px-6 py-2.5">
+                            <span className="font-medium text-gray-900">{s.productName}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-gray-500">{s.sizeMl}ml</td>
+                          <td className="px-4 py-2.5 text-center text-gray-600">
+                            {editMode ? (
+                              <input
+                                type="number" min="0"
+                                value={editCases}
+                                onChange={e => setEdits(prev => ({ ...prev, [s.id]: { ...prev[s.id], cases: e.target.value } }))}
+                                className="w-16 text-center border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                placeholder="0"
+                              />
+                            ) : s.cases}
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-gray-600">
+                            {editMode ? (
+                              <input
+                                type="number" min="0"
+                                value={editBottles}
+                                onChange={e => setEdits(prev => ({ ...prev, [s.id]: { ...prev[s.id], bottles: e.target.value } }))}
+                                className="w-16 text-center border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                placeholder="0"
+                              />
+                            ) : s.bottles}
+                          </td>
+                          <td className="px-6 py-2.5 text-right">
+                            {previewTotal > 0 ? (
+                              <span className="font-black text-blue-700 text-base">{previewTotal}</span>
+                            ) : (
+                              <span className="text-gray-300 font-semibold">0</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="bg-blue-50/30 border-t border-blue-100">

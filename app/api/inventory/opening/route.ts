@@ -6,7 +6,25 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { sessionId, entries } = body
+  const { entries } = body
+
+  // Auto-create today's session if none exists
+  let session = await prisma.inventorySession.findFirst({
+    orderBy: { periodStart: 'desc' },
+  })
+
+  if (!session) {
+    const today = new Date()
+    const todayNoon = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12, 0, 0))
+    // Find any staff member to assign as creator
+    const staff = await prisma.staff.findFirst({ where: { active: true } })
+    if (!staff) return NextResponse.json({ error: 'No staff found' }, { status: 400 })
+    session = await prisma.inventorySession.create({
+      data: { periodStart: todayNoon, periodEnd: todayNoon, staffId: staff.id }
+    })
+  }
+
+  const sessionId = session.id
 
   const created = await Promise.all(
     entries.map(async (e: any) => {
