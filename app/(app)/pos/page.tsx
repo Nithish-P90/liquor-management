@@ -262,7 +262,7 @@ export default function POSPage() {
           </div>
 
           <div className="text-gray-500 text-xs hidden lg:block">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
           </div>
 
         </div>

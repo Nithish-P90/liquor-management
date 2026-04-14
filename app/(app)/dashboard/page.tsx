@@ -83,7 +83,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
           <p className="text-slate-400 text-sm mt-0.5">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
           </p>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
                   <p className="text-sm font-semibold text-slate-800">{n.title}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(n.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date(n.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <button onClick={() => markRead([n.id])} className="text-slate-300 hover:text-slate-500 text-xs flex-shrink-0">
@@ -147,7 +147,7 @@ export default function DashboardPage() {
               <BarChart data={data.weeklySales} barSize={24}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }}
-                  tickFormatter={(d: unknown) => new Date(String(d)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  tickFormatter={(d: unknown) => new Date(String(d)).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}
                   axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }}
                   tickFormatter={(v: unknown) => `₹${(Number(v) / 1000).toFixed(0)}k`}

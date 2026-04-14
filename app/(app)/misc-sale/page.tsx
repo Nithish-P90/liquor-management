@@ -62,6 +62,10 @@ export default function MiscSalePage() {
   const totalBottles = tally.reduce((s, r) => s + r.bottles, 0)
   const totalAmount = tally.reduce((s, r) => s + r.amount, 0)
 
+  const cigarettesQty = tally.filter(r => /cigarette/i.test(r.productName)).reduce((s, r) => s + r.bottles, 0)
+  const snacksQty = tally.filter(r => /snack/i.test(r.productName)).reduce((s, r) => s + r.bottles, 0)
+  const cupsQty = tally.filter(r => /cup|tea|coffee/i.test(r.productName)).reduce((s, r) => s + r.bottles, 0)
+
   return (
     <div className="p-6 space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
@@ -78,14 +82,22 @@ export default function MiscSalePage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 border-l-4 border-l-violet-500 rounded-xl p-5">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Misc Revenue</p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{rupee(totalAmount)}</p>
         </div>
+        <div className="bg-white border border-slate-200 border-l-4 border-l-amber-500 rounded-xl p-5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Cigarettes Sold</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{cigarettesQty}</p>
+        </div>
         <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-xl p-5">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Bottles Sold</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{totalBottles}</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Snacks Sold</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{snacksQty}</p>
+        </div>
+        <div className="bg-white border border-slate-200 border-l-4 border-l-blue-500 rounded-xl p-5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Cups Sold</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{cupsQty}</p>
         </div>
       </div>
 
