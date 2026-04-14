@@ -2,12 +2,13 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaNeon } from '@prisma/adapter-neon'
 import { neonConfig, Pool } from '@neondatabase/serverless'
 
-// Required for Cloudflare Workers edge runtime (no Node.js net module)
-neonConfig.webSocketConstructor =
-  typeof WebSocket !== 'undefined' ? WebSocket : undefined
-
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL!
+  // Use WebSocket for Cloudflare Workers edge runtime
+  if (typeof WebSocket !== 'undefined') {
+    neonConfig.webSocketConstructor = WebSocket
+  }
+  // Fallback URL prevents build-time crash; runtime always has DATABASE_URL set
+  const connectionString = process.env.DATABASE_URL || 'postgresql://build:build@localhost/build'
   const pool = new Pool({ connectionString })
   const adapter = new PrismaNeon(pool)
   return new PrismaClient({ adapter, log: ['error'] } as any)
