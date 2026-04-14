@@ -76,8 +76,10 @@ const fmtH  = (h: number | null) => {
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60)
   return `${hh}h ${mm}m`
 }
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+const fmtDate = (d: string) => {
+  const dt = new Date(d)
+  return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`
+}
 
 // ── Tab constants ──────────────────────────────────────────────────────────────
 
@@ -336,12 +338,12 @@ export default function DailyLedgerPage() {
                                   )) : (
                                     <div className="px-4 py-3 text-gray-400 text-sm">No cash register entry for this day.</div>
                                   )}
-                                  {(detail.cashFlow?.totalBankDeposited ?? 0) > 0 && (
-                                    <div className="flex justify-between px-4 py-2.5 bg-blue-50">
-                                      <span className="text-blue-700 font-medium">🏦 Deposited to Bank</span>
-                                      <span className="text-blue-700 font-bold">{fmt(detail.cashFlow?.totalBankDeposited ?? 0)}</span>
+                                  {(detail.cashFlow?.bankDeposits ?? []).map((dep, i) => (
+                                    <div key={dep.id} className="flex justify-between px-4 py-2.5 bg-blue-50">
+                                      <span className="text-blue-700 font-medium">🏦 Bank Deposit{dep.notes ? ` — ${dep.notes}` : ''}</span>
+                                      <span className="text-blue-700 font-bold">{fmt(dep.amount)}</span>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
                               </div>
                               <div>

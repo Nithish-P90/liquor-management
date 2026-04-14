@@ -57,7 +57,7 @@ export default function IndentDetailPage() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm">
         <div className="grid grid-cols-3 gap-4">
           <div><span className="text-gray-500">Invoice:</span> <strong>{indent.invoiceNumber}</strong></div>
-          <div><span className="text-gray-500">Date:</span> <strong>{new Date(indent.indentDate).toLocaleDateString('en-IN')}</strong></div>
+          <div><span className="text-gray-500">Date:</span> <strong>{new Date(indent.indentDate).toLocaleDateString('en-GB')}</strong></div>
           <div><span className="text-gray-500">Status:</span> <strong className="text-blue-700">{indent.status}</strong></div>
         </div>
       </div>

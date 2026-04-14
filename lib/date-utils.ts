@@ -8,3 +8,9 @@ export function subtractDays(date: Date, days: number): Date {
   d.setUTCDate(d.getUTCDate() - days)
   return d
 }
+
+/** Format a date as dd/mm/yyyy */
+export function fmtDMY(value: string | Date): string {
+  const d = new Date(value)
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
+}

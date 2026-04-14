@@ -93,11 +93,6 @@ export default function DashboardPage() {
         <StatCard label="Credit" value={rupee(Number(today.credit))} sub="Outstanding bills" accent="amber" />
       </div>
 
-      {/* Alerts + indents */}
-      <div className="grid grid-cols-1 gap-4">
-        <SummaryCard label="Pending Indents" value={data.pendingIndents} color="blue" onClick={() => router.push('/indents')} />
-      </div>
-
       {/* Notifications (price drops, system alerts) */}
       {unreadNotifications.length > 0 && (
         <div className="bg-white border border-amber-200 rounded-xl p-5">
@@ -210,7 +205,7 @@ export default function DashboardPage() {
                   <td className={`py-2 font-semibold ${a.variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                     {a.variance > 0 ? '+' : ''}{a.variance} btls
                   </td>
-                  <td className="py-2 text-slate-400">{new Date(a.date).toLocaleDateString('en-IN')}</td>
+                  <td className="py-2 text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       a.severity === 'HIGH' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'

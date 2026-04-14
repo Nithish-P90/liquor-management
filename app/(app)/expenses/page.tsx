@@ -95,7 +95,7 @@ export default function ExpensesPage() {
             <tbody className="divide-y divide-gray-50">
               {expenses.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-gray-500">{new Date(e.expDate).toLocaleDateString('en-IN')}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{new Date(e.expDate).toLocaleDateString('en-GB')}</td>
                   <td className="px-4 py-2.5 text-gray-800 font-medium">{e.particulars}</td>
                   <td className="px-4 py-2.5"><span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{e.category}</span></td>
                   <td className="px-4 py-2.5 text-right font-semibold text-gray-900">₹{Number(e.amount).toLocaleString('en-IN')}</td>

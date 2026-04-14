@@ -30,7 +30,6 @@ export default function InventoryPage() {
         <div className="flex gap-3">
           <button onClick={() => router.push('/inventory/opening')} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Opening Stock</button>
           <button onClick={() => router.push('/inventory/closing')} className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Closing Stock</button>
-          <button onClick={() => router.push('/inventory/reconcile')} className="px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700">Reconcile</button>
         </div>
       </div>
 
@@ -41,7 +40,7 @@ export default function InventoryPage() {
             <div>
               <span className="text-sm font-medium text-blue-800">Current Period: </span>
               <span className="text-sm text-blue-700">
-                {new Date(currentSession.periodStart).toLocaleDateString('en-IN')} — {new Date(currentSession.periodEnd).toLocaleDateString('en-IN')}
+                {new Date(currentSession.periodStart).toLocaleDateString('en-GB')} — {new Date(currentSession.periodEnd).toLocaleDateString('en-GB')}
               </span>
             </div>
             <div className="flex gap-4 text-sm">

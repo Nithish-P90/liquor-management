@@ -53,8 +53,8 @@ export default function IndentsPage() {
                     Invoice: {indent.invoiceNumber} &bull; {indent.retailerName} (#{indent.retailerId})
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Date: {new Date(indent.indentDate).toLocaleDateString('en-IN')} &bull;
-                    Uploaded: {new Date(indent.createdAt).toLocaleDateString('en-IN')}
+                    Date: {new Date(indent.indentDate).toLocaleDateString('en-GB')} &bull;
+                    Uploaded: {new Date(indent.createdAt).toLocaleDateString('en-GB')}
                   </p>
                 </div>
                 <div className="text-right">

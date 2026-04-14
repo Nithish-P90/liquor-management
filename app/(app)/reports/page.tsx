@@ -100,7 +100,7 @@ export default function ReportsPage() {
               {sessions.length === 0 && <option value="">No sessions yet</option>}
               {sessions.map(s => (
                 <option key={s.id} value={s.id}>
-                  Session #{s.id} — {new Date(s.periodStart).toLocaleDateString('en-IN')} to {new Date(s.periodEnd).toLocaleDateString('en-IN')}
+                  Session #{s.id} — {new Date(s.periodStart).toLocaleDateString('en-GB')} to {new Date(s.periodEnd).toLocaleDateString('en-GB')}
                 </option>
               ))}
             </select>

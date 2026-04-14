@@ -256,16 +256,11 @@ export default function CashPage() {
 
       {/* Locker + Bank summary bar */}
       {bankData && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-slate-800 text-white rounded-xl p-4">
             <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">Locker Balance</p>
             <p className="text-2xl font-bold">{rupee(bankData.lockerBalance)}</p>
             <p className="text-xs text-slate-500 mt-1">Cash accumulated in safe</p>
-          </div>
-          <div className="bg-blue-700 text-white rounded-xl p-4">
-            <p className="text-xs text-blue-200 font-semibold uppercase tracking-wide mb-1">Bank Balance</p>
-            <p className="text-2xl font-bold">{rupee(bankData.bankBalance)}</p>
-            <p className="text-xs text-blue-300 mt-1">Deposits − KSBCL payments</p>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-center">
             <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">Bank Deposit</p>
@@ -283,7 +278,7 @@ export default function CashPage() {
       {/* System vs Manual Sales */}
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         <h2 className="text-sm font-bold text-slate-700 mb-3">
-          Sales — {new Date(date + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+          Sales — {new Date(date + 'T12:00:00').toLocaleDateString('en-GB')}
         </h2>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-slate-500">Auto-filled from POS and expenditure entries. Manually verify with physical counts and payment statements before save.</p>
@@ -413,7 +408,7 @@ export default function CashPage() {
             <tbody className="divide-y divide-slate-50">
               {bankData.transactions.map(t => (
                 <tr key={t.id}>
-                  <td className="py-2 text-slate-500">{new Date(t.txDate).toLocaleDateString('en-IN')}</td>
+                  <td className="py-2 text-slate-500">{new Date(t.txDate).toLocaleDateString('en-GB')}</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.txType === 'DEPOSIT' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                       {t.txType === 'DEPOSIT' ? 'Deposit' : 'KSBCL Payment'}
@@ -445,7 +440,7 @@ export default function CashPage() {
               <div>{summary.closingStock.bottles} bottles in closing entry</div>
               {summary.closingStock.periodStart && summary.closingStock.periodEnd && (
                 <div className="text-xs text-slate-400">
-                  Period: {new Date(summary.closingStock.periodStart).toLocaleDateString('en-IN')} to {new Date(summary.closingStock.periodEnd).toLocaleDateString('en-IN')}
+                  Period: {new Date(summary.closingStock.periodStart).toLocaleDateString('en-GB')} to {new Date(summary.closingStock.periodEnd).toLocaleDateString('en-GB')}
                 </div>
               )}
             </div>
