@@ -31,6 +31,17 @@ function saveTemplates(arr) {
 // ── Bridge calls ──────────────────────────────────────────────────────────────
 function bridgeCapture() {
   return new Promise((resolve, reject) => {
+    // Simulation mode: generate a fake template locally (no bridge needed)
+    if (process.env.FP_SIMULATE_CAPTURE === '1' || process.env.FP_SIMULATE_CAPTURE === 'true') {
+      try {
+        const fake = generateFakeTemplate()
+        const xml = `<PidData>\n  <Resp errCode="0" errInfo="Success" fCount="1" fType="0" iCount="0" pCount="0" nmPoints="15" qScore="85" />\n  <Data type="X">${fake}</Data>\n  <Hmac>BRIDGE</Hmac>\n</PidData>`
+        return resolve(xml)
+      } catch (e) {
+        return reject(e)
+      }
+    }
+
     const body = `<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" otp="" wadh="" posh=""/></PidOptions>`
     const req = http.request(
       { hostname: '127.0.0.1', port: BRIDGE_PORT, path: '/rd/capture',
@@ -42,6 +53,32 @@ function bridgeCapture() {
     req.write(body)
     req.end()
   })
+}
+
+// ── Fake template generator for simulation/testing ──────────────────────────
+function generateFakeTemplate(count = 5) {
+  // Create minimal ISO-like buffer with "FMR\0" header and 'count' minutiae
+  const header = Buffer.alloc(32, 0)
+  header[0] = 0x46; header[1] = 0x4D; header[2] = 0x52; header[3] = 0x00
+  header[18] = 1
+  header[31] = count
+
+  const minutiae = Buffer.alloc(count * 6)
+  for (let i = 0; i < count; i++) {
+    const x = Math.floor(Math.random() * 500) + 20
+    const y = Math.floor(Math.random() * 500) + 20
+    const angle = Math.floor(Math.random() * 180)
+    const off = i * 6
+    minutiae[off + 0] = (x >> 8) & 0x3F
+    minutiae[off + 1] = x & 0xFF
+    minutiae[off + 2] = (y >> 8) & 0x3F
+    minutiae[off + 3] = y & 0xFF
+    minutiae[off + 4] = angle & 0xFF
+    minutiae[off + 5] = 0
+  }
+
+  const buf = Buffer.concat([header, minutiae])
+  return buf.toString('base64')
 }
 
 // ── Template extraction from bridge XML ────────────────────────────────────────
