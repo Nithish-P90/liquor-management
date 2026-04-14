@@ -20,10 +20,13 @@ const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid
 const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false }) as unknown as TooltipType
 const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false }) as unknown as ResponsiveContainerType
 
+type ClerkBillingRow = { staffId: number; name: string; bills: number; bottles: number; amount: number }
+
 type DashboardData = {
   todaySales: { total: number; bottles: number; cash: number; card: number; upi: number; credit: number }
   alerts: { total: number; high: number }
   pendingIndents: number
+  clerkBilling: ClerkBillingRow[]
   weeklySales: { date: string; amount: number }[]
   topSellers: { name: string; sizeMl: number; bottles: number; amount: number }[]
   recentAlerts: { id: number; product: string; sizeMl: number; variance: number; date: string; severity: string }[]
@@ -179,6 +182,37 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Clerk Billing Today */}
+      {data.clerkBilling?.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700">Clerk Billing — Today</h2>
+            <button onClick={() => router.push('/clerks')} className="text-xs text-blue-600 hover:underline font-medium">
+              Full view
+            </button>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-slate-100">
+                {['Clerk', 'Bills', 'Bottles', 'Amount'].map(h => (
+                  <th key={h} className="pb-2 text-xs font-semibold text-slate-400">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {data.clerkBilling.map(row => (
+                <tr key={row.staffId}>
+                  <td className="py-2 font-semibold text-slate-700">{row.name}</td>
+                  <td className="py-2 text-slate-500">{row.bills}</td>
+                  <td className="py-2 text-slate-500">{row.bottles}</td>
+                  <td className="py-2 font-bold text-slate-800">{rupee(row.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Variance alerts table */}
       {data.recentAlerts.length > 0 && (

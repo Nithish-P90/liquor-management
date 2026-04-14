@@ -17,19 +17,28 @@ type Edits = Record<number, { cases: string; bottles: string }>
 
 export default function OpeningStockPage() {
   const router = useRouter()
-  const [stock,    setStock]    = useState<StockItem[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [search,   setSearch]   = useState('')
-  const [hideZero, setHideZero] = useState(false)
-  const [editMode, setEditMode] = useState(false)
-  const [edits,    setEdits]    = useState<Edits>({})
-  const [saving,   setSaving]   = useState(false)
+  const [stock,      setStock]      = useState<StockItem[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [hideZero,   setHideZero]   = useState(false)
+  const [editMode,   setEditMode]   = useState(false)
+  const [edits,      setEdits]      = useState<Edits>({})
+  const [saving,     setSaving]     = useState(false)
+  const [sessionCount, setSessionCount] = useState<number | null>(null)
 
   useEffect(() => {
-    fetch('/api/inventory/opening')
-      .then(r => r.json())
-      .then(data => { setStock(data); setLoading(false) })
+    Promise.all([
+      fetch('/api/inventory/opening').then(r => r.json()),
+      fetch('/api/inventory/sessions').then(r => r.json()),
+    ]).then(([data, sessions]) => {
+      setStock(data)
+      setSessionCount(Array.isArray(sessions) ? sessions.length : 0)
+      setLoading(false)
+    })
   }, [])
+
+  // Only show manual edit on day 1 (0 or 1 sessions total)
+  const isDay1 = sessionCount !== null && sessionCount <= 1
 
   const filtered = stock.filter(s => {
     const matchSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
@@ -97,36 +106,47 @@ export default function OpeningStockPage() {
         </button>
         <h1 className="text-2xl font-bold text-gray-900">Today's Opening Stock</h1>
         <div className="ml-auto flex gap-2">
-          {editMode ? (
-            <>
+          {isDay1 ? (
+            editMode ? (
+              <>
+                <button
+                  onClick={() => setEditMode(false)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEdits}
+                  disabled={saving}
+                  className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : 'Save Opening Stock'}
+                </button>
+              </>
+            ) : (
               <button
-                onClick={() => setEditMode(false)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50"
+                onClick={enterEditMode}
+                className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl"
               >
-                Cancel
+                Enter / Edit Opening Stock
               </button>
-              <button
-                onClick={saveEdits}
-                disabled={saving}
-                className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : 'Save Opening Stock'}
-              </button>
-            </>
+            )
           ) : (
-            <button
-              onClick={enterEditMode}
-              className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl"
-            >
-              Enter / Edit Opening Stock
-            </button>
+            <span className="px-4 py-2 text-sm text-gray-400 border border-gray-200 rounded-xl bg-gray-50">
+              Auto-rollover active
+            </span>
           )}
         </div>
       </div>
 
-      {editMode && (
+      {isDay1 && editMode && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 text-sm">
           Enter cases and loose bottles for each product. Leave blank for zero. Only non-zero entries will be saved.
+        </div>
+      )}
+      {!isDay1 && !loading && (
+        <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-green-800 text-sm">
+          Opening stock is automatically carried forward from the previous day&apos;s closing stock.
         </div>
       )}
 

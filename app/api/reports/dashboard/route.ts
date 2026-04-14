@@ -15,6 +15,24 @@ export async function GET() {
 
   const today = toUtcNoonDate(new Date())
 
+  // Per-clerk billing today
+  const clerkBilling = await prisma.sale.groupBy({
+    by: ['staffId'],
+    where: { saleDate: today },
+    _sum: { totalAmount: true, quantityBottles: true },
+    _count: { id: true },
+    orderBy: { _sum: { totalAmount: 'desc' } },
+  })
+  const allStaff = await prisma.staff.findMany({ select: { id: true, name: true } })
+  const staffMap = Object.fromEntries(allStaff.map(s => [s.id, s.name]))
+  const clerkBillingData = clerkBilling.map(row => ({
+    staffId: row.staffId,
+    name: staffMap[row.staffId] ?? `Staff #${row.staffId}`,
+    bills: row._count.id,
+    bottles: row._sum.quantityBottles ?? 0,
+    amount: Number(row._sum.totalAmount ?? 0),
+  }))
+
   // Today's sales
   const salesAgg = await prisma.sale.groupBy({
     by: ['paymentMode'],
@@ -87,6 +105,7 @@ export async function GET() {
     todaySales,
     alerts: { total: alerts, high: highAlerts },
     pendingIndents,
+    clerkBilling: clerkBillingData,
     weeklySales: weeklySales.map(s => ({
       date: s.saleDate,
       amount: Number(s._sum.totalAmount ?? 0),

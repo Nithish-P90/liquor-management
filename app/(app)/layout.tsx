@@ -12,6 +12,8 @@ const adminNav = [
     items: [
       { href: '/dashboard', label: 'Dashboard' },
       { href: '/pos', label: 'Point of Sale' },
+      { href: '/misc-sale', label: 'Misc Sale' },
+      { href: '/clerks', label: 'Clerk Billing' },
       { href: '/sales', label: 'Sales History' },
     ],
   },
@@ -49,6 +51,8 @@ const staffNav = [
     group: 'Counter',
     items: [
       { href: '/pos', label: 'Point of Sale' },
+      { href: '/misc-sale', label: 'Misc Sale' },
+      { href: '/clerks', label: 'Clerk Billing' },
       { href: '/attendance', label: 'Biometric Attendance' },
       { href: '/cash', label: 'Cash Register' },
       { href: '/expenses', label: 'Expenditure' },
@@ -64,7 +68,7 @@ const staffNav = [
 ]
 
 // Staff can access POS, cash register, expenses, and inventory
-const STAFF_ALLOWED = ['/pos', '/cash', '/expenses', '/inventory', '/indents', '/attendance']
+const STAFF_ALLOWED = ['/pos', '/misc-sale', '/clerks', '/cash', '/expenses', '/inventory', '/indents', '/attendance']
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 

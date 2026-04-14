@@ -18,7 +18,7 @@ type RecentSale = {
   id: number; saleTime: string; productName: string
   sizeMl: number; totalAmount: number; paymentMode: string; quantityBottles: number
 }
-const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE']
+const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
 
 function fmt(n: number) { return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) }
 
@@ -201,7 +201,7 @@ export default function POSPage() {
   // ── Checkout ───────────────────────────────────────────────────────────────
   async function completeSale() {
     if (!cart.length || !activeCashier) return
-    // Credit logic removed
+    if (payMode === 'CASH' && tenderedNum < cartTotal) { flash('Enter amount received', 'err'); return }
     if (payMode === 'SPLIT' && splitCashNum <= 0) { flash('Enter cash amount', 'err'); return }
 
     setProcessing(true)
@@ -256,6 +256,23 @@ export default function POSPage() {
 
   function flash(msg: string, type: 'ok' | 'err') {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
+  }
+
+  async function voidSale(saleId: number, productName: string) {
+    if (!confirm(`Void sale of "${productName}"? Stock will be returned.`)) return
+    const res = await fetch('/api/sales/void', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saleId }),
+    })
+    if (res.ok) {
+      flash('Sale voided — stock returned', 'ok')
+      loadRecent()
+      loadProducts()
+    } else {
+      const e = await res.json()
+      flash(e.error || 'Void failed', 'err')
+    }
   }
 
   // ── Filtered Products ──────────────────────────────────────────────────────
@@ -485,12 +502,18 @@ export default function POSPage() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Recent Transactions</p>
             <div className="space-y-3 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
               {recentSales.slice(0, 5).map((s, i) => (
-                <div key={s.id || i} className="flex items-center justify-between text-[12px]">
-                  <div className="min-w-0">
-                    <p className="text-slate-800 font-bold truncate pr-2">{s.productName}</p>
+                <div key={s.id || i} className="flex items-center justify-between text-[12px] gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-slate-800 font-bold truncate pr-1">{s.productName}</p>
                     <p className="text-[10px] text-slate-400 font-medium">{s.sizeMl}ml · {s.paymentMode}</p>
                   </div>
                   <span className="text-slate-900 font-black whitespace-nowrap">{fmt(s.totalAmount)}</span>
+                  <button
+                    onClick={() => voidSale(s.id, s.productName)}
+                    className="text-[10px] text-red-400 hover:text-red-600 font-bold uppercase tracking-wide whitespace-nowrap px-1.5 py-0.5 rounded border border-red-200 hover:border-red-400 hover:bg-red-50 transition-colors"
+                  >
+                    Void
+                  </button>
                 </div>
               ))}
             </div>

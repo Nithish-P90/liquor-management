@@ -9,8 +9,6 @@ type CashForm = {
   closingRegister: number
   cardSales: number
   upiSales: number
-  creditSales: number
-  creditCollected: number
   notes: string
 }
 
@@ -68,8 +66,7 @@ type BankData = {
 
 const emptyForm = (openingRegister = 0): CashForm => ({
   openingRegister, cashSales: 0, expenses: 0, cashToLocker: 0,
-  closingRegister: 0, cardSales: 0, upiSales: 0,
-  creditSales: 0, creditCollected: 0, notes: '',
+  closingRegister: 0, cardSales: 0, upiSales: 0, notes: '',
 })
 
 function rupee(n: number) {
@@ -100,7 +97,6 @@ export default function CashPage() {
       cashSales: daySummary.sales.paymentTotals.cash,
       cardSales: daySummary.sales.paymentTotals.card,
       upiSales: daySummary.sales.paymentTotals.upi,
-      creditSales: daySummary.sales.paymentTotals.credit,
       expenses: daySummary.expenses.total,
     }))
   }
@@ -125,8 +121,6 @@ export default function CashPage() {
           closingRegister: +cashRecord.closingRegister || 0,
           cardSales: +cashRecord.cardSales || 0,
           upiSales: +cashRecord.upiSales || 0,
-          creditSales: +cashRecord.creditSales || 0,
-          creditCollected: +cashRecord.creditCollected || 0,
           notes: cashRecord.notes || '',
         })
       } else {
@@ -135,7 +129,6 @@ export default function CashPage() {
           cashSales: daySummary.sales.paymentTotals.cash,
           cardSales: daySummary.sales.paymentTotals.card,
           upiSales: daySummary.sales.paymentTotals.upi,
-          creditSales: daySummary.sales.paymentTotals.credit,
           expenses: daySummary.expenses.total,
         })
       }
@@ -148,14 +141,13 @@ export default function CashPage() {
   const expectedClosing = form.openingRegister + form.cashSales - form.expenses - form.cashToLocker
   const registerVar = form.closingRegister - expectedClosing
   const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0 }, [summary])
-  const totalSales = form.cashSales + form.cardSales + form.upiSales + form.creditSales
-  const systemTotal = systemSales.cash + systemSales.card + systemSales.upi + systemSales.credit
+  const totalSales = form.cashSales + form.cardSales + form.upiSales
+  const systemTotal = systemSales.cash + systemSales.card + systemSales.upi
   const verifyDiff = useMemo(
     () => ({
       cash: form.cashSales - systemSales.cash,
       card: form.cardSales - systemSales.card,
       upi: form.upiSales - systemSales.upi,
-      credit: form.creditSales - systemSales.credit,
       expenses: form.expenses - (summary?.expenses.total ?? 0),
     }),
     [form, summary, systemSales]
@@ -177,8 +169,6 @@ export default function CashPage() {
       closingRegister: +saved.closingRegister || 0,
       cardSales: +saved.cardSales || 0,
       upiSales: +saved.upiSales || 0,
-      creditSales: +saved.creditSales || 0,
-      creditCollected: +saved.creditCollected || 0,
       notes: saved.notes || '',
     })
     setLoading(false)
@@ -194,7 +184,6 @@ export default function CashPage() {
             cash: form.cashSales,
             card: form.cardSales,
             upi: form.upiSales,
-            credit: form.creditSales,
           },
         },
       })
@@ -298,7 +287,6 @@ export default function CashPage() {
               <div className="flex justify-between"><span>Cash</span><span className="font-semibold">{rupee(systemSales.cash)}</span></div>
               <div className="flex justify-between"><span>Card</span><span className="font-semibold">{rupee(systemSales.card)}</span></div>
               <div className="flex justify-between"><span>UPI</span><span className="font-semibold">{rupee(systemSales.upi)}</span></div>
-              <div className="flex justify-between"><span>Credit</span><span className="font-semibold">{rupee(systemSales.credit)}</span></div>
             </div>
           </div>
           <div className={`border rounded-xl p-4 ${Math.abs(totalSales - systemTotal) > 10 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
@@ -330,7 +318,6 @@ export default function CashPage() {
                 { label: 'Cash Sales', system: systemSales.cash, manual: form.cashSales, diff: verifyDiff.cash },
                 { label: 'Card Sales', system: systemSales.card, manual: form.cardSales, diff: verifyDiff.card },
                 { label: 'UPI Sales', system: systemSales.upi, manual: form.upiSales, diff: verifyDiff.upi },
-                { label: 'Credit Sales', system: systemSales.credit, manual: form.creditSales, diff: verifyDiff.credit },
                 { label: 'Expenditure', system: summary?.expenses.total ?? 0, manual: form.expenses, diff: verifyDiff.expenses },
               ].map(row => (
                 <tr key={row.label}>
@@ -368,27 +355,13 @@ export default function CashPage() {
           )}
         </div>
 
-        {/* Digital + Credit */}
-        <div className="space-y-5">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Digital Payments</h2>
-            {renderField('Card Sales', 'cardSales')}
-            {renderField('UPI / PhonePe / Paytm', 'upiSales')}
-            <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-400">
-              System: Card {rupee(summary?.sales.paymentTotals.card || 0)} · UPI {rupee(summary?.sales.paymentTotals.upi || 0)}
-            </div>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Credit</h2>
-            {renderField('Credit Given Today', 'creditSales')}
-            {renderField('Credit Collected Today', 'creditCollected')}
-            <div className="p-3 bg-slate-50 rounded-lg text-sm flex justify-between">
-              <span className="text-slate-500">Net Credit Change</span>
-              <strong className={form.creditSales - form.creditCollected > 0 ? 'text-amber-700' : 'text-emerald-700'}>
-                {form.creditSales - form.creditCollected > 0 ? '+' : ''}
-                {rupee(form.creditSales - form.creditCollected)}
-              </strong>
-            </div>
+        {/* Digital Payments */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Digital Payments</h2>
+          {renderField('Card Sales', 'cardSales')}
+          {renderField('UPI / PhonePe / Paytm', 'upiSales')}
+          <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-400">
+            System: Card {rupee(summary?.sales.paymentTotals.card || 0)} · UPI {rupee(summary?.sales.paymentTotals.upi || 0)}
           </div>
         </div>
       </div>
