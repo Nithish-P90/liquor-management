@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProductSize = {
@@ -301,10 +301,10 @@ export default function POSPage() {
             <h3 className="text-slate-900 font-black text-xl mb-6 tracking-tight">Select Cashier</h3>
             <div className="space-y-2">
               {cashiers.map(c => (
-                <button key={c.id} onClick={() => signOut({ callbackUrl: '/login' })}
+                <button key={c.id} onClick={() => { setActiveCashier(c); setShowCashierModal(false) }}
                   className={`w-full px-5 py-4 rounded-2xl text-sm font-bold text-left transition-all duration-200 ${
-                    activeCashier?.id === c.id
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                    activeCashier?.id === c.id 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
                       : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}>{c.name}</button>
               ))}

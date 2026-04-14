@@ -24,12 +24,25 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.pin) return null
 
-        // Wrap DB operations so we can provide a controlled fallback when the
-        // database is unreachable in hosted environments. Fallback behaviour
-        // is opt-in via `ALLOW_PIN_FALLBACK=true` and uses `FALLBACK_PIN`.
+        // Determine fallback behaviour:
+        // - `FALLBACK_PIN` (default '1006') is the emergency PIN.
+        // - If `DATABASE_URL` is not configured, allow an automatic fallback
+        //   for the emergency PIN so owners can recover the deployment.
+        const fallbackPin = process.env.FALLBACK_PIN || '1006'
+        const dbConfigured = Boolean(process.env.DATABASE_URL)
+        const allowFallback = process.env.ALLOW_PIN_FALLBACK === 'true' || !dbConfigured
+
+        // If there is no DB configured, short-circuit and allow the fallback PIN.
+        if (!dbConfigured) {
+          if (credentials.pin === fallbackPin) {
+            return { id: '0', name: 'Admin (fallback)', email: 'admin@fallback.local', role: 'ADMIN' }
+          }
+          return null
+        }
+
         try {
           // Auto-provisioning for requested admin PIN "1006"
-          // This ensures the admin account exists on Vercel without manual seeding
+          // This ensures the admin account exists in a configured DB without manual seeding
           if (credentials.pin === '1006') {
             const admin = await prisma.staff.upsert({
               where: { email: 'admin@mv.com' },
@@ -51,17 +64,10 @@ export const authOptions: NextAuthOptions = {
           if (!staff) return null
           return { id: String(staff.id), name: staff.name, email: staff.email, role: staff.role }
         } catch (err) {
-          // If the DB call failed (no DATABASE_URL, connection error, etc.),
-          // optionally allow a fallback PIN so admins can still log in and fix
-          // the environment. This must be explicitly enabled in Render or CI.
+          // If the DB call failed (connection error, etc.), allow fallback if enabled.
           console.warn('Auth authorize: database error - falling back if allowed', err)
-          if (process.env.ALLOW_PIN_FALLBACK === 'true') {
-            const fallbackPin = process.env.FALLBACK_PIN || '1006'
-            if (credentials.pin === fallbackPin) {
-              // Return a minimal admin-like object. This user isn't backed by the
-              // DB, so keep the id distinct ('0') and email synthetic.
-              return { id: '0', name: 'Admin (fallback)', email: 'admin@fallback.local', role: 'ADMIN' }
-            }
+          if (allowFallback && credentials.pin === fallbackPin) {
+            return { id: '0', name: 'Admin (fallback)', email: 'admin@fallback.local', role: 'ADMIN' }
           }
           return null
         }
