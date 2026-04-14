@@ -82,6 +82,22 @@ DATABASE_URL="your-neon-url" npx prisma migrate deploy
 DATABASE_URL="your-neon-url" npm run seed
 ```
 
+### 1d. Deploy to Render.com (alternative to Vercel)
+
+If you're deploying to Render, make sure the service is configured to *build* the Next.js app before starting the production server. Common misconfiguration causes the error:
+
+> Could not find a production build in the '.next' directory. Try building your app with 'next build' before starting the production server.
+
+Recommended Render settings for this repository:
+
+- **Build Command:** `npm run build`
+- **Start Command:** `npm start`
+
+Notes:
+- The repository already defines a `build` script (`prisma generate && NODE_OPTIONS=--max-old-space-size=400 next build`) and a `start` script (`next start`). Render must run the build step first so `next start` can serve the compiled `.next` directory.
+- If you cannot change the Render settings, an alternative (less preferred) is to modify `package.json` so `start` runs a build first, e.g. `"start": "next build && next start"`. This will make `npm start` succeed when Render uses it as the build command, but adjusting Render's Build Command is the cleaner fix.
+
+
 ---
 
 ## Step 2 — Windows POS Setup
