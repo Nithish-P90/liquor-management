@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     card: 0,
     upi: 0,
     credit: 0,
-    split: 0
+    split: 0,
   }
 
   sales.forEach(s => {
@@ -36,7 +36,12 @@ export async function GET(req: NextRequest) {
       case 'CARD': paymentTotals.card += amount; break
       case 'UPI': paymentTotals.upi += amount; break
       case 'CREDIT': paymentTotals.credit += amount; break
-      case 'SPLIT': paymentTotals.split += amount; break
+      case 'SPLIT':
+        paymentTotals.cash += Number(s.cashAmount ?? 0)
+        paymentTotals.card += Number(s.cardAmount ?? 0)
+        paymentTotals.upi += Number(s.upiAmount ?? 0)
+        paymentTotals.split += 0
+        break
     }
   })
 

@@ -143,6 +143,10 @@ export async function GET() {
         _sum: { totalAmount: true, quantityBottles: true },
         _count: { _all: true },
       })
+      const splitBreakdown = await prisma.sale.aggregate({
+        where: { saleDate: dateOnly, paymentMode: 'SPLIT' },
+        _sum: { cashAmount: true, cardAmount: true, upiAmount: true },
+      })
 
       let totalSalesAmount = 0
       let totalBottlesSold = 0
@@ -151,7 +155,14 @@ export async function GET() {
 
       for (const group of salesAgg) {
         const amount = Number(group._sum.totalAmount ?? 0)
-        salesByMode[group.paymentMode] += amount
+        if (group.paymentMode === 'SPLIT') {
+          salesByMode.CASH += Number(splitBreakdown._sum.cashAmount ?? 0)
+          salesByMode.CARD += Number(splitBreakdown._sum.cardAmount ?? 0)
+          salesByMode.UPI += Number(splitBreakdown._sum.upiAmount ?? 0)
+          salesByMode.SPLIT += 0
+        } else {
+          salesByMode[group.paymentMode] += amount
+        }
         totalSalesAmount += amount
         totalBottlesSold += group._sum.quantityBottles ?? 0
         totalBills += group._count._all

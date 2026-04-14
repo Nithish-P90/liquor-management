@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -12,19 +12,36 @@ type CartItem = {
   productSizeId: number; name: string; sizeMl: number
   sellingPrice: number; qty: number; stock: number
 }
-type Cashier = { id: number; name: string; active: boolean }
+type StaffMember = { id: number; name: string; active: boolean; role: string }
+type ClerkOption = { key: string; label: string; staffId: number; kind: 'COUNTER' | 'SUPPLIER' }
 type PayMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT'
-type RecentSale = {
-  id: number; saleTime: string; productName: string
-  sizeMl: number; totalAmount: number; paymentMode: string; quantityBottles: number
+type RecentBill = {
+  id: string
+  saleTime: string
+  clerkName: string
+  paymentMode: string
+  quantityBottles: number
+  totalAmount: number
+  lines: number
+  items: {
+    saleId: number
+    productSizeId: number
+    productName: string
+    sizeMl: number
+    quantityBottles: number
+    totalAmount: number
+  }[]
 }
+type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: number }
 const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
 
 function fmt(n: number) { return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) }
 
 function playBeep() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AudioCtx = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
@@ -51,15 +68,17 @@ export default function POSPage() {
   const user = session?.user as { id?: string; name?: string; role?: string } | undefined
 
   const [products, setProducts] = useState<ProductSize[]>([])
-  const [staff, setStaff] = useState<Cashier[]>([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [counterStaffId, setCounterStaffId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [recentSales, setRecentSales] = useState<RecentSale[]>([])
+  const [recentBills, setRecentBills] = useState<RecentBill[]>([])
 
   const [category, setCategory] = useState('ALL')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
-  const [activeCashier, setActiveCashier] = useState<Cashier | null>(null)
-  const [selectedClerkId, setSelectedClerkId] = useState<string>('counter')
+  const [activeClerkKey, setActiveClerkKey] = useState<string>('COUNTER')
+  const [voidMode, setVoidMode] = useState(false)
+  const [voidItems, setVoidItems] = useState<VoidItem[]>([])
 
   const [payMode, setPayMode] = useState<PayMode>('CASH')
   const [tendered, setTendered] = useState('')
@@ -68,10 +87,13 @@ export default function POSPage() {
   const [splitMethod, setSplitMethod] = useState<'UPI' | 'CARD'>('UPI')
 
   const [processing, setProcessing] = useState(false)
+  const [voidProcessing, setVoidProcessing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [showPayment, setShowPayment] = useState(false)
 
   const scanRef = useRef<HTMLInputElement>(null)
+  const barcodeBuffer = useRef('')
+  const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Load Data ──────────────────────────────────────────────────────────────
   const loadProducts = useCallback(async () => {
@@ -86,29 +108,131 @@ export default function POSPage() {
       const res = await fetch('/api/pos/summary')
       if (res.ok) {
         const d = await res.json()
-        setRecentSales(d.recentSales?.slice(0, 8) ?? [])
+        setRecentBills(d.recentBills?.slice(0, 8) ?? [])
       }
     } catch { /* ignore */ }
   }, [])
 
+  const clerkOptions = useMemo<ClerkOption[]>(() => {
+    if (!counterStaffId) return []
+    const suppliers = staff
+      .filter(s => s.active && !['ADMIN', 'CASHIER'].includes(s.role))
+      .map(s => ({ key: `STAFF:${s.id}`, label: s.name, staffId: s.id, kind: 'SUPPLIER' as const }))
+    return [
+      { key: 'COUNTER', label: 'Counter', staffId: counterStaffId, kind: 'COUNTER' as const },
+      ...suppliers,
+    ]
+  }, [counterStaffId, staff])
+
+  const activeClerk = useMemo(
+    () => clerkOptions.find(c => c.key === activeClerkKey) ?? clerkOptions[0] ?? null,
+    [clerkOptions, activeClerkKey]
+  )
+
   useEffect(() => {
     loadProducts()
     loadRecent()
-    fetch('/api/staff').then(r => r.json()).then((list: Cashier[]) => {
+    fetch('/api/staff').then(r => r.json()).then((list: StaffMember[]) => {
       const active = list.filter(s => s.active)
       setStaff(active)
-      const me = active.find(s => s.id === parseInt(user?.id ?? '0'))
-      setActiveCashier(me ?? active[0] ?? null)
+
+      const meId = parseInt(user?.id ?? '0')
+      const me = active.find(s => s.id === meId)
+      const anyCashier = active.find(s => s.role === 'CASHIER')
+      const fallback = me ?? anyCashier ?? active[0] ?? null
+      setCounterStaffId(fallback?.id ?? null)
+      setActiveClerkKey('COUNTER')
     })
   }, [loadProducts, loadRecent, user?.id])
 
+  useEffect(() => {
+    scanRef.current?.focus()
+  }, [])
+
+  // ── USB Barcode Scanner ────────────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement
+
+      // Hotkeys (Global)
+      if (e.key === 'F2') {
+        e.preventDefault()
+        setShowPayment(true); setPayMode('CASH')
+        return
+      }
+      if (e.key === 'F3') {
+        e.preventDefault()
+        setShowPayment(true); setPayMode('UPI')
+        return
+      }
+      if (e.key === 'F4') {
+        e.preventDefault()
+        setShowPayment(true); setPayMode('CARD')
+        return
+      }
+      if (e.key === 'F6') {
+        e.preventDefault()
+        setShowPayment(true); setPayMode('SPLIT')
+        return
+      }
+      if (e.key === 'F8') {
+        e.preventDefault()
+        setVoidMode(v => !v)
+        return
+      }
+
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
+        if (e.key === 'Enter') {
+          // Trigger complete sale while entering payment details
+          if (showPayment) { completeSale(); return }
+        }
+        return
+      }
+
+      if (e.key === 'Backspace' && cart.length > 0) {
+        e.preventDefault()
+        setCart(prev => prev.slice(0, -1))
+        return
+      }
+
+      if (e.key === 'Enter') {
+        if (showPayment) {
+          completeSale()
+          return
+        } else if (cart.length > 0) {
+           setShowPayment(true); setPayMode('CASH')
+           return
+        }
+
+        const code = barcodeBuffer.current.trim()
+        if (code.length >= 4) handleScan(code)
+        barcodeBuffer.current = ''
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
+        return
+      }
+      
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key
+        if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
+        barcodeTimer.current = setTimeout(() => { barcodeBuffer.current = '' }, 120)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scan Handler ───────────────────────────────────────────────────────────
   function handleScan(code: string) {
     const found = products.find(p => p.barcode === code || p.product.itemCode === code)
     if (!found) { flash(`No product found: ${code}`, 'err'); return }
-    if (found.currentStock <= 0) { flash(`${found.product.name} — OUT OF STOCK`, 'err'); return }
     playBeep()
+    if (voidMode) {
+      addToVoid(found)
+      flash(`Return queued: ${found.product.name} ${found.sizeMl}ml`, 'ok')
+      return
+    }
+
+    if (found.currentStock <= 0) { flash(`${found.product.name} — OUT OF STOCK`, 'err'); return }
     addToCart(found)
     flash(`${found.product.name} ${found.sizeMl}ml added`, 'ok')
   }
@@ -116,6 +240,7 @@ export default function POSPage() {
   // ── Cart ────────────────────────────────────────────────────────────────────
   function addToCart(ps: ProductSize) {
     if (ps.currentStock <= 0) { flash('Out of stock', 'err'); return }
+    setShowPayment(true)
     setCart(prev => {
       const ex = prev.find(c => c.productSizeId === ps.id)
       if (ex) {
@@ -125,6 +250,21 @@ export default function POSPage() {
       return [...prev, {
         productSizeId: ps.id, name: ps.product.name, sizeMl: ps.sizeMl,
         sellingPrice: Number(ps.sellingPrice), qty: 1, stock: ps.currentStock,
+      }]
+    })
+  }
+
+  function addToVoid(ps: ProductSize) {
+    setVoidItems(prev => {
+      const ex = prev.find(v => v.productSizeId === ps.id)
+      if (ex) {
+        return prev.map(v => v.productSizeId === ps.id ? { ...v, qty: v.qty + 1 } : v)
+      }
+      return [...prev, {
+        productSizeId: ps.id,
+        name: ps.product.name,
+        sizeMl: ps.sizeMl,
+        qty: 1,
       }]
     })
   }
@@ -139,6 +279,15 @@ export default function POSPage() {
     }))
   }
 
+  function setVoidQty(id: number, d: number) {
+    setVoidItems(prev => prev.flatMap(v => {
+      if (v.productSizeId !== id) return [v]
+      const nq = v.qty + d
+      if (nq <= 0) return []
+      return [{ ...v, qty: nq }]
+    }))
+  }
+
   const cartTotal = cart.reduce((s, c) => s + c.sellingPrice * c.qty, 0)
   const cartItems = cart.reduce((s, c) => s + c.qty, 0)
   const splitCashNum = parseFloat(splitCash) || 0
@@ -148,12 +297,14 @@ export default function POSPage() {
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   async function completeSale() {
-    if (!cart.length || !activeCashier) return
+    if (!cart.length || !activeClerk) return
     if (payMode === 'CASH' && tenderedNum < cartTotal) { flash('Enter amount received', 'err'); return }
     if (payMode === 'SPLIT' && splitCashNum <= 0) { flash('Enter cash amount', 'err'); return }
+    if (payMode === 'SPLIT' && splitCashNum >= cartTotal) { flash('Split cash must be less than total', 'err'); return }
 
     setProcessing(true)
     try {
+      const billTimeIso = new Date().toISOString()
       
       // ── HDFC BonusHub Terminal Integration ──
       const needsTerminal = payMode === 'CARD' || payMode === 'UPI' || (payMode === 'SPLIT' && (splitMethod === 'CARD' || splitMethod === 'UPI'))
@@ -174,9 +325,9 @@ export default function POSPage() {
         const prop = item.sellingPrice * item.qty / cartTotal
         const body: Record<string, unknown> = {
           productSizeId: item.productSizeId, quantityBottles: item.qty,
-          paymentMode: payMode, scanMethod: 'MANUAL',
-          staffId: selectedClerkId === 'counter' ? activeCashier.id : parseInt(selectedClerkId),
+          paymentMode: payMode, scanMethod: 'MANUAL', staffId: activeClerk.staffId,
           customerName: customerName || null,
+          saleTime: billTimeIso,
         }
         if (payMode === 'SPLIT') {
           body.cashAmount = +(splitCashNum * prop).toFixed(2)
@@ -193,6 +344,7 @@ export default function POSPage() {
       flash(`Bill complete — ${fmt(total)}`, 'ok')
       loadProducts()
       loadRecent()
+      scanRef.current?.focus()
     } catch (e: unknown) {
       flash(e instanceof Error ? e.message : 'Failed', 'err')
     } finally { setProcessing(false) }
@@ -200,22 +352,72 @@ export default function POSPage() {
 
   function resetSale() {
     setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
-    setCustomerName(''); setShowPayment(false); setSelectedClerkId('counter')
+    setCustomerName(''); setShowPayment(false)
   }
 
   function flash(msg: string, type: 'ok' | 'err') {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
   }
 
-  async function voidSale(saleId: number, productName: string) {
-    if (!confirm(`Void sale of "${productName}"? Stock will be returned.`)) return
+  async function completeVoid() {
+    if (!voidItems.length) return
+    if (!confirm(`Void ${voidItems.reduce((s, i) => s + i.qty, 0)} returned bottle(s)? Stock will be added back.`)) return
+
+    setVoidProcessing(true)
+    try {
+      const res = await fetch('/api/sales/void', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })),
+          reason: 'POS return by barcode/checkout void',
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Void failed')
+
+      const refund = data.refund as { total?: number; cash?: number; card?: number; upi?: number } | undefined
+      flash(
+        refund?.total != null
+          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))}, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})`
+          : 'Void complete — stock returned',
+        'ok'
+      )
+      setVoidItems([])
+      setVoidMode(false)
+      loadRecent()
+      loadProducts()
+      scanRef.current?.focus()
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : 'Void failed', 'err')
+    } finally {
+      setVoidProcessing(false)
+    }
+  }
+
+  async function voidBill(bill: RecentBill) {
+    const names = bill.items.map(i => `${i.productName} ${i.sizeMl}ml ×${i.quantityBottles}`).join(', ')
+    if (!confirm(`Void bill (${names})? Stock and payment totals will be reversed.`)) return
+
+    const merged = new Map<number, { productSizeId: number; quantityBottles: number }>()
+    for (const item of bill.items) {
+      const ex = merged.get(item.productSizeId)
+      if (ex) ex.quantityBottles += item.quantityBottles
+      else merged.set(item.productSizeId, { productSizeId: item.productSizeId, quantityBottles: item.quantityBottles })
+    }
+
     const res = await fetch('/api/sales/void', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ saleId }),
+      body: JSON.stringify({
+        items: Array.from(merged.values()),
+        reason: `POS bill void (${bill.id})`,
+      }),
     })
+
     if (res.ok) {
-      flash('Sale voided — stock returned', 'ok')
+      flash('Bill voided — stock returned', 'ok')
       loadRecent()
       loadProducts()
     } else {
@@ -243,7 +445,6 @@ export default function POSPage() {
         }`}>{toast.msg}</div>
       )}
 
-
       {/* ═══════════════════════════════════════════════════
           LEFT PANEL — Products
          ═══════════════════════════════════════════════════ */}
@@ -257,14 +458,45 @@ export default function POSPage() {
           <div className="flex-1 max-w-md relative">
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input ref={scanRef} value={search} onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && search.trim()) {
+                  const code = search.trim()
+                  const found = products.find(p => p.barcode === code || p.product.itemCode === code)
+                  if (found) {
+                    if (voidMode) {
+                      addToVoid(found)
+                      flash(`Return queued: ${found.product.name}`, 'ok')
+                    } else {
+                      addToCart(found)
+                      flash(`${found.product.name} added`, 'ok')
+                    }
+                    setSearch('')
+                  }
+                  else if (filtered.length === 1) {
+                    if (voidMode) addToVoid(filtered[0])
+                    else addToCart(filtered[0])
+                    setSearch('')
+                  }
+                }
+              }}
               placeholder="Scan barcode or type name..."
               className="w-full pl-11 pr-4 py-2.5 bg-slate-50 text-slate-900 placeholder-slate-400 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 border border-transparent focus:border-blue-500 transition-all shadow-inner" />
           </div>
 
           <div className="text-gray-500 text-xs hidden lg:block">
-            {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+            {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
 
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider bg-slate-100 text-slate-600">
+              Counter Ready
+            </span>
+            {voidMode && (
+              <span className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider bg-red-100 text-red-700">
+                Void Mode
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Category Tabs ────────────────── */}
@@ -294,10 +526,11 @@ export default function POSPage() {
               {filtered.map(ps => {
                 const inCart = cart.find(c => c.productSizeId === ps.id)
                 const oos = ps.currentStock === 0
+                const disabled = !voidMode && oos
                 return (
-                  <button key={ps.id} onClick={() => addToCart(ps)} disabled={oos}
+                  <button key={ps.id} onClick={() => (voidMode ? addToVoid(ps) : addToCart(ps))} disabled={disabled}
                     className={`relative text-left rounded-2xl p-4 transition-all duration-200 group ${
-                      oos ? 'bg-white/50 opacity-40 cursor-not-allowed border border-slate-100'
+                      disabled ? 'bg-white/50 opacity-40 cursor-not-allowed border border-slate-100'
                         : inCart ? 'bg-white ring-2 ring-blue-600 shadow-xl shadow-blue-100 scale-[0.98]'
                         : 'bg-white hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 active:scale-[0.96] cursor-pointer border border-slate-200/60'
                     }`}>
@@ -364,8 +597,76 @@ export default function POSPage() {
           )}
         </div>
 
+        {/* Quick clerk + void controls for fast counter flow */}
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.18em] font-black text-slate-400">Bill For</div>
+          <div className="flex flex-wrap gap-2">
+            {clerkOptions.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setActiveClerkKey(c.key)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                  activeClerk?.key === c.key
+                    ? c.kind === 'COUNTER'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-blue-600 text-white'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVoidMode(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition ${
+                voidMode ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
+              }`}
+            >
+              {voidMode ? 'Void Mode On' : 'Void / Return'}
+            </button>
+
+            {voidItems.length > 0 && (
+              <button
+                onClick={completeVoid}
+                disabled={voidProcessing}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {voidProcessing ? 'Voiding...' : `Process Void (${voidItems.reduce((s, i) => s + i.qty, 0)})`}
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Bill Items */}
         <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          {voidMode && (
+            <div className="px-4 py-3 border-b border-red-100 bg-red-50/60">
+              <p className="text-[11px] font-black text-red-700 uppercase tracking-wider">Return Queue</p>
+              {voidItems.length === 0 ? (
+                <p className="text-xs text-red-500 mt-1">Scan returned bottles to queue them, then press Process Void.</p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {voidItems.map(item => (
+                    <div key={item.productSizeId} className="flex items-center justify-between bg-white border border-red-100 rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
+                        <p className="text-[10px] text-slate-400">{item.sizeMl}ml</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setVoidQty(item.productSizeId, -1)} className="w-7 h-7 rounded bg-red-50 text-red-700 font-black">−</button>
+                        <span className="w-8 text-center text-xs font-black text-red-700">{item.qty}</span>
+                        <button onClick={() => setVoidQty(item.productSizeId, +1)} className="w-7 h-7 rounded bg-red-50 text-red-700 font-black">+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-4 px-8">
               <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
@@ -412,23 +713,34 @@ export default function POSPage() {
         </div>
 
         {/* ── Last Sales Ticker ─────────────── */}
-        {cart.length === 0 && recentSales.length > 0 && (
+        {cart.length === 0 && recentBills.length > 0 && (
           <div className="border-t border-slate-100 px-6 py-5 bg-slate-50/50">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Recent Transactions</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Recent Bills</p>
             <div className="space-y-3 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-              {recentSales.slice(0, 5).map((s, i) => (
-                <div key={s.id || i} className="flex items-center justify-between text-[12px] gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-slate-800 font-bold truncate pr-1">{s.productName}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">{s.sizeMl}ml · {s.paymentMode}</p>
+              {recentBills.slice(0, 6).map(bill => (
+                <div key={bill.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[12px] font-black text-slate-800">{bill.clerkName}</p>
+                      <p className="text-[10px] text-slate-400 font-semibold">
+                        {new Date(bill.saleTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} · {bill.paymentMode} · {bill.lines} line(s)
+                      </p>
+                    </div>
+                    <span className="text-slate-900 text-sm font-black whitespace-nowrap">{fmt(bill.totalAmount)}</span>
                   </div>
-                  <span className="text-slate-900 font-black whitespace-nowrap">{fmt(s.totalAmount)}</span>
-                  <button
-                    onClick={() => voidSale(s.id, s.productName)}
-                    className="text-[10px] text-red-400 hover:text-red-600 font-bold uppercase tracking-wide whitespace-nowrap px-1.5 py-0.5 rounded border border-red-200 hover:border-red-400 hover:bg-red-50 transition-colors"
-                  >
-                    Void
-                  </button>
+
+                  <p className="mt-2 text-[11px] text-slate-500 line-clamp-2">
+                    {bill.items.map(i => `${i.productName} ${i.sizeMl}ml ×${i.quantityBottles}`).join(', ')}
+                  </p>
+
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => voidBill(bill)}
+                      className="text-[10px] text-red-500 hover:text-red-700 font-black uppercase tracking-wide px-2 py-1 rounded border border-red-200 hover:border-red-400 hover:bg-red-50 transition-colors"
+                    >
+                      Void Bill
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -444,20 +756,6 @@ export default function POSPage() {
               <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">
                 <span>Total bottles ({cartItems})</span>
                 <span>{fmt(cartTotal)}</span>
-              </div>
-              {/* Clerk / Supplier selector */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-16 flex-shrink-0">Bill to</span>
-                <select
-                  value={selectedClerkId}
-                  onChange={e => setSelectedClerkId(e.target.value)}
-                  className="flex-1 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="counter">Counter</option>
-                  {staff.filter(s => s.id !== activeCashier?.id).map(s => (
-                    <option key={s.id} value={String(s.id)}>{s.name}</option>
-                  ))}
-                </select>
               </div>
               <div className="flex justify-between items-end">
                 <span className="text-sm font-black text-slate-900 uppercase tracking-tighter mb-1">Total Payable</span>
@@ -501,6 +799,17 @@ export default function POSPage() {
                         placeholder={cartTotal.toString()} autoFocus
                         className="flex-1 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all" />
                     </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[{ add: 0, label: 'Exact' }, { add: 50, label: '+50' }, { add: 100, label: '+100' }, { add: 200, label: '+200' }].map((opt, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setTendered(String(Math.ceil(cartTotal + opt.add)))}
+                          className="rounded-lg bg-white border border-slate-200 text-[11px] font-black text-slate-600 py-2 hover:bg-slate-100"
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                     {tenderedNum > 0 && (
                       <div className="flex justify-between items-center px-1">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Change Due</span>
@@ -520,7 +829,7 @@ export default function POSPage() {
                         className="flex-1 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-violet-500 shadow-sm transition-all" />
                     </div>
                     <div className="flex items-center gap-3">
-                      <select value={splitMethod} onChange={e => setSplitMethod(e.target.value as any)}
+                      <select value={splitMethod} onChange={e => setSplitMethod(e.target.value === 'CARD' ? 'CARD' : 'UPI')}
                         className="w-24 bg-white text-violet-600 text-[11px] font-black rounded-xl outline-none focus:ring-2 focus:ring-violet-500 border border-slate-200 py-3 px-2 text-center cursor-pointer shadow-sm transition-all uppercase tracking-widest">
                         <option value="UPI">UPI</option>
                         <option value="CARD">CARD</option>
@@ -560,9 +869,9 @@ export default function POSPage() {
         )}
 
         {/* Empty footer */}
-        {cart.length === 0 && recentSales.length === 0 && (
+        {cart.length === 0 && recentBills.length === 0 && (
           <div className="border-t border-[#252836] px-4 py-3 text-center">
-            <p className="text-[10px] text-gray-600">{activeCashier ? `${activeCashier.name} on duty` : 'No cashier selected'}</p>
+            <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select bill clerk'}</p>
           </div>
         )}
       </div>

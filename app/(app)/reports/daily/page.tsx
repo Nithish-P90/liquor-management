@@ -303,7 +303,6 @@ export default function DailyLedgerPage() {
                                   ['UPI / Digital',   fmt(detail.financials.salesByMode.UPI)],
                                   ['Card',            fmt(detail.financials.salesByMode.CARD)],
                                   ['Credit Bills',    fmt(detail.financials.salesByMode.CREDIT)],
-                                  ['Split',           fmt(detail.financials.salesByMode.SPLIT)],
                                 ].map(([label, val]) => (
                                   <div key={label} className="flex justify-between px-4 py-2.5">
                                     <span className="text-gray-500">{label}</span>

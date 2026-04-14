@@ -272,7 +272,14 @@ export async function GET(req: NextRequest) {
 
     for (const s of salesRows) {
       const amount = Number(s.totalAmount)
-      salesByMode[s.paymentMode] = (salesByMode[s.paymentMode] ?? 0) + amount
+      if (s.paymentMode === 'SPLIT') {
+        salesByMode.CASH += Number(s.cashAmount ?? 0)
+        salesByMode.CARD += Number(s.cardAmount ?? 0)
+        salesByMode.UPI += Number(s.upiAmount ?? 0)
+        salesByMode.SPLIT += 0
+      } else {
+        salesByMode[s.paymentMode] = (salesByMode[s.paymentMode] ?? 0) + amount
+      }
       totalSales       += amount
       totalBottlesSold += s.quantityBottles
       totalBills++

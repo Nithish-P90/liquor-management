@@ -15,39 +15,89 @@ export async function GET() {
 
   const today = toUtcNoonDate(new Date())
 
-  // Per-clerk billing today
-  const clerkBilling = await prisma.sale.groupBy({
-    by: ['staffId'],
+  const todayRows = await prisma.sale.findMany({
     where: { saleDate: today },
-    _sum: { totalAmount: true, quantityBottles: true },
-    _count: { id: true },
-    orderBy: { _sum: { totalAmount: 'desc' } },
-  })
-  const allStaff = await prisma.staff.findMany({ select: { id: true, name: true } })
-  const staffMap = Object.fromEntries(allStaff.map(s => [s.id, s.name]))
-  const clerkBillingData = clerkBilling.map(row => ({
-    staffId: row.staffId,
-    name: staffMap[row.staffId] ?? `Staff #${row.staffId}`,
-    bills: row._count.id,
-    bottles: row._sum.quantityBottles ?? 0,
-    amount: Number(row._sum.totalAmount ?? 0),
-  }))
-
-  // Today's sales
-  const salesAgg = await prisma.sale.groupBy({
-    by: ['paymentMode'],
-    where: { saleDate: today },
-    _sum: { totalAmount: true, quantityBottles: true },
+    select: {
+      id: true,
+      saleTime: true,
+      staffId: true,
+      paymentMode: true,
+      totalAmount: true,
+      quantityBottles: true,
+      cashAmount: true,
+      cardAmount: true,
+      upiAmount: true,
+      staff: { select: { name: true, role: true } },
+    },
+    orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
   })
 
+  // Per-clerk billing today (cashiers merged as Counter)
+  const clerkMap = new Map<string, {
+    staffId: number
+    name: string
+    billKeys: Set<string>
+    bottles: number
+    amount: number
+  }>()
+
+  // Today's sales with split allocation into cash/card/upi
   const todaySales = {
-    total: salesAgg.reduce((s, x) => s + Number(x._sum.totalAmount ?? 0), 0),
-    bottles: salesAgg.reduce((s, x) => s + (x._sum.quantityBottles ?? 0), 0),
-    cash: salesAgg.find(x => x.paymentMode === 'CASH')?._sum.totalAmount ?? 0,
-    card: salesAgg.find(x => x.paymentMode === 'CARD')?._sum.totalAmount ?? 0,
-    upi: salesAgg.find(x => x.paymentMode === 'UPI')?._sum.totalAmount ?? 0,
-    credit: salesAgg.find(x => x.paymentMode === 'CREDIT')?._sum.totalAmount ?? 0,
+    total: 0,
+    bottles: 0,
+    cash: 0,
+    card: 0,
+    upi: 0,
+    credit: 0,
   }
+
+  for (const sale of todayRows) {
+    const saleAmount = Number(sale.totalAmount)
+    todaySales.total += saleAmount
+    todaySales.bottles += sale.quantityBottles
+
+    if (sale.paymentMode === 'SPLIT') {
+      todaySales.cash += Number(sale.cashAmount ?? 0)
+      todaySales.card += Number(sale.cardAmount ?? 0)
+      todaySales.upi += Number(sale.upiAmount ?? 0)
+    } else if (sale.paymentMode === 'CASH') {
+      todaySales.cash += saleAmount
+    } else if (sale.paymentMode === 'CARD') {
+      todaySales.card += saleAmount
+    } else if (sale.paymentMode === 'UPI') {
+      todaySales.upi += saleAmount
+    } else if (sale.paymentMode === 'CREDIT') {
+      todaySales.credit += saleAmount
+    }
+
+    const isCounter = sale.staff.role === 'CASHIER'
+    const key = isCounter ? 'COUNTER' : `STAFF:${sale.staffId}`
+    const label = isCounter ? 'Counter' : sale.staff.name
+    const existing = clerkMap.get(key)
+    if (!existing) {
+      clerkMap.set(key, {
+        staffId: isCounter ? 0 : sale.staffId,
+        name: label,
+        billKeys: new Set([`${sale.staffId}:${sale.saleTime.toISOString()}`]),
+        bottles: sale.quantityBottles,
+        amount: saleAmount,
+      })
+      continue
+    }
+    existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
+    existing.bottles += sale.quantityBottles
+    existing.amount += saleAmount
+  }
+
+  const clerkBillingData = Array.from(clerkMap.values())
+    .map(row => ({
+      staffId: row.staffId,
+      name: row.name,
+      bills: row.billKeys.size,
+      bottles: row.bottles,
+      amount: row.amount,
+    }))
+    .sort((a, b) => b.amount - a.amount)
 
   // Active alerts
   const alerts = await prisma.varianceRecord.count({

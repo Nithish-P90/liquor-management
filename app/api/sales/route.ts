@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
     productSizeId, quantityBottles, paymentMode, scanMethod,
     customerName, isManualOverride, overrideReason, staffId,
     cashAmount, cardAmount, upiAmount,
+    saleTime,
   } = body
 
   const requestedQuantity = Number(quantityBottles)
@@ -121,7 +122,10 @@ export async function POST(req: NextRequest) {
   const productSize = await prisma.productSize.findUnique({ where: { id: productSizeId } })
   if (!productSize) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
-  const now = new Date()
+  const now = saleTime ? new Date(saleTime) : new Date()
+  if (Number.isNaN(now.getTime())) {
+    return NextResponse.json({ error: 'Invalid saleTime' }, { status: 400 })
+  }
   const saleDate = toUtcNoonDate(now)
 
   try {

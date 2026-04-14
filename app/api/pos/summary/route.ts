@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { PaymentMode, StockEntryType } from '@prisma/client'
+import { StockEntryType } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
@@ -24,6 +24,10 @@ function summarizeStockEntries(entries: { totalBottles: number }[]): StockEntryS
   }
 }
 
+function getClerkLabel(staff: { name: string; role?: string }) {
+  return staff.role === 'CASHIER' ? 'Counter' : staff.name
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) {
@@ -45,21 +49,40 @@ export async function GET() {
     ...(isStaff && staffId ? { staffId } : {}),
   }
 
-  const [salesAgg, recentSales, openingEntries, closingEntries] = await Promise.all([
-    prisma.sale.groupBy({
-      by: ['paymentMode'],
-      where: saleWhere,
+  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, recentLines, openingEntries, closingEntries] = await Promise.all([
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'CASH' },
       _sum: { totalAmount: true, quantityBottles: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'CARD' },
+      _sum: { totalAmount: true, quantityBottles: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'UPI' },
+      _sum: { totalAmount: true, quantityBottles: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'CREDIT' },
+      _sum: { totalAmount: true, quantityBottles: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'SPLIT' },
+      _sum: { totalAmount: true, quantityBottles: true, cashAmount: true, cardAmount: true, upiAmount: true },
       _count: { _all: true },
     }),
     prisma.sale.findMany({
       where: saleWhere,
       include: {
         productSize: { include: { product: true } },
-        staff: { select: { id: true, name: true } },
+        staff: { select: { id: true, name: true, role: true } },
       },
-      orderBy: { saleTime: 'desc' },
-      take: 12,
+      orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
+      take: 160,
     }),
     latestSession
       ? prisma.stockEntry.findMany({
@@ -75,19 +98,70 @@ export async function GET() {
       : Promise.resolve([]),
   ])
 
-  const paymentTotals = Object.values(PaymentMode).reduce<Record<PaymentMode, number>>(
-    (totals, mode) => {
-      totals[mode] = Number(salesAgg.find(row => row.paymentMode === mode)?._sum.totalAmount ?? 0)
-      return totals
-    },
-    {
-      CASH: 0,
-      CARD: 0,
-      UPI: 0,
-      CREDIT: 0,
-      SPLIT: 0,
+  const paymentTotals = {
+    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0),
+    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0),
+    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0),
+    CREDIT: Number(creditAgg._sum.totalAmount ?? 0),
+    SPLIT: 0,
+  }
+
+  const recentBillMap = new Map<string, {
+    id: string
+    saleTime: Date
+    clerkName: string
+    paymentMode: string
+    quantityBottles: number
+    totalAmount: number
+    items: Array<{
+      saleId: number
+      productSizeId: number
+      productName: string
+      sizeMl: number
+      quantityBottles: number
+      totalAmount: number
+    }>
+  }>()
+
+  for (const sale of recentLines) {
+    const billKey = `${sale.staffId}:${sale.saleTime.toISOString()}`
+    const existing = recentBillMap.get(billKey)
+    if (!existing) {
+      recentBillMap.set(billKey, {
+        id: billKey,
+        saleTime: sale.saleTime,
+        clerkName: getClerkLabel(sale.staff),
+        paymentMode: sale.paymentMode,
+        quantityBottles: sale.quantityBottles,
+        totalAmount: Number(sale.totalAmount),
+        items: [{
+          saleId: sale.id,
+          productSizeId: sale.productSizeId,
+          productName: sale.productSize.product.name,
+          sizeMl: sale.productSize.sizeMl,
+          quantityBottles: sale.quantityBottles,
+          totalAmount: Number(sale.totalAmount),
+        }],
+      })
+      continue
     }
-  )
+
+    existing.quantityBottles += sale.quantityBottles
+    existing.totalAmount += Number(sale.totalAmount)
+    if (existing.paymentMode !== sale.paymentMode) existing.paymentMode = 'MIXED'
+    existing.items.push({
+      saleId: sale.id,
+      productSizeId: sale.productSizeId,
+      productName: sale.productSize.product.name,
+      sizeMl: sale.productSize.sizeMl,
+      quantityBottles: sale.quantityBottles,
+      totalAmount: Number(sale.totalAmount),
+    })
+  }
+
+  const recentBills = Array.from(recentBillMap.values())
+    .sort((a, b) => b.saleTime.getTime() - a.saleTime.getTime())
+    .slice(0, 12)
 
   return NextResponse.json({
     scope: isStaff ? 'STAFF' : 'OWNER',
@@ -108,12 +182,28 @@ export async function GET() {
     openingStock: summarizeStockEntries(openingEntries),
     closingStock: summarizeStockEntries(closingEntries),
     todaySales: {
-      bills: salesAgg.reduce((sum, row) => sum + row._count._all, 0),
-      bottles: salesAgg.reduce((sum, row) => sum + (row._sum.quantityBottles ?? 0), 0),
-      amount: (Object.values(paymentTotals) as number[]).reduce((sum, amount) => sum + amount, 0),
+      bills: cashAgg._count._all + cardAgg._count._all + upiAgg._count._all + creditAgg._count._all + splitAgg._count._all,
+      bottles:
+        Number(cashAgg._sum.quantityBottles ?? 0) +
+        Number(cardAgg._sum.quantityBottles ?? 0) +
+        Number(upiAgg._sum.quantityBottles ?? 0) +
+        Number(creditAgg._sum.quantityBottles ?? 0) +
+        Number(splitAgg._sum.quantityBottles ?? 0),
+      amount: paymentTotals.CASH + paymentTotals.CARD + paymentTotals.UPI + paymentTotals.CREDIT,
       paymentTotals,
     },
-    recentSales: recentSales.map(sale => ({
+    recentBills: recentBills.map(bill => ({
+      id: bill.id,
+      saleTime: bill.saleTime,
+      clerkName: bill.clerkName,
+      paymentMode: bill.paymentMode,
+      quantityBottles: bill.quantityBottles,
+      totalAmount: bill.totalAmount,
+      lines: bill.items.length,
+      items: bill.items,
+    })),
+    // Backward compatibility for screens that still consume line-level recents
+    recentSales: recentLines.slice(0, 12).map(sale => ({
       id: sale.id,
       saleTime: sale.saleTime,
       productName: sale.productSize.product.name,
@@ -122,7 +212,7 @@ export async function GET() {
       totalAmount: Number(sale.totalAmount),
       paymentMode: sale.paymentMode,
       scanMethod: sale.scanMethod,
-      staffName: sale.staff.name,
+      staffName: getClerkLabel(sale.staff),
     })),
   })
 }

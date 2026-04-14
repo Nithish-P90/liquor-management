@@ -16,24 +16,58 @@ export async function GET(req: NextRequest) {
     ? toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
     : toUtcNoonDate(new Date())
 
-  const byClerk = await prisma.sale.groupBy({
-    by: ['staffId'],
+  const sales = await prisma.sale.findMany({
     where: { saleDate: today },
-    _sum: { totalAmount: true, quantityBottles: true },
-    _count: { id: true },
-    orderBy: { _sum: { totalAmount: 'desc' } },
+    select: {
+      id: true,
+      saleTime: true,
+      staffId: true,
+      quantityBottles: true,
+      totalAmount: true,
+      staff: { select: { id: true, name: true, role: true } },
+    },
+    orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
   })
 
-  const staff = await prisma.staff.findMany({ select: { id: true, name: true } })
-  const staffMap = Object.fromEntries(staff.map(s => [s.id, s.name]))
+  const map = new Map<string, {
+    staffId: number
+    name: string
+    billKeys: Set<string>
+    bottles: number
+    amount: number
+  }>()
 
-  return NextResponse.json(
-    byClerk.map(row => ({
+  for (const sale of sales) {
+    const isCounter = sale.staff.role === 'CASHIER'
+    const key = isCounter ? 'COUNTER' : `STAFF:${sale.staffId}`
+    const name = isCounter ? 'Counter' : sale.staff.name
+
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, {
+        staffId: isCounter ? 0 : sale.staffId,
+        name,
+        billKeys: new Set([`${sale.staffId}:${sale.saleTime.toISOString()}`]),
+        bottles: sale.quantityBottles,
+        amount: Number(sale.totalAmount),
+      })
+      continue
+    }
+
+    existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
+    existing.bottles += sale.quantityBottles
+    existing.amount += Number(sale.totalAmount)
+  }
+
+  const rows = Array.from(map.values())
+    .map(row => ({
       staffId: row.staffId,
-      name: staffMap[row.staffId] ?? `Staff #${row.staffId}`,
-      bills: row._count.id,
-      bottles: row._sum.quantityBottles ?? 0,
-      amount: Number(row._sum.totalAmount ?? 0),
+      name: row.name,
+      bills: row.billKeys.size,
+      bottles: row.bottles,
+      amount: row.amount,
     }))
-  )
+    .sort((a, b) => b.amount - a.amount)
+
+  return NextResponse.json(rows)
 }
