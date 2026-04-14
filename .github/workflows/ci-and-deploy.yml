@@ -19,6 +19,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SKIP_ENV_VALIDATION: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
