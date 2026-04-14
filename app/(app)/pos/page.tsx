@@ -51,7 +51,7 @@ export default function POSPage() {
   const user = session?.user as { id?: string; name?: string; role?: string } | undefined
 
   const [products, setProducts] = useState<ProductSize[]>([])
-  const [cashiers, setCashiers] = useState<Cashier[]>([])
+  const [staff, setStaff] = useState<Cashier[]>([])
   const [loading, setLoading] = useState(true)
   const [recentSales, setRecentSales] = useState<RecentSale[]>([])
 
@@ -59,7 +59,7 @@ export default function POSPage() {
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [activeCashier, setActiveCashier] = useState<Cashier | null>(null)
-  const [showCashierModal, setShowCashierModal] = useState(false)
+  const [selectedClerkId, setSelectedClerkId] = useState<string>('counter')
 
   const [payMode, setPayMode] = useState<PayMode>('CASH')
   const [tendered, setTendered] = useState('')
@@ -98,7 +98,7 @@ export default function POSPage() {
     loadRecent()
     fetch('/api/staff').then(r => r.json()).then((list: Cashier[]) => {
       const active = list.filter(s => s.active)
-      setCashiers(active)
+      setStaff(active)
       const me = active.find(s => s.id === parseInt(user?.id ?? '0'))
       setActiveCashier(me ?? active[0] ?? null)
     })
@@ -226,7 +226,8 @@ export default function POSPage() {
         const prop = item.sellingPrice * item.qty / cartTotal
         const body: Record<string, unknown> = {
           productSizeId: item.productSizeId, quantityBottles: item.qty,
-          paymentMode: payMode, scanMethod: 'MANUAL', staffId: activeCashier.id,
+          paymentMode: payMode, scanMethod: 'MANUAL',
+          staffId: selectedClerkId === 'counter' ? activeCashier.id : parseInt(selectedClerkId),
           customerName: customerName || null,
         }
         if (payMode === 'SPLIT') {
@@ -251,7 +252,7 @@ export default function POSPage() {
 
   function resetSale() {
     setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
-    setCustomerName(''); setShowPayment(false)
+    setCustomerName(''); setShowPayment(false); setSelectedClerkId('counter')
   }
 
   function flash(msg: string, type: 'ok' | 'err') {
@@ -294,24 +295,6 @@ export default function POSPage() {
         }`}>{toast.msg}</div>
       )}
 
-      {/* ── Cashier Modal ────────────────────── */}
-      {showCashierModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 flex items-center justify-center font-sans" onClick={() => setShowCashierModal(false)}>
-          <div className="bg-white rounded-3xl p-8 w-96 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-            <h3 className="text-slate-900 font-black text-xl mb-6 tracking-tight">Select Cashier</h3>
-            <div className="space-y-2">
-              {cashiers.map(c => (
-                <button key={c.id} onClick={() => { setActiveCashier(c); setShowCashierModal(false) }}
-                  className={`w-full px-5 py-4 rounded-2xl text-sm font-bold text-left transition-all duration-200 ${
-                    activeCashier?.id === c.id 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}>{c.name}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ═══════════════════════════════════════════════════
           LEFT PANEL — Products
@@ -342,14 +325,6 @@ export default function POSPage() {
             {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
 
-          {/* Cashier */}
-          <button onClick={() => setShowCashierModal(true)}
-            className="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all border border-slate-100 flex-shrink-0">
-            <div className="w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center text-[10px] font-black text-white shadow-sm">
-              {activeCashier?.name?.[0] ?? '?'}
-            </div>
-            <span className="hidden md:inline">{activeCashier?.name ?? 'Select'}</span>
-          </button>
         </div>
 
         {/* ── Category Tabs ────────────────── */}
@@ -529,6 +504,20 @@ export default function POSPage() {
               <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">
                 <span>Total bottles ({cartItems})</span>
                 <span>{fmt(cartTotal)}</span>
+              </div>
+              {/* Clerk / Supplier selector */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-16 flex-shrink-0">Bill to</span>
+                <select
+                  value={selectedClerkId}
+                  onChange={e => setSelectedClerkId(e.target.value)}
+                  className="flex-1 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="counter">Counter</option>
+                  {staff.filter(s => s.id !== activeCashier?.id).map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex justify-between items-end">
                 <span className="text-sm font-black text-slate-900 uppercase tracking-tighter mb-1">Total Payable</span>
