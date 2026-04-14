@@ -62,7 +62,7 @@ export default function LoginPage() {
             <label className="block text-sm font-medium text-gray-700 mb-4 text-center">Enter 4-Digit Security PIN</label>
             <div className="flex justify-center">
               <input
-                type="password" value={pin} onChange={e => setPin(e.target.value.slice(0,4))} maxLength={4}
+                type="text" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0,4))} maxLength={4}
                 className="w-48 text-center text-4xl tracking-[0.5em] px-4 py-5 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-inner"
                 placeholder="----" inputMode="numeric" pattern="[0-9]*" autoFocus
               />
