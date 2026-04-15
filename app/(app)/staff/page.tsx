@@ -9,7 +9,7 @@ export default function StaffPage() {
   const user = session?.user as { id?: string; name?: string; role?: string } | undefined
   const [staff, setStaff] = useState<any[]>([])
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState<any>({ name: '', email: '', pin: '', role: 'CASHIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
+  const [form, setForm] = useState<any>({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
   const [loading, setLoading] = useState(false)
   const [formError, setFormError] = useState('')
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null)
@@ -88,7 +88,7 @@ export default function StaffPage() {
       if (res.ok) {
         setShowAdd(false)
         setEditingStaffId(null)
-        setForm({ name: '', email: '', pin: '', role: 'CASHIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
+        setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
         load()
       } else {
         setFormError(data.error ?? 'Failed to save staff')
@@ -288,7 +288,7 @@ export default function StaffPage() {
           <button onClick={() => { setShowMetrics(true); loadMetrics() }} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors">
             Attendance Metrics
           </button>
-          <button onClick={() => { setEditingStaffId(null); setForm({ name: '', email: '', pin: '', role: 'CASHIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' }); setShowAdd(true) }} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+          <button onClick={() => { setEditingStaffId(null); setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' }); setShowAdd(true) }} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
             + Add Staff
           </button>
         </div>

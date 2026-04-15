@@ -69,13 +69,13 @@ export default function POSPage() {
 
   const [products, setProducts] = useState<ProductSize[]>([])
   const [staff, setStaff] = useState<StaffMember[]>([])
-  const [counterStaffId, setCounterStaffId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [recentBills, setRecentBills] = useState<RecentBill[]>([])
 
   const [category, setCategory] = useState('ALL')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
+  const [counterStaffId, setCounterStaffId] = useState<number | null>(null)
   const [activeClerkKey, setActiveClerkKey] = useState<string>('COUNTER')
   const [voidMode, setVoidMode] = useState(false)
   const [voidItems, setVoidItems] = useState<VoidItem[]>([])
@@ -116,8 +116,8 @@ export default function POSPage() {
   const clerkOptions = useMemo<ClerkOption[]>(() => {
     if (!counterStaffId) return []
     const suppliers = staff
-      .filter(s => s.active && !['ADMIN', 'CASHIER'].includes(s.role))
-      .map(s => ({ key: `STAFF:${s.id}`, label: s.name, staffId: s.id, kind: 'SUPPLIER' as const }))
+      .filter(s => s.active && s.role === 'SUPPLIER')
+      .map(s => ({ key: `SUPPLIER:${s.id}`, label: s.name, staffId: s.id, kind: 'SUPPLIER' as const }))
     return [
       { key: 'COUNTER', label: 'Counter', staffId: counterStaffId, kind: 'COUNTER' as const },
       ...suppliers,
@@ -378,9 +378,10 @@ export default function POSPage() {
       if (!res.ok) throw new Error(data.error || 'Void failed')
 
       const refund = data.refund as { total?: number; cash?: number; card?: number; upi?: number } | undefined
+      const cashRefund = Number(refund?.cash ?? 0)
       flash(
         refund?.total != null
-          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))}, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})`
+          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(cashRefund)} deducted, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})`
           : 'Void complete — stock returned',
         'ok'
       )
@@ -597,45 +598,30 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Quick clerk + void controls for fast counter flow */}
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.18em] font-black text-slate-400">Bill For</div>
-          <div className="flex flex-wrap gap-2">
+        {/* Supplier selector */}
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] font-black text-slate-400">Suppliers</div>
+            <div className="text-[10px] text-slate-400 font-black uppercase tracking-[0.18em]">Tap a box</div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {clerkOptions.map(c => (
               <button
                 key={c.key}
                 onClick={() => setActiveClerkKey(c.key)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                className={`aspect-square min-h-[88px] rounded-2xl border px-3 py-4 text-center text-sm font-black transition-all flex items-center justify-center leading-tight ${
                   activeClerk?.key === c.key
-                    ? c.kind === 'COUNTER'
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-100 scale-[0.98]'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
                 }`}
               >
-                {c.label}
+                <span className="line-clamp-2">{c.label}</span>
               </button>
             ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setVoidMode(v => !v)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition ${
-                voidMode ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
-              }`}
-            >
-              {voidMode ? 'Void Mode On' : 'Void / Return'}
-            </button>
-
-            {voidItems.length > 0 && (
-              <button
-                onClick={completeVoid}
-                disabled={voidProcessing}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {voidProcessing ? 'Voiding...' : `Process Void (${voidItems.reduce((s, i) => s + i.qty, 0)})`}
-              </button>
+            {clerkOptions.length === 0 && (
+              <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs font-bold text-slate-400">
+                No active suppliers found
+              </div>
             )}
           </div>
         </div>
@@ -871,7 +857,7 @@ export default function POSPage() {
         {/* Empty footer */}
         {cart.length === 0 && recentBills.length === 0 && (
           <div className="border-t border-[#252836] px-4 py-3 text-center">
-            <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select bill clerk'}</p>
+            <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}</p>
           </div>
         )}
       </div>
