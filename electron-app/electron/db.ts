@@ -713,9 +713,9 @@ export function getTodayTotals(db: Database.Database) {
   const date = todayStr()
   const row = db.prepare(`
     SELECT
-      COUNT(*)         AS bill_count,
-      SUM(quantity)    AS total_bottles,
-      SUM(total_amount) AS gross_revenue,
+      COUNT(CASE WHEN payment_mode != 'VOID' THEN 1 END) AS bill_count,
+      SUM(CASE WHEN payment_mode != 'VOID' THEN quantity ELSE 0 END) AS total_bottles,
+      SUM(total_amount)  AS gross_revenue,
       SUM(CASE WHEN payment_mode IN ('CASH','SPLIT') THEN COALESCE(cash_amount, total_amount) ELSE 0 END) AS cash_total,
       SUM(CASE WHEN payment_mode IN ('CARD','SPLIT') THEN COALESCE(card_amount, total_amount) ELSE 0 END) AS card_total,
       SUM(CASE WHEN payment_mode IN ('UPI','SPLIT')  THEN COALESCE(upi_amount,  total_amount) ELSE 0 END) AS upi_total

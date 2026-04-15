@@ -57,6 +57,7 @@ enum PaymentMode {
   UPI
   CREDIT
   SPLIT
+  VOID
 }
 
 enum ScanMethod {

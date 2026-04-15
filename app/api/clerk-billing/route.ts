@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     : toUtcNoonDate(new Date())
 
   const sales = await prisma.sale.findMany({
-    where: { saleDate: today },
+    where: { saleDate: today, paymentMode: { not: 'VOID' } },
     select: {
       id: true,
       saleTime: true,
