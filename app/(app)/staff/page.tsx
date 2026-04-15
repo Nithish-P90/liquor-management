@@ -411,10 +411,12 @@ export default function StaffPage() {
                   <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="CASHIER">Cashier</option>
                     <option value="SUPPLIER">Supplier</option>
+                    <option value="HELPER">Helper</option>
                     <option value="CLEANER">Cleaner</option>
-                    {form.role && !['CASHIER', 'SUPPLIER', 'CLEANER'].includes(form.role) && (
-                      <option value={form.role}>{form.role}</option>
-                    )}
+                    <option value="WATCHMAN">Watchman</option>
+                    <option value="LOADER">Loader</option>
+                    <option value="COLLECTOR">Collector</option>
+                    <option value="OTHER">Other</option>
                   </select>
                 </div>
               </div>

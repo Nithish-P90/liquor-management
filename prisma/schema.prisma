@@ -27,10 +27,12 @@ enum Category {
 enum Role {
   ADMIN
   CASHIER
+  SUPPLIER
   HELPER
   LOADER
   COLLECTOR
   CLEANER
+  WATCHMAN
   OTHER
 }
 
