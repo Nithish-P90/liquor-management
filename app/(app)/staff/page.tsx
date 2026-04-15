@@ -414,7 +414,6 @@ export default function StaffPage() {
                     <option value="HELPER">Helper</option>
                     <option value="CLEANER">Cleaner</option>
                     <option value="WATCHMAN">Watchman</option>
-                    <option value="LOADER">Loader</option>
                     <option value="COLLECTOR">Collector</option>
                     <option value="OTHER">Other</option>
                   </select>
