@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { subtractDays, toUtcNoonDate } from '@/lib/date-utils'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   const user = session?.user as { role?: string } | undefined
