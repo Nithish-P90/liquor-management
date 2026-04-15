@@ -227,6 +227,8 @@ export default function POS() {
   const [showManage, setShowManage] = useState(false)
   const [showOneOff, setShowOneOff] = useState(false)
   const [showSplit, setShowSplit]   = useState(false)
+  const [showVoidLast, setShowVoidLast] = useState(false)
+  const [todaySales, setTodaySales]     = useState<any[]>([])
 
   const searchRef     = useRef<HTMLInputElement>(null)
   const barcodeTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -366,12 +368,36 @@ export default function POS() {
     setCart(prev => prev.filter(i => i.key !== key))
   }
 
-  // Void: clears cart. Stock was never deducted (deduction only happens on insertSale),
-  // so items are effectively returned to inventory automatically.
+  // Void pending cart (before checkout) — just clears UI state.
+  // Stock is only deducted on insertSale, so nothing to restore.
   function voidCart() {
     setCart([])
     setCustomerName('')
     setShowSplit(false)
+  }
+
+  // Open "Void Last Bill" modal — fetch today's sales first
+  async function openVoidLast() {
+    const sales = await window.posAPI.getTodaySales()
+    // Group by sale_time+staff_id to reconstruct bills, show most recent first
+    setTodaySales(sales)
+    setShowVoidLast(true)
+  }
+
+  // Void a specific sale row by local_id, restore stock + refresh totals
+  async function handleVoidSale(localId: string, productName: string) {
+    const confirmed = window.confirm(`Void sale: ${productName}?\nStock will be restored and the amount removed from today's totals.`)
+    if (!confirmed) return
+    const result = await window.posAPI.voidSale(localId)
+    if (!result.ok) {
+      showToast('err', result.error ?? 'Void failed')
+      return
+    }
+    showToast('ok', `Voided: ${productName}`)
+    // Refresh the modal list and totals
+    const sales = await window.posAPI.getTodaySales()
+    setTodaySales(sales)
+    refreshTotals()
   }
 
   const cartTotal     = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -757,6 +783,16 @@ export default function POS() {
           {isSubmitting && (
             <div className="px-3 pb-3 text-center text-xs text-slate-400 animate-pulse">Recording bill…</div>
           )}
+
+          {/* Void Last Bill — always visible below action bar */}
+          <div className="px-3 pb-3">
+            <button
+              onClick={openVoidLast}
+              className="w-full py-2 rounded-lg border border-red-900/60 bg-red-950/30 text-red-400 hover:bg-red-900/40 hover:text-red-300 text-xs font-semibold transition-colors"
+            >
+              Void Last Bill / Undo Sale
+            </button>
+          </div>
         </div>
       </div>
 
@@ -774,6 +810,50 @@ export default function POS() {
           onConfirm={(cash, card, upi) => processCheckout('SPLIT', { cash, card, upi })}
           onClose={() => setShowSplit(false)}
         />
+      )}
+      {showVoidLast && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl border border-slate-600 w-[520px] max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700">
+              <div>
+                <span className="font-semibold text-slate-100">Void a Sale</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">Stock is restored and amount removed from today's totals.</p>
+              </div>
+              <button onClick={() => setShowVoidLast(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+              {todaySales.length === 0 && (
+                <p className="text-slate-500 text-sm text-center py-8">No sales recorded today.</p>
+              )}
+              {[...todaySales].reverse().map(sale => (
+                <div key={sale.local_id} className="flex items-center gap-3 bg-slate-900/60 rounded-lg px-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-200 truncate">
+                      {sale.product_name} {sale.size_ml ? `${sale.size_ml}ml` : ''}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                      <span>x{sale.quantity}</span>
+                      <span className="text-emerald-400 font-semibold">₹{Number(sale.total_amount).toFixed(2)}</span>
+                      <span className="uppercase text-slate-500">{sale.payment_mode}</span>
+                      <span>{new Date(sale.sale_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleVoidSale(sale.local_id, `${sale.product_name} x${sale.quantity}`)}
+                    className="px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-red-300 text-xs font-bold border border-red-800/60 transition-colors flex-shrink-0"
+                  >
+                    Void
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-3 border-t border-slate-700">
+              <button onClick={() => setShowVoidLast(false)} className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Toast ── */}

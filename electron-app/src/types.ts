@@ -125,6 +125,7 @@ export interface PosAPI {
   insertSale: (input: Omit<Sale, 'local_id' | 'sale_date' | 'sale_time' | 'server_id' | 'synced' | 'sync_error' | 'created_at'>) => Promise<{ ok: boolean; sale?: Sale; error?: string }>
   getTodaySales: () => Promise<Sale[]>
   getTodayTotals: () => Promise<DailyTotals>
+  voidSale: (localId: string) => Promise<{ ok: boolean; error?: string }>
   checkIn: (staffId: number, staffName: string) => Promise<{ ok: boolean; record?: AttendanceRecord; error?: string }>
   checkOut: (staffId: number) => Promise<{ ok: boolean; record?: AttendanceRecord; error?: string }>
   getTodayAttendance: () => Promise<AttendanceRecord[]>

@@ -16,7 +16,7 @@ import {
   getDb, getSetting, setSetting,
   getProducts, getProductByBarcode,
   getStaff,
-  insertSale, getTodaySales, getTodayTotals,
+  insertSale, getTodaySales, getTodayTotals, voidSale,
   checkInStaff, checkOutStaff, getAttendanceForDate, getAttendanceForStaffToday,
   insertExpense, getTodayExpenses,
   getTodayCashRecord, upsertCashRecord,
@@ -176,6 +176,10 @@ ipcMain.handle('db:insertSale', (_, input) => {
 
 ipcMain.handle('db:getTodaySales', () => {
   return getTodaySales(getDb())
+})
+
+ipcMain.handle('db:voidSale', (_e, localId: string) => {
+  return voidSale(getDb(), localId)
 })
 
 ipcMain.handle('db:getTodayTotals', () => {

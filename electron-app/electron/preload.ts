@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('posAPI', {
   insertSale: (input: unknown) => ipcRenderer.invoke('db:insertSale', input),
   getTodaySales: () => ipcRenderer.invoke('db:getTodaySales'),
   getTodayTotals: () => ipcRenderer.invoke('db:getTodayTotals'),
+  voidSale: (localId: string) => ipcRenderer.invoke('db:voidSale', localId),
 
   // ── Attendance ────────────────────────────────────────────────────────────
   checkIn: (staffId: number, staffName: string) => ipcRenderer.invoke('db:checkIn', staffId, staffName),

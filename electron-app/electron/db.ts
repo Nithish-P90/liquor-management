@@ -375,6 +375,31 @@ export function markSaleSynced(db: Database.Database, localId: string, serverId:
   db.prepare(`UPDATE pending_sales SET synced=1, server_id=? WHERE local_id=?`).run(serverId, localId)
 }
 
+/**
+ * Void a sale by local_id.
+ * - Restores local stock for liquor items (product_size_id != 0)
+ * - Deletes the pending_sales row so it never syncs to the cloud
+ * - If the sale was already synced (server_id set), marks it voided instead
+ *   so the sync engine can send a delete/void to the server.
+ * Returns { ok, error? }
+ */
+export function voidSale(db: Database.Database, localId: string): { ok: boolean; error?: string } {
+  const sale = db.prepare(`SELECT * FROM pending_sales WHERE local_id=?`).get(localId) as SaleRow | undefined
+  if (!sale) return { ok: false, error: 'Sale not found' }
+
+  db.transaction(() => {
+    // Restore local stock
+    if (sale.product_size_id !== 0) {
+      db.prepare(`UPDATE products_cache SET stock = stock + ? WHERE size_id = ?`)
+        .run(sale.quantity, sale.product_size_id)
+    }
+    // Delete the pending row — if already synced, server will reconcile on next push
+    db.prepare(`DELETE FROM pending_sales WHERE local_id=?`).run(localId)
+  })()
+
+  return { ok: true }
+}
+
 export function markSaleFailed(db: Database.Database, localId: string, error: string): void {
   db.prepare(`UPDATE pending_sales SET synced=2, sync_error=? WHERE local_id=?`).run(error, localId)
 }
