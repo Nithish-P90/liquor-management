@@ -1,22 +1,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
-  Search, Barcode, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone,
-  ShoppingBag, CheckCircle, AlertCircle, X, XCircle, Package, Settings2, Pencil,
+  Search, Barcode, Plus, Minus, Trash2, ShoppingBag, CheckCircle, AlertCircle,
+  X, XCircle, Package, Settings2, Pencil, Banknote, CreditCard, Smartphone, Layers,
 } from 'lucide-react'
 import type { Product, MiscItem, DailyTotals, MiscTotals } from '../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CartItem = {
-  key: string           // unique per cart line
+  key: string
   label: string
   unitPrice: number
   quantity: number
   isMisc: boolean
-  // for regular items:
   product?: Product
-  // for misc items:
-  miscItemId?: number   // undefined for one-off items
+  miscItemId?: number
   miscItemName?: string
 }
 
@@ -32,25 +30,23 @@ const fmtRs = (n: number) => `₹${n.toFixed(2)}`
 function SizeBadge({ ml }: { ml: number }) {
   let label: string
   let cls: string
-  if (ml <= 60)        { label = `${ml}ml`;  cls = 'bg-purple-900 text-purple-300 border-purple-700' }
-  else if (ml <= 90)   { label = '90ml';     cls = 'bg-violet-900 text-violet-300 border-violet-700' }
-  else if (ml <= 180)  { label = '180ml';    cls = 'bg-blue-900   text-blue-300   border-blue-700'   }
-  else if (ml <= 375)  { label = '375ml';    cls = 'bg-cyan-900   text-cyan-300   border-cyan-700'   }
-  else if (ml <= 500)  { label = '500ml';    cls = 'bg-teal-900   text-teal-300   border-teal-700'   }
-  else if (ml <= 750)  { label = '750ml';    cls = 'bg-amber-900  text-amber-300  border-amber-700'  }
-  else                 { label = `${ml}ml`;  cls = 'bg-red-900    text-red-300    border-red-700'    }
+  if (ml <= 60)       { label = `${ml}ml`; cls = 'bg-purple-900 text-purple-300 border-purple-700' }
+  else if (ml <= 90)  { label = '90ml';    cls = 'bg-violet-900 text-violet-300 border-violet-700' }
+  else if (ml <= 180) { label = '180ml';   cls = 'bg-blue-900   text-blue-300   border-blue-700'   }
+  else if (ml <= 375) { label = '375ml';   cls = 'bg-cyan-900   text-cyan-300   border-cyan-700'   }
+  else if (ml <= 500) { label = '500ml';   cls = 'bg-teal-900   text-teal-300   border-teal-700'   }
+  else if (ml <= 750) { label = '750ml';   cls = 'bg-amber-900  text-amber-300  border-amber-700'  }
+  else                { label = `${ml}ml`; cls = 'bg-red-900    text-red-300    border-red-700'    }
   return <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold leading-none ${cls}`}>{label}</span>
 }
 
 // ── Manage Misc Items modal ───────────────────────────────────────────────────
 
-type ManageModalProps = {
+function ManageMiscModal({ items, onClose, onRefresh }: {
   items: MiscItem[]
   onClose: () => void
   onRefresh: () => void
-}
-
-function ManageMiscModal({ items, onClose, onRefresh }: ManageModalProps) {
+}) {
   const [name, setName]       = useState('')
   const [price, setPrice]     = useState('')
   const [barcode, setBarcode] = useState('')
@@ -59,112 +55,61 @@ function ManageMiscModal({ items, onClose, onRefresh }: ManageModalProps) {
   const [err, setErr]         = useState('')
 
   function startEdit(item: MiscItem) {
-    setEditId(item.id)
-    setName(item.name)
-    setPrice(String(item.price))
-    setBarcode(item.barcode ?? '')
-    setErr('')
+    setEditId(item.id); setName(item.name); setPrice(String(item.price))
+    setBarcode(item.barcode ?? ''); setErr('')
   }
-
-  function resetForm() {
-    setEditId(null); setName(''); setPrice(''); setBarcode(''); setErr('')
-  }
+  function resetForm() { setEditId(null); setName(''); setPrice(''); setBarcode(''); setErr('') }
 
   async function handleSave() {
     const p = parseFloat(price)
-    if (!name.trim())   { setErr('Name is required'); return }
+    if (!name.trim())       { setErr('Name is required'); return }
     if (isNaN(p) || p <= 0) { setErr('Enter a valid price'); return }
     setSaving(true)
-    const res = await window.posAPI.saveMiscItem({
-      id: editId ?? undefined,
-      name: name.trim(),
-      price: p,
-      barcode: barcode.trim() || null,
-    })
+    const res = await window.posAPI.saveMiscItem({ id: editId ?? undefined, name: name.trim(), price: p, barcode: barcode.trim() || null })
     setSaving(false)
     if (!res.ok) { setErr(res.error ?? 'Save failed'); return }
-    resetForm()
-    onRefresh()
+    resetForm(); onRefresh()
   }
 
-  async function handleDelete(id: number) {
-    await window.posAPI.deleteMiscItem(id)
-    onRefresh()
-  }
+  async function handleDelete(id: number) { await window.posAPI.deleteMiscItem(id); onRefresh() }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-slate-800 rounded-xl border border-slate-600 w-[480px] max-h-[80vh] flex flex-col shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700">
           <span className="font-semibold text-slate-100">Manage Misc Items</span>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
-
-        {/* Existing items */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1.5">
-          {items.length === 0 && (
-            <p className="text-slate-500 text-sm text-center py-6">No items yet. Add one below.</p>
-          )}
+          {items.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No items yet.</p>}
           {items.map(item => (
-            <div key={item.id} className="flex items-center gap-2 bg-slate-750 bg-slate-900/50 rounded-lg px-3 py-2">
+            <div key={item.id} className="flex items-center gap-2 bg-slate-900/50 rounded-lg px-3 py-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-slate-200 truncate">{item.name}</div>
-                <div className="text-xs text-slate-400">
-                  {fmtRs(item.price)}
-                  {item.barcode && <span className="ml-2 text-slate-500">#{item.barcode}</span>}
-                </div>
+                <div className="text-xs text-slate-400">{fmtRs(item.price)}{item.barcode && <span className="ml-2 text-slate-500">#{item.barcode}</span>}</div>
               </div>
-              <button onClick={() => startEdit(item)} className="text-slate-400 hover:text-indigo-400 p-1">
-                <Pencil size={13} />
-              </button>
-              <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 p-1">
-                <Trash2 size={13} />
-              </button>
+              <button onClick={() => startEdit(item)} className="text-slate-400 hover:text-indigo-400 p-1"><Pencil size={13} /></button>
+              <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={13} /></button>
             </div>
           ))}
         </div>
-
-        {/* Add / Edit form */}
         <div className="border-t border-slate-700 px-5 py-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            {editId ? 'Edit item' : 'Add new item'}
-          </p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{editId ? 'Edit item' : 'Add new item'}</p>
           {err && <p className="text-xs text-red-400">{err}</p>}
           <div className="flex gap-2">
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Item name (e.g. Cigarette)"
-              className="flex-1 bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-            <input
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              placeholder="₹ Price"
-              type="number"
-              className="w-24 bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Item name"
+              className="flex-1 bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            <input value={price} onChange={e => setPrice(e.target.value)} placeholder="₹ Price" type="number"
+              className="w-24 bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
           </div>
-          <input
-            value={barcode}
-            onChange={e => setBarcode(e.target.value)}
-            placeholder="Barcode (optional — scan or type)"
-            className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+          <input value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Barcode (optional)"
+            className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
           <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50">
               {saving ? 'Saving…' : editId ? 'Update' : 'Add Item'}
             </button>
-            {editId && (
-              <button onClick={resetForm} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm">
-                Cancel
-              </button>
-            )}
+            {editId && <button onClick={resetForm} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm">Cancel</button>}
           </div>
         </div>
       </div>
@@ -174,25 +119,18 @@ function ManageMiscModal({ items, onClose, onRefresh }: ManageModalProps) {
 
 // ── One-off item modal ────────────────────────────────────────────────────────
 
-type OneOffModalProps = {
-  onAdd: (name: string, price: number) => void
-  onClose: () => void
-}
-
-function OneOffModal({ onAdd, onClose }: OneOffModalProps) {
+function OneOffModal({ onAdd, onClose }: { onAdd: (name: string, price: number) => void; onClose: () => void }) {
   const [name, setName]   = useState('')
   const [price, setPrice] = useState('')
   const [err, setErr]     = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
-
   useEffect(() => { nameRef.current?.focus() }, [])
 
   function handleAdd() {
     const p = parseFloat(price)
     if (!name.trim())       { setErr('Enter item name'); return }
     if (isNaN(p) || p <= 0) { setErr('Enter a valid price'); return }
-    onAdd(name.trim(), p)
-    onClose()
+    onAdd(name.trim(), p); onClose()
   }
 
   return (
@@ -203,27 +141,67 @@ function OneOffModal({ onAdd, onClose }: OneOffModalProps) {
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
-        <input
-          ref={nameRef}
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Item name"
-          className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-2 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-        <input
-          value={price}
-          onChange={e => setPrice(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="₹ Price"
-          type="number"
-          className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-2 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-        <button
-          onClick={handleAdd}
-          className="w-full py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium"
-        >
-          Add to Cart
+        <input ref={nameRef} value={name} onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Item name"
+          className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-2 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+        <input value={price} onChange={e => setPrice(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="₹ Price" type="number"
+          className="w-full bg-slate-700 text-slate-100 rounded px-2.5 py-2 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+        <button onClick={handleAdd} className="w-full py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">Add to Cart</button>
+      </div>
+    </div>
+  )
+}
+
+// ── Split payment modal ───────────────────────────────────────────────────────
+
+function SplitModal({ total, onConfirm, onClose }: {
+  total: number
+  onConfirm: (cash: number, card: number, upi: number) => void
+  onClose: () => void
+}) {
+  const [cash, setCash] = useState('')
+  const [card, setCard] = useState('')
+  const [upi,  setUpi]  = useState('')
+  const [err,  setErr]  = useState('')
+
+  const splitSum = parseFloat(cash || '0') + parseFloat(card || '0') + parseFloat(upi || '0')
+  const diff     = Math.abs(splitSum - total)
+
+  function handleConfirm() {
+    if (diff > 0.01) { setErr(`Difference: ${fmtRs(diff)} — amounts must equal ${fmtRs(total)}`); return }
+    onConfirm(parseFloat(cash || '0'), parseFloat(card || '0'), parseFloat(upi || '0'))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-slate-800 rounded-xl border border-slate-600 w-80 shadow-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-slate-100">Split Payment</span>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={16} /></button>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-black text-white">{fmtRs(total)}</div>
+          <div className="text-xs text-slate-400 mt-0.5">total to split</div>
+        </div>
+        {[
+          { label: 'Cash', icon: <Banknote size={14} />, val: cash, set: setCash },
+          { label: 'Card', icon: <CreditCard size={14} />, val: card, set: setCard },
+          { label: 'UPI',  icon: <Smartphone size={14} />, val: upi,  set: setUpi  },
+        ].map(({ label, icon, val, set }) => (
+          <div key={label}>
+            <label className="text-xs text-slate-400 mb-1 flex items-center gap-1">{icon}{label}</label>
+            <input type="number" value={val} onChange={e => set(e.target.value)} placeholder="0"
+              className="w-full bg-slate-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+          </div>
+        ))}
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        {!err && diff <= 0.01 && splitSum > 0 && (
+          <p className="text-xs text-emerald-400">✓ Amounts balance</p>
+        )}
+        <button onClick={handleConfirm}
+          className="w-full py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base">
+          Confirm Split · {fmtRs(total)}
         </button>
       </div>
     </div>
@@ -233,35 +211,32 @@ function OneOffModal({ onAdd, onClose }: OneOffModalProps) {
 // ── Main POS screen ───────────────────────────────────────────────────────────
 
 export default function POS() {
-  const [products, setProducts]   = useState<Product[]>([])
-  const [miscItems, setMiscItems] = useState<MiscItem[]>([])
-  const [staff, setStaff]         = useState<{ id: number; name: string; role: string }[]>([])
-  const [search, setSearch]       = useState('')
-  const [category, setCategory]   = useState('ALL')
-  const [cart, setCart]           = useState<CartItem[]>([])
-  const [totals, setTotals]       = useState<DailyTotals | null>(null)
+  const [products, setProducts]     = useState<Product[]>([])
+  const [miscItems, setMiscItems]   = useState<MiscItem[]>([])
+  const [staff, setStaff]           = useState<{ id: number; name: string; role: string }[]>([])
+  const [search, setSearch]         = useState('')
+  const [category, setCategory]     = useState('ALL')
+  const [cart, setCart]             = useState<CartItem[]>([])
+  const [totals, setTotals]         = useState<DailyTotals | null>(null)
   const [miscTotals, setMiscTotals] = useState<MiscTotals | null>(null)
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH')
-  const [cashAmount, setCashAmount]   = useState('')
-  const [cardAmount, setCardAmount]   = useState('')
-  const [upiAmount, setUpiAmount]     = useState('')
-  const [customerName, setCustomerName] = useState('')
   const [activeStaffId, setActiveStaffId] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting]   = useState(false)
-  const [toast, setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
+  const [customerName, setCustomerName]   = useState('')
+  const [toast, setToast]           = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
   const [barcodeBuffer, setBarcodeBuffer] = useState('')
-  const [showManage, setShowManage]       = useState(false)
-  const [showOneOff, setShowOneOff]       = useState(false)
+  const [showManage, setShowManage] = useState(false)
+  const [showOneOff, setShowOneOff] = useState(false)
+  const [showSplit, setShowSplit]   = useState(false)
+
   const searchRef     = useRef<HTMLInputElement>(null)
   const barcodeTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const staffInit     = useRef(false)
   const oneOffCounter = useRef(0)
 
-  // ── Data loading ─────────────────────────────────────────────────────────────
+  // ── Data loading ─────────────────────────────────────────────────────────
 
   const loadMiscItems = useCallback(async () => {
-    const items = await window.posAPI.getMiscItems()
-    setMiscItems(items)
+    setMiscItems(await window.posAPI.getMiscItems())
   }, [])
 
   const initialLoad = useCallback(async () => {
@@ -301,13 +276,12 @@ export default function POS() {
     return () => unsub()
   }, [initialLoad, refreshTotals])
 
-  // ── Barcode scanner ───────────────────────────────────────────────────────────
+  // ── Barcode scanner ───────────────────────────────────────────────────────
 
   useEffect(() => {
     const handleKey = async (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' && target !== searchRef.current) return
-
       if (e.key === 'Enter') {
         if (barcodeBuffer.length >= 4) await handleBarcodeInput(barcodeBuffer)
         setBarcodeBuffer('')
@@ -326,17 +300,14 @@ export default function POS() {
   }, [barcodeBuffer])
 
   async function handleBarcodeInput(barcode: string) {
-    // Check regular products first, then misc items
     const product = await window.posAPI.getProductByBarcode(barcode)
     if (product) { addProductToCart(product); return }
-
     const misc = await window.posAPI.getMiscItemByBarcode(barcode)
     if (misc) { addMiscToCart(misc); return }
-
     showToast('err', `Barcode not found: ${barcode}`)
   }
 
-  // ── Filtered products ─────────────────────────────────────────────────────────
+  // ── Filtered lists ────────────────────────────────────────────────────────
 
   const isMiscTab = category === 'MISC'
 
@@ -345,9 +316,7 @@ export default function POS() {
     return products.filter(p => {
       const matchCat = category === 'ALL' || p.category === category
       const s = search.toLowerCase()
-      const matchSearch = !s || p.name.toLowerCase().includes(s) ||
-        p.item_code.toLowerCase().includes(s) || (p.barcode ?? '').includes(s)
-      return matchCat && matchSearch
+      return matchCat && (!s || p.name.toLowerCase().includes(s) || p.item_code.toLowerCase().includes(s) || (p.barcode ?? '').includes(s))
     })
   }, [products, category, search, isMiscTab])
 
@@ -357,17 +326,14 @@ export default function POS() {
     return miscItems.filter(m => !s || m.name.toLowerCase().includes(s))
   }, [miscItems, search, isMiscTab])
 
+  // Only CASHIER (counter) and SUPPLIER roles
   const eligibleStaff = useMemo(
     () => staff.filter(s => ['CASHIER', 'SUPPLIER'].includes(s.role)),
     [staff]
   )
+  const activeStaff = useMemo(() => staff.find(s => s.id === activeStaffId), [staff, activeStaffId])
 
-  const activeStaff = useMemo(
-    () => staff.find(s => s.id === activeStaffId),
-    [staff, activeStaffId]
-  )
-
-  // ── Cart operations ───────────────────────────────────────────────────────────
+  // ── Cart operations ───────────────────────────────────────────────────────
 
   function addProductToCart(product: Product) {
     const key = `prod-${product.size_id}`
@@ -393,79 +359,74 @@ export default function POS() {
   }
 
   function updateQty(key: string, delta: number) {
-    setCart(prev =>
-      prev.map(i => i.key === key ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
-          .filter(i => i.quantity > 0)
-    )
+    setCart(prev => prev.map(i => i.key === key ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0))
   }
 
   function removeFromCart(key: string) {
     setCart(prev => prev.filter(i => i.key !== key))
   }
 
+  // Void: clears cart. Stock was never deducted (deduction only happens on insertSale),
+  // so items are effectively returned to inventory automatically.
   function voidCart() {
     setCart([])
-    setCashAmount(''); setCardAmount(''); setUpiAmount('')
-    setCustomerName(''); setPaymentMode('CASH')
+    setCustomerName('')
+    setShowSplit(false)
   }
 
   const cartTotal     = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const liquorTotal   = cart.filter(i => !i.isMisc).reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const miscCartTotal = cart.filter(i =>  i.isMisc).reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const cartEmpty     = cart.length === 0
 
-  const splitTotal = parseFloat(cashAmount || '0') + parseFloat(cardAmount || '0') + parseFloat(upiAmount || '0')
-  const splitDiff  = paymentMode === 'SPLIT' ? Math.abs(splitTotal - cartTotal) : 0
-  const canSubmit  = cart.length > 0 && activeStaffId && (paymentMode !== 'SPLIT' || splitDiff < 0.01)
-
-  // ── Toast ─────────────────────────────────────────────────────────────────────
+  // ── Toast ─────────────────────────────────────────────────────────────────
 
   function showToast(type: 'ok' | 'err', msg: string) {
     setToast({ type, msg })
     setTimeout(() => setToast(null), 4000)
   }
 
-  // ── Checkout ──────────────────────────────────────────────────────────────────
+  // ── Checkout core ─────────────────────────────────────────────────────────
 
-  const handleCheckout = async () => {
-    if (!canSubmit || isSubmitting) return
+  async function processCheckout(
+    mode: PaymentMode,
+    splits?: { cash: number; card: number; upi: number }
+  ) {
+    if (cartEmpty || !activeStaffId || isSubmitting) return
     setIsSubmitting(true)
+    setShowSplit(false)
 
     try {
       const liquorItems = cart.filter(i => !i.isMisc)
       const miscCartItems = cart.filter(i => i.isMisc)
 
-      // Record regular liquor sales
       for (const item of liquorItems) {
         const result = await window.posAPI.insertSale({
-          staff_id:        activeStaffId!,
+          staff_id:        activeStaffId,
           product_size_id: item.product!.size_id,
           product_name:    item.product!.name,
           size_ml:         item.product!.size_ml,
           quantity:        item.quantity,
           selling_price:   item.unitPrice,
           total_amount:    item.unitPrice * item.quantity,
-          payment_mode:    paymentMode,
-          cash_amount: paymentMode === 'CASH'  ? cartTotal :
-                       paymentMode === 'SPLIT' ? parseFloat(cashAmount || '0') : null,
-          card_amount: paymentMode === 'CARD'  ? cartTotal :
-                       paymentMode === 'SPLIT' ? parseFloat(cardAmount || '0') : null,
-          upi_amount:  paymentMode === 'UPI'   ? cartTotal :
-                       paymentMode === 'SPLIT' ? parseFloat(upiAmount  || '0') : null,
+          payment_mode:    mode,
+          cash_amount:  mode === 'CASH'  ? cartTotal : mode === 'SPLIT' ? (splits?.cash ?? null) : null,
+          card_amount:  mode === 'CARD'  ? cartTotal : mode === 'SPLIT' ? (splits?.card ?? null) : null,
+          upi_amount:   mode === 'UPI'   ? cartTotal : mode === 'SPLIT' ? (splits?.upi  ?? null) : null,
           scan_method:   'MANUAL',
           customer_name: customerName || null,
         })
         if (!result.ok) throw new Error(result.error ?? 'Sale failed')
       }
 
-      // Record misc sales (local only — cashier's earnings)
       for (const item of miscCartItems) {
         await window.posAPI.insertMiscSale({
-          staff_id:     activeStaffId!,
+          staff_id:     activeStaffId,
           item_name:    item.miscItemName ?? item.label,
           quantity:     item.quantity,
           price:        item.unitPrice,
           total:        item.unitPrice * item.quantity,
-          payment_mode: paymentMode,
+          payment_mode: mode,
         })
       }
 
@@ -480,17 +441,16 @@ export default function POS() {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   const allTabs = [...LIQUOR_CATEGORIES, 'MISC']
 
   return (
     <div className="flex h-full bg-slate-900 overflow-hidden">
 
-      {/* ── Left: product / misc list ── */}
+      {/* ── Left: product list ── */}
       <div className="flex flex-col w-[55%] border-r border-slate-700">
-
-        {/* Search bar */}
+        {/* Search */}
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 border-b border-slate-700">
           <div className="relative flex-1">
             <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -513,77 +473,49 @@ export default function POS() {
         {/* Category tabs */}
         <div className="flex gap-1 px-2 py-2 overflow-x-auto bg-slate-800 border-b border-slate-700 flex-shrink-0">
           {allTabs.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
+            <button key={cat} onClick={() => setCategory(cat)}
               className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors
                 ${category === cat
                   ? cat === 'MISC' ? 'bg-orange-600 text-white' : 'bg-indigo-600 text-white'
                   : cat === 'MISC' ? 'bg-orange-900/40 text-orange-300 hover:bg-orange-800/50'
-                                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-            >
+                                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
               {cat === 'MISC' ? '🛍 MISC' : cat}
             </button>
           ))}
         </div>
 
-        {/* Product grid OR misc grid */}
+        {/* Product / misc grid */}
         {isMiscTab ? (
           <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
-            {/* Misc header */}
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-xs text-slate-400">
-                Cashier items — {activeStaff?.name ?? 'select counter'}'s stock
-              </span>
+              <span className="text-xs text-slate-400">Cashier items — {activeStaff?.name ?? '—'}'s stock</span>
               <div className="flex gap-1">
-                <button
-                  onClick={() => setShowOneOff(true)}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs"
-                >
+                <button onClick={() => setShowOneOff(true)}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs">
                   <Plus size={12} /> Custom
                 </button>
-                <button
-                  onClick={() => setShowManage(true)}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs"
-                >
+                <button onClick={() => setShowManage(true)}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs">
                   <Settings2 size={12} /> Manage
                 </button>
               </div>
             </div>
-
-            {/* Misc item cards */}
             <div className="grid grid-cols-3 gap-2 content-start">
               {filteredMisc.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => addMiscToCart(item)}
-                  className="text-left p-2 rounded-lg border border-orange-800/50 bg-orange-950/30 hover:border-orange-500 hover:bg-orange-900/30 active:scale-95 transition-all text-xs"
-                >
+                <button key={item.id} onClick={() => addMiscToCart(item)}
+                  className="text-left p-2 rounded-lg border border-orange-800/50 bg-orange-950/30 hover:border-orange-500 hover:bg-orange-900/30 active:scale-95 transition-all text-xs">
                   <div className="font-medium text-slate-200 line-clamp-2 leading-tight mb-1">{item.name}</div>
-                  <div className="mb-1">
-                    <span className="inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold leading-none bg-orange-900 text-orange-300 border-orange-700">
-                      MISC
-                    </span>
-                  </div>
+                  <span className="inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold leading-none bg-orange-900 text-orange-300 border-orange-700 mb-1">MISC</span>
                   <div className="text-emerald-400 font-semibold mt-1">{fmtRs(item.price)}</div>
                 </button>
               ))}
-
-              {/* "Add custom" card */}
-              <button
-                onClick={() => setShowOneOff(true)}
-                className="text-left p-2 rounded-lg border border-dashed border-slate-600 hover:border-slate-400 bg-slate-800/30 hover:bg-slate-800 active:scale-95 transition-all text-xs flex flex-col items-center justify-center gap-1 min-h-[80px] text-slate-500 hover:text-slate-300"
-              >
-                <Plus size={18} />
-                <span>Custom item</span>
+              <button onClick={() => setShowOneOff(true)}
+                className="p-2 rounded-lg border border-dashed border-slate-600 hover:border-slate-400 bg-slate-800/30 hover:bg-slate-800 active:scale-95 transition-all flex flex-col items-center justify-center gap-1 min-h-[80px] text-slate-500 hover:text-slate-300 text-xs">
+                <Plus size={18} /><span>Custom</span>
               </button>
-
-              {filteredMisc.length === 0 && search && (
-                <div className="col-span-3 text-center text-slate-500 py-8 text-sm">No items match</div>
-              )}
               {miscItems.length === 0 && !search && (
                 <div className="col-span-3 text-center text-slate-600 py-8 text-sm">
-                  No saved items yet — click <strong>Manage</strong> to add cigarettes, cups, snacks…
+                  No saved items — click <strong>Manage</strong> to add items
                 </div>
               )}
             </div>
@@ -591,22 +523,17 @@ export default function POS() {
         ) : (
           <div className="flex-1 overflow-y-auto p-2 grid grid-cols-3 gap-2 content-start scrollbar-thin">
             {filteredProducts.map(product => (
-              <button
-                key={product.size_id}
-                onClick={() => addProductToCart(product)}
+              <button key={product.size_id} onClick={() => addProductToCart(product)}
                 disabled={product.stock <= 0}
                 className={`text-left p-2 rounded-lg border transition-all text-xs
                   ${product.stock <= 0
                     ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700'
-                    : 'bg-slate-800 border-slate-700 hover:border-indigo-500 hover:bg-slate-750 active:scale-95'}`}
-              >
+                    : 'bg-slate-800 border-slate-700 hover:border-indigo-500 active:scale-95'}`}>
                 <div className="font-medium text-slate-200 line-clamp-2 leading-tight mb-1">{product.name}</div>
                 <div className="mb-1"><SizeBadge ml={product.size_ml} /></div>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-emerald-400 font-semibold">{fmtRs(product.selling_price)}</span>
-                  <span className={`text-xs ${product.stock < 5 ? 'text-amber-400' : 'text-slate-500'}`}>
-                    {product.stock} btl
-                  </span>
+                  <span className={`text-xs ${product.stock < 5 ? 'text-amber-400' : 'text-slate-500'}`}>{product.stock} btl</span>
                 </div>
               </button>
             ))}
@@ -616,16 +543,14 @@ export default function POS() {
           </div>
         )}
 
-        {/* Today's summary footer */}
+        {/* Daily summary */}
         {totals && (
           <div className="flex gap-3 px-3 py-2 bg-slate-800 border-t border-slate-700 text-xs text-slate-400 flex-shrink-0 flex-wrap">
             <span>{totals.bill_count} bills</span>
             <span>{totals.total_bottles} bottles</span>
             <span className="text-emerald-400 font-medium">{fmtRs(totals.gross_revenue)}</span>
             {miscTotals && miscTotals.misc_revenue > 0 && (
-              <span className="text-orange-400">
-                +{fmtRs(miscTotals.misc_revenue)} misc
-              </span>
+              <span className="text-orange-400">+{fmtRs(miscTotals.misc_revenue)} misc</span>
             )}
             <span className="ml-auto text-slate-500">{new Date().toLocaleDateString('en-IN')}</span>
           </div>
@@ -635,33 +560,34 @@ export default function POS() {
       {/* ── Right: cart + checkout ── */}
       <div className="flex flex-col w-[45%]">
 
-        {/* Counter selector + Void */}
-        <div className="px-3 py-2 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
-          <span className="text-xs text-slate-400 whitespace-nowrap">Counter:</span>
-          <select
-            value={activeStaffId ?? ''}
-            onChange={e => setActiveStaffId(parseInt(e.target.value))}
-            className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none"
-          >
-            {eligibleStaff.length === 0 && <option value="">No staff assigned</option>}
+        {/* ── Clerk selector — big tap targets ── */}
+        <div className="px-3 py-2 bg-slate-800 border-b border-slate-700">
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Counter / Supplier</div>
+          <div className="flex flex-wrap gap-1.5">
             {eligibleStaff.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <button
+                key={s.id}
+                onClick={() => setActiveStaffId(s.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border
+                  ${activeStaffId === s.id
+                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-900/40'
+                    : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600 hover:text-white'}`}
+              >
+                {s.name}
+                <span className={`ml-1.5 text-[9px] font-bold uppercase opacity-70`}>
+                  {s.role === 'CASHIER' ? 'counter' : 'supplier'}
+                </span>
+              </button>
             ))}
-          </select>
-          {cart.length > 0 && (
-            <button
-              onClick={voidCart}
-              title="Void Bill"
-              className="flex items-center gap-1 px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-red-300 text-xs font-medium transition-colors whitespace-nowrap"
-            >
-              <XCircle size={13} /> Void
-            </button>
-          )}
+            {eligibleStaff.length === 0 && (
+              <span className="text-xs text-slate-500 py-1">No counter/supplier staff found</span>
+            )}
+          </div>
         </div>
 
         {/* Cart items */}
         <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
-          {cart.length === 0 ? (
+          {cartEmpty ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-600">
               <ShoppingBag size={40} />
               <p className="text-sm">Cart is empty</p>
@@ -669,7 +595,7 @@ export default function POS() {
             </div>
           ) : (
             <div className="space-y-1.5">
-              {/* Group: liquor items */}
+              {/* Liquor items */}
               {cart.filter(i => !i.isMisc).map(item => (
                 <div key={item.key} className="flex items-center gap-2 bg-slate-800 rounded-lg p-2">
                   <div className="flex-1 min-w-0">
@@ -689,7 +615,7 @@ export default function POS() {
                 </div>
               ))}
 
-              {/* Divider + misc items */}
+              {/* Misc items */}
               {cart.some(i => i.isMisc) && (
                 <>
                   <div className="flex items-center gap-2 py-1">
@@ -723,106 +649,130 @@ export default function POS() {
           )}
         </div>
 
-        {/* Checkout panel */}
-        {cart.length > 0 && (
-          <div className="border-t border-slate-700 bg-slate-800 p-3 space-y-3 flex-shrink-0">
-
-            {/* Totals breakdown */}
-            <div className="space-y-0.5">
-              {cart.some(i => !i.isMisc) && (
-                <div className="flex items-center justify-between text-sm">
+        {/* ── Checkout footer — always visible ── */}
+        <div className="border-t border-slate-700 bg-slate-800 flex-shrink-0">
+          {/* Totals */}
+          <div className="px-3 pt-3 pb-2 space-y-0.5">
+            {!cartEmpty && cart.some(i => !i.isMisc) && cart.some(i => i.isMisc) && (
+              <>
+                <div className="flex justify-between text-xs">
                   <span className="text-slate-400">Liquor</span>
                   <span className="text-slate-300">{fmtRs(liquorTotal)}</span>
                 </div>
-              )}
-              {cart.some(i => i.isMisc) && (
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex justify-between text-xs">
                   <span className="text-orange-400">Misc ({activeStaff?.name ?? '—'})</span>
                   <span className="text-orange-300">{fmtRs(miscCartTotal)}</span>
                 </div>
-              )}
-              <div className="flex items-center justify-between pt-1 border-t border-slate-700">
-                <span className="text-slate-300 font-medium">Total</span>
-                <span className="text-2xl font-bold text-white">{fmtRs(cartTotal)}</span>
-              </div>
-            </div>
-
-            {/* Payment mode */}
-            <div className="grid grid-cols-4 gap-1">
-              {(['CASH', 'CARD', 'UPI', 'SPLIT'] as PaymentMode[]).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setPaymentMode(mode)}
-                  className={`py-2 rounded text-xs font-medium transition-colors flex flex-col items-center gap-1
-                    ${paymentMode === mode ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                >
-                  {mode === 'CASH'  && <Banknote size={14} />}
-                  {mode === 'CARD'  && <CreditCard size={14} />}
-                  {mode === 'UPI'   && <Smartphone size={14} />}
-                  {mode === 'SPLIT' && <span className="text-base leading-none">⅔</span>}
-                  {mode}
-                </button>
-              ))}
-            </div>
-
-            {/* Split inputs */}
-            {paymentMode === 'SPLIT' && (
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Cash', val: cashAmount, set: setCashAmount },
-                  { label: 'Card', val: cardAmount, set: setCardAmount },
-                  { label: 'UPI',  val: upiAmount,  set: setUpiAmount  },
-                ].map(({ label, val, set }) => (
-                  <div key={label}>
-                    <label className="text-xs text-slate-400 mb-1 block">{label}</label>
-                    <input type="number" value={val} onChange={e => set(e.target.value)}
-                      className="w-full bg-slate-700 text-white rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="0" />
-                  </div>
-                ))}
-                {splitDiff > 0.01 && (
-                  <div className="col-span-3 text-xs text-red-400">
-                    Difference: {fmtRs(splitDiff)} — amounts must equal total
-                  </div>
-                )}
-              </div>
+              </>
             )}
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-sm font-medium">Total</span>
+              <span className={`font-black ${cartEmpty ? 'text-slate-600 text-xl' : 'text-white text-3xl'}`}>
+                {cartEmpty ? '—' : fmtRs(cartTotal)}
+              </span>
+            </div>
+          </div>
 
-            {/* Customer name */}
-            <input
-              type="text"
-              value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              placeholder="Customer name (optional)"
-              className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+          {/* Customer name — only show when cart has items */}
+          {!cartEmpty && (
+            <div className="px-3 pb-2">
+              <input
+                type="text"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="Customer name (optional)"
+                className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1.5 text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          )}
 
-            {/* Confirm */}
+          {/* ── Action buttons: CASH | UPI | CARD | SPLIT | VOID ── */}
+          <div className="grid grid-cols-5 gap-1.5 px-3 pb-3">
+            {/* CASH — one click */}
             <button
-              onClick={handleCheckout}
-              disabled={!canSubmit || isSubmitting}
-              className={`w-full py-3 rounded-lg font-bold text-base transition-all
-                ${canSubmit && !isSubmitting
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.98]'
+              onClick={() => processCheckout('CASH')}
+              disabled={cartEmpty || !activeStaffId || isSubmitting}
+              className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-bold text-xs transition-all
+                ${!cartEmpty && activeStaffId && !isSubmitting
+                  ? 'bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white shadow-lg shadow-emerald-900/40'
                   : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
             >
-              {isSubmitting ? 'Recording…' : `Confirm Sale · ${fmtRs(cartTotal)}`}
+              <Banknote size={20} />
+              <span>CASH</span>
+            </button>
+
+            {/* UPI — one click */}
+            <button
+              onClick={() => processCheckout('UPI')}
+              disabled={cartEmpty || !activeStaffId || isSubmitting}
+              className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-bold text-xs transition-all
+                ${!cartEmpty && activeStaffId && !isSubmitting
+                  ? 'bg-violet-700 hover:bg-violet-600 active:scale-95 text-white shadow-lg shadow-violet-900/40'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+            >
+              <Smartphone size={20} />
+              <span>UPI</span>
+            </button>
+
+            {/* CARD — one click */}
+            <button
+              onClick={() => processCheckout('CARD')}
+              disabled={cartEmpty || !activeStaffId || isSubmitting}
+              className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-bold text-xs transition-all
+                ${!cartEmpty && activeStaffId && !isSubmitting
+                  ? 'bg-blue-700 hover:bg-blue-600 active:scale-95 text-white shadow-lg shadow-blue-900/40'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+            >
+              <CreditCard size={20} />
+              <span>CARD</span>
+            </button>
+
+            {/* SPLIT — opens modal */}
+            <button
+              onClick={() => setShowSplit(true)}
+              disabled={cartEmpty || !activeStaffId || isSubmitting}
+              className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-bold text-xs transition-all
+                ${!cartEmpty && activeStaffId && !isSubmitting
+                  ? 'bg-amber-700 hover:bg-amber-600 active:scale-95 text-white shadow-lg shadow-amber-900/40'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+            >
+              <Layers size={20} />
+              <span>SPLIT</span>
+            </button>
+
+            {/* VOID — always active, clears cart */}
+            <button
+              onClick={voidCart}
+              disabled={cartEmpty}
+              className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-bold text-xs transition-all
+                ${!cartEmpty
+                  ? 'bg-red-900 hover:bg-red-800 active:scale-95 text-red-300 border border-red-700'
+                  : 'bg-slate-700 text-slate-600 cursor-not-allowed'}`}
+            >
+              <XCircle size={20} />
+              <span>VOID</span>
             </button>
           </div>
-        )}
+
+          {isSubmitting && (
+            <div className="px-3 pb-3 text-center text-xs text-slate-400 animate-pulse">Recording bill…</div>
+          )}
+        </div>
       </div>
 
       {/* ── Modals ── */}
       {showManage && (
-        <ManageMiscModal
-          items={miscItems}
-          onClose={() => setShowManage(false)}
-          onRefresh={() => { loadMiscItems(); setShowManage(false) }}
-        />
+        <ManageMiscModal items={miscItems} onClose={() => setShowManage(false)}
+          onRefresh={() => { loadMiscItems(); setShowManage(false) }} />
       )}
       {showOneOff && (
-        <OneOffModal
-          onAdd={addOneOffToCart}
-          onClose={() => setShowOneOff(false)}
+        <OneOffModal onAdd={addOneOffToCart} onClose={() => setShowOneOff(false)} />
+      )}
+      {showSplit && (
+        <SplitModal
+          total={cartTotal}
+          onConfirm={(cash, card, upi) => processCheckout('SPLIT', { cash, card, upi })}
+          onClose={() => setShowSplit(false)}
         />
       )}
 
