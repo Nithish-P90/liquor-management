@@ -89,8 +89,12 @@ export function findBestFaceMatch(
   profiles: FaceProfileSummary[],
   options?: { defaultThreshold?: number; margin?: number }
 ): FaceMatchOutcome {
-  const defaultThreshold = options?.defaultThreshold ?? 0.48
-  const margin = options?.margin ?? 0.05
+  // 0.52 is more forgiving than 0.48 for typical webcam conditions;
+  // still strict enough to avoid false positives with 5+ samples enrolled.
+  const defaultThreshold = options?.defaultThreshold ?? 0.52
+  // Narrowed margin: 0.08 means the best match must beat runner-up by 0.08
+  // to avoid "ambiguous" rejections when two staff have similar faces.
+  const margin = options?.margin ?? 0.08
   const input = normalizeDescriptor(descriptor)
 
   const ranked = profiles

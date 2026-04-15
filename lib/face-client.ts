@@ -10,6 +10,16 @@ export type FaceCaptureSample = {
   previewDataUrl: string
 }
 
+export type AutoDetectResult = {
+  detected: boolean
+  descriptor?: number[]
+  detectionScore?: number
+  qualityScore?: number
+  box?: { x: number; y: number; width: number; height: number }
+  previewDataUrl?: string
+  error?: string
+}
+
 let faceApiPromise: Promise<FaceApiModule> | null = null
 let modelLoadPromise: Promise<FaceApiModule> | null = null
 
@@ -128,9 +138,9 @@ function computeCenterScore(box: { x: number; y: number; width: number; height: 
 
 function computeSizeScore(box: { width: number; height: number }, width: number, height: number): number {
   const faceRatio = (box.width * box.height) / (width * height)
-  if (faceRatio < 0.03) return 0
+  if (faceRatio < 0.02) return 0
   if (faceRatio > 0.45) return 0.55
-  return clamp((faceRatio - 0.03) / 0.22, 0, 1)
+  return clamp((faceRatio - 0.02) / 0.2, 0, 1)
 }
 
 function computeQualityScore(
@@ -146,6 +156,9 @@ function computeQualityScore(
   return clamp((detectionScore * 0.55) + (sharpness * 0.2) + (centerScore * 0.15) + (sizeScore * 0.1), 0, 1)
 }
 
+/** Single-shot capture: grabs one frame and returns the best face found.
+ *  Quality threshold is intentionally lower here (0.35) so enrollment works
+ *  across typical webcam conditions. */
 export async function captureFaceSample(video: HTMLVideoElement): Promise<FaceCaptureSample> {
   const faceapi = await ensureFaceModelsLoaded()
 
@@ -163,13 +176,14 @@ export async function captureFaceSample(video: HTMLVideoElement): Promise<FaceCa
 
   context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
+  // Use lower minConfidence (0.6) so more faces are detected under poor lighting
   const detections = await faceapi
-    .detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.9 }))
+    .detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
     .withFaceLandmarks()
     .withFaceDescriptors()
 
   if (detections.length === 0) {
-    throw new Error('No face detected. Center one face in the frame.')
+    throw new Error('No face detected. Move closer and make sure your face is well-lit.')
   }
 
   if (detections.length > 1) {
@@ -181,8 +195,9 @@ export async function captureFaceSample(video: HTMLVideoElement): Promise<FaceCa
   const box = detection.detection.box
   const qualityScore = computeQualityScore(context, canvas.width, canvas.height, box, detectionScore)
 
-  if (qualityScore < 0.55) {
-    throw new Error('Face quality is too low. Improve lighting and keep the face centered.')
+  // Lowered from 0.55 → 0.35 so typical overhead-lit office/counter works
+  if (qualityScore < 0.35) {
+    throw new Error('Image quality too low. Improve lighting or move closer to the camera.')
   }
 
   return {
@@ -193,5 +208,55 @@ export async function captureFaceSample(video: HTMLVideoElement): Promise<FaceCa
     frameHeight: canvas.height,
     box: { x: box.x, y: box.y, width: box.width, height: box.height },
     previewDataUrl: canvas.toDataURL('image/jpeg', 0.92),
+  }
+}
+
+/** Lightweight single-frame face probe used by the auto-detect loop.
+ *  Returns null when no single face is present — does NOT throw.
+ *  minConfidence intentionally low (0.5) so it triggers quickly. */
+export async function probeFaceFrame(video: HTMLVideoElement): Promise<AutoDetectResult> {
+  try {
+    const faceapi = await ensureFaceModelsLoaded()
+
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      return { detected: false }
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return { detected: false }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    const detections = await faceapi
+      .detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+      .withFaceLandmarks()
+      .withFaceDescriptors()
+
+    if (detections.length !== 1) {
+      return { detected: false }
+    }
+
+    const det = detections[0]
+    const box = det.detection.box
+    const qualityScore = computeQualityScore(ctx, canvas.width, canvas.height, box, det.detection.score)
+
+    // Only report as "detected" if quality is at least workable (0.3)
+    if (qualityScore < 0.3) {
+      return { detected: false }
+    }
+
+    return {
+      detected: true,
+      descriptor: Array.from(det.descriptor),
+      detectionScore: det.detection.score,
+      qualityScore,
+      box: { x: box.x, y: box.y, width: box.width, height: box.height },
+      previewDataUrl: canvas.toDataURL('image/jpeg', 0.85),
+    }
+  } catch {
+    return { detected: false, error: 'probe error' }
   }
 }

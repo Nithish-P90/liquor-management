@@ -70,12 +70,19 @@ export async function GET(req: NextRequest) {
 }
 
 // ── POST /api/attendance ───────────────────────────────────────────────────────
+// Body: { staffId, faceDescriptor?, allowManualOverride?, actionType?: 'CHECK_IN' | 'CHECK_OUT' }
+// actionType is optional — if omitted the server auto-toggles (legacy behaviour).
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const requestedStaffId = Number(body?.staffId)
     const allowManualOverride = body?.allowManualOverride === true
     const faceDescriptor = toFaceDescriptor(body?.faceDescriptor ?? body?.descriptor)
+    // Client may explicitly request CHECK_IN or CHECK_OUT
+    const actionType: 'CHECK_IN' | 'CHECK_OUT' | undefined =
+      body?.actionType === 'CHECK_IN' || body?.actionType === 'CHECK_OUT'
+        ? body.actionType
+        : undefined
 
     if (!faceDescriptor && !allowManualOverride) {
       return NextResponse.json({ error: 'Face descriptor required for attendance.' }, { status: 400 })
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     if (faceDescriptor) {
       const faceProfiles = await loadActiveFaceProfiles()
-      const matchOutcome = findBestFaceMatch(faceDescriptor, faceProfiles, { defaultThreshold: 0.48, margin: 0.05 })
+      const matchOutcome = findBestFaceMatch(faceDescriptor, faceProfiles, { defaultThreshold: 0.52, margin: 0.08 })
 
       if (!matchOutcome.match) {
         return NextResponse.json(
@@ -129,7 +136,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Staff not found' }, { status: 404 })
     }
 
-    return markAttendance(staff.id, resolvedStaffName || staff.name, matchMeta)
+    return markAttendance(staff.id, resolvedStaffName || staff.name, matchMeta, actionType)
   } catch (error: any) {
     console.error('[attendance POST]', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -140,7 +147,8 @@ export async function POST(req: NextRequest) {
 async function markAttendance(
   staffId: number,
   staffName: string,
-  matchMeta?: { distance: number; confidence: number; threshold: number; sampleCount: number } | null
+  matchMeta?: { distance: number; confidence: number; threshold: number; sampleCount: number } | null,
+  actionType?: 'CHECK_IN' | 'CHECK_OUT'
 ) {
   const now   = new Date()
   const today = toUtcNoonDate(now)
@@ -149,8 +157,53 @@ async function markAttendance(
     where: { staffId_date: { staffId, date: today } },
   })
 
+  // If client explicitly requests CHECK_IN
+  if (actionType === 'CHECK_IN') {
+    if (existing?.checkIn) {
+      return NextResponse.json(
+        { error: `${staffName} is already checked in today (${existing.checkIn.toLocaleTimeString('en-IN')}).` },
+        { status: 400 }
+      )
+    }
+    await prisma.attendanceLog.upsert({
+      where: { staffId_date: { staffId, date: today } },
+      create: { staffId, date: today, checkIn: now, status: 'PRESENT' },
+      update: { checkIn: now, status: 'PRESENT' },
+    })
+    return NextResponse.json({ success: true, staff: staffName, type: 'CHECK_IN', time: now, faceMatch: matchMeta })
+  }
+
+  // If client explicitly requests CHECK_OUT
+  if (actionType === 'CHECK_OUT') {
+    if (!existing?.checkIn) {
+      return NextResponse.json(
+        { error: `${staffName} has not checked in yet today.` },
+        { status: 400 }
+      )
+    }
+    if (existing.checkOut) {
+      return NextResponse.json(
+        { error: `${staffName} already checked out at ${existing.checkOut.toLocaleTimeString('en-IN')}.` },
+        { status: 400 }
+      )
+    }
+    await prisma.attendanceLog.update({
+      where: { staffId_date: { staffId, date: today } },
+      data:  { checkOut: now },
+    })
+    const hours = (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000
+    return NextResponse.json({
+      success: true,
+      staff:  staffName,
+      type:   'CHECK_OUT',
+      time:   now,
+      hoursWorked: Math.round(hours * 10) / 10,
+      faceMatch: matchMeta,
+    })
+  }
+
+  // Legacy auto-toggle behaviour (manual override uses this path)
   if (!existing) {
-    // First scan of the day → check in
     await prisma.attendanceLog.create({
       data: { staffId, date: today, checkIn: now, status: 'PRESENT' },
     })
@@ -158,13 +211,11 @@ async function markAttendance(
   }
 
   if (!existing.checkOut) {
-    // Already checked in, not yet checked out → check out
     await prisma.attendanceLog.update({
       where: { staffId_date: { staffId, date: today } },
       data:  { checkOut: now },
     })
-    const hours =
-      (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000
+    const hours = (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000
     return NextResponse.json({
       success: true,
       staff:  staffName,
@@ -176,7 +227,6 @@ async function markAttendance(
     })
   }
 
-  // Already checked in and out (2/2) — block further scans for today
   return NextResponse.json(
     { error: `${staffName} has already completed their 2 scans for today.` },
     { status: 400 }

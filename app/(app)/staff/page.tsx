@@ -153,22 +153,26 @@ export default function StaffPage() {
   async function openFaceEnrollment(s: any) {
     setFaceEnrollmentStaff(s)
     setFaceSamples([])
-    setFaceCaptureStatus('ready')
-    setFaceCaptureMessage('Capture 3 to 5 samples with good lighting. Slightly vary your angle between captures.')
+    setFaceCaptureStatus('idle')
+    setFaceCaptureMessage('Starting camera…')
     setFaceModalOpen(true)
+    // Auto-start camera — wait one tick for the video element to mount
+    setTimeout(() => startFaceCamera(), 80)
   }
 
   async function startFaceCamera() {
-    if (!faceEnrollmentStaff) return
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      })
       faceStreamRef.current = stream
       if (faceVideoRef.current) faceVideoRef.current.srcObject = stream
       setFaceCaptureStatus('ready')
-      setFaceCaptureMessage('Camera ready. Capture a clear sample.')
+      setFaceCaptureMessage('Camera ready. Capture 3–5 samples, slightly varying your angle each time.')
     } catch {
       setFaceCaptureStatus('error')
-      setFaceCaptureMessage('Could not access camera')
+      setFaceCaptureMessage('Could not access camera — check browser permissions.')
     }
   }
 
@@ -194,14 +198,23 @@ export default function StaffPage() {
       setFaceCaptureMessage('Maximum of 5 samples reached. Save or remove one.')
       return
     }
+    // Ensure the video stream is actually running
+    if (!faceStreamRef.current || faceVideoRef.current.readyState < 2) {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage('Camera not ready — try pressing "Start camera" first.')
+      return
+    }
 
     setFaceCaptureStatus('loading')
-    setFaceCaptureMessage('Analyzing face...')
+    setFaceCaptureMessage('Analyzing face…')
     try {
       const sample = await captureFaceSample(faceVideoRef.current)
-      setFaceSamples(prev => [...prev, sample])
+      setFaceSamples(prev => {
+        const next = [...prev, sample]
+        setFaceCaptureMessage(`Sample ${next.length}/5 captured.${next.length < 3 ? ` Need ${3 - next.length} more.` : ' You can save now.'}`)
+        return next
+      })
       setFaceCaptureStatus('ready')
-      setFaceCaptureMessage(`Captured sample ${faceSamples.length + 1}/5. Collect at least 3.`)
     } catch (error: any) {
       setFaceCaptureStatus('error')
       setFaceCaptureMessage(error?.message ?? 'Failed to capture face sample')
@@ -507,17 +520,11 @@ export default function StaffPage() {
 
                 <div className="flex gap-2 flex-wrap">
                   <button
-                    onClick={startFaceCamera}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 font-medium"
-                  >
-                    Start camera
-                  </button>
-                  <button
                     onClick={captureFaceEnrollmentSample}
                     disabled={!faceReady || faceCaptureStatus === 'loading' || faceSamples.length >= 5}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 disabled:opacity-50 font-medium"
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 font-medium"
                   >
-                    {faceCaptureStatus === 'loading' ? 'Capturing...' : 'Capture sample'}
+                    {faceCaptureStatus === 'loading' ? 'Capturing…' : 'Capture sample'}
                   </button>
                   <button
                     onClick={removeLastFaceSample}
@@ -526,12 +533,15 @@ export default function StaffPage() {
                   >
                     Remove last
                   </button>
-                  <button
-                    onClick={stopFaceCamera}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 font-medium"
-                  >
-                    Stop camera
-                  </button>
+                  {/* Fallback in case auto-start failed */}
+                  {!faceStreamRef.current && (
+                    <button
+                      onClick={startFaceCamera}
+                      className="px-4 py-2 rounded-lg bg-slate-700 text-slate-100 hover:bg-slate-600 font-medium"
+                    >
+                      Retry camera
+                    </button>
+                  )}
                 </div>
 
                 <p className="text-[11px] text-slate-400">{faceModelMessage}</p>
