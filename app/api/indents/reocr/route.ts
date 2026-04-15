@@ -4,7 +4,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { readFile, unlink } from 'fs/promises'
 import os from 'os'
-import { parseIndentFromText } from '@/lib/pdf-parser'
+import { parseIndentFromText, parseIndentPdf } from '@/lib/pdf-parser'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +41,18 @@ export async function POST(req: NextRequest) {
     try {
       await execFileAsync('pdftoppm', ['-r', '300', '-png', '-singlefile', tempPdfPath, tmpPrefix])
     } catch (err) {
+      // If pdftoppm is not available (common on serverless platforms), try a text-extraction fallback
+      if (pdfPath.startsWith('data:') && buffer) {
+        try {
+          const parsed = await parseIndentPdf(buffer)
+          if (pdfPath.startsWith('data:') && tempPdfPath) try { await unlink(tempPdfPath) } catch {}
+          return NextResponse.json({ parsed, ocrText: parsed.rawText ?? '', warning: 'pdftoppm not available; used text-extraction fallback' })
+        } catch (e) {
+          if (pdfPath.startsWith('data:') && tempPdfPath) try { await unlink(tempPdfPath) } catch {}
+          return NextResponse.json({ error: 'pdftoppm not available or conversion failed, and text-extraction fallback also failed' }, { status: 500 })
+        }
+      }
+
       if (pdfPath.startsWith('data:') && tempPdfPath) try { await unlink(tempPdfPath) } catch {}
       return NextResponse.json({ error: 'pdftoppm not available or conversion failed. Install poppler: `brew install poppler`' }, { status: 500 })
     }

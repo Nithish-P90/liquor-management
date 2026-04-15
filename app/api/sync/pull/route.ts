@@ -2,7 +2,7 @@
  * GET /api/sync/pull
  * Returns everything the Windows POS app needs to operate:
  *  - Product catalog with current stock levels
- *  - Active staff with fingerprint templates
+ *  - Active staff with face profiles
  *  - Today's cloud cash record (if any) for opening balance reference
  *
  * This is a read-only endpoint. The Windows app caches this locally.
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       })
     )
 
-    // ── Active staff with fingerprint templates ───────────────────────────────
+    // ── Active staff with face profiles ───────────────────────────────────────
     const staff = await prisma.staff.findMany({
       where: { active: true },
       select: {
@@ -116,8 +116,25 @@ export async function GET(req: NextRequest) {
         name: true,
         role: true,
         pin: true,
-        fingerprintTemplate: true,
         active: true,
+        faceProfile: {
+          select: {
+            threshold: true,
+            sampleCount: true,
+            descriptor: true,
+            enrolledAt: true,
+            lastMatchedAt: true,
+            updatedAt: true,
+            samples: {
+              orderBy: { createdAt: 'asc' },
+              select: {
+                descriptor: true,
+                detectionScore: true,
+                qualityScore: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -126,8 +143,20 @@ export async function GET(req: NextRequest) {
       name: s.name,
       role: s.role,
       pin: s.pin,
-      fingerprint_template: s.fingerprintTemplate,
       active: s.active ? 1 : 0,
+      face_profile_json: s.faceProfile ? JSON.stringify({
+        threshold: s.faceProfile.threshold,
+        sampleCount: s.faceProfile.sampleCount,
+        descriptor: s.faceProfile.descriptor ?? null,
+        enrolledAt: s.faceProfile.enrolledAt ? s.faceProfile.enrolledAt.toISOString() : null,
+        lastMatchedAt: s.faceProfile.lastMatchedAt ? s.faceProfile.lastMatchedAt.toISOString() : null,
+        updatedAt: s.faceProfile.updatedAt.toISOString(),
+        samples: s.faceProfile.samples.map(sample => ({
+          descriptor: sample.descriptor,
+          detectionScore: Number(sample.detectionScore),
+          qualityScore: Number(sample.qualityScore),
+        })),
+      }) : null,
     }))
 
     // ── Today's cloud cash record (for opening balance reference) ─────────────

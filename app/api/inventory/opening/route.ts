@@ -26,9 +26,17 @@ export async function POST(req: NextRequest) {
 
   const sessionId = session.id
 
+  // Fetch all referenced product sizes in one query instead of N queries
+  const productSizeIds: number[] = entries.map((e: any) => e.productSizeId)
+  const productSizes = await prisma.productSize.findMany({
+    where: { id: { in: productSizeIds } },
+    select: { id: true, bottlesPerCase: true },
+  })
+  const psMap = new Map(productSizes.map(ps => [ps.id, ps]))
+
   const created = await Promise.all(
     entries.map(async (e: any) => {
-      const ps = await prisma.productSize.findUnique({ where: { id: e.productSizeId } })
+      const ps = psMap.get(e.productSizeId)
       const normalized = normalizeStockEntry(e.cases, e.bottles, ps?.bottlesPerCase ?? 12)
       return prisma.stockEntry.upsert({
         where: {
@@ -58,25 +66,25 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  // All product sizes — the complete inventory catalogue
-  const allProductSizes = await prisma.productSize.findMany({
-    include: { product: true },
-    orderBy: [
-      { product: { category: 'asc' } },
-      { product: { name: 'asc' } },
-      { sizeMl: 'desc' },
-    ],
-  })
-
-  // Latest session's opening entries (may be a subset of all products)
-  const latestSession = await prisma.inventorySession.findFirst({
-    orderBy: { periodStart: 'desc' },
-    include: {
-      stockEntries: {
-        where: { entryType: 'OPENING' },
+  // Run both queries in parallel — no dependency between them
+  const [allProductSizes, latestSession] = await Promise.all([
+    prisma.productSize.findMany({
+      include: { product: true },
+      orderBy: [
+        { product: { category: 'asc' } },
+        { product: { name: 'asc' } },
+        { sizeMl: 'desc' },
+      ],
+    }),
+    prisma.inventorySession.findFirst({
+      orderBy: { periodStart: 'desc' },
+      include: {
+        stockEntries: {
+          where: { entryType: 'OPENING' },
+        },
       },
-    },
-  })
+    }),
+  ])
 
   // Build a lookup: productSizeId → entry
   const entryMap = new Map(

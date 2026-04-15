@@ -39,7 +39,7 @@ const adminNav = [
     items: [
       { href: '/products', label: 'Products' },
       { href: '/staff', label: 'Staff Directory' },
-      { href: '/attendance', label: 'Biometric Attendance' },
+      { href: '/attendance', label: 'Face Attendance' },
       { href: '/settings', label: 'Settings' },
     ],
   },
@@ -53,7 +53,7 @@ const staffNav = [
       { href: '/pos', label: 'Point of Sale' },
       { href: '/misc-sale', label: 'Misc Sale' },
       { href: '/clerks', label: 'Clerk Billing' },
-      { href: '/attendance', label: 'Biometric Attendance' },
+      { href: '/attendance', label: 'Face Attendance' },
       { href: '/cash', label: 'Cash Register' },
       { href: '/expenses', label: 'Expenditure' },
     ],

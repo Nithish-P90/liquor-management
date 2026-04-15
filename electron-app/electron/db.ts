@@ -67,7 +67,6 @@ function migrate(db: Database.Database) {
         name                 TEXT NOT NULL,
         role                 TEXT NOT NULL,
         pin                  TEXT,
-        fingerprint_template TEXT,
         active               INTEGER NOT NULL DEFAULT 1,
         synced_at            INTEGER NOT NULL DEFAULT 0
       );
@@ -173,6 +172,46 @@ function migrate(db: Database.Database) {
 
     db.prepare(`INSERT OR REPLACE INTO schema_meta VALUES ('version', '1')`).run()
   }
+
+  if (currentVersion < 2) {
+    db.exec(`
+      -- ── Misc items catalog (cashier-stocked goods: cigarettes, cups, snacks) ──
+      -- Admin manages this list. Cashiers pick from it or add one-off items.
+      -- No inventory tracking — cashiers own the stock and keep the profit.
+      CREATE TABLE IF NOT EXISTS misc_items (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT    NOT NULL,
+        price       REAL    NOT NULL,
+        barcode     TEXT,
+        active      INTEGER NOT NULL DEFAULT 1,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+      );
+
+      -- ── Misc sales (local-only, used to pay out cashiers their earnings) ──────
+      CREATE TABLE IF NOT EXISTS misc_sales (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_date    TEXT    NOT NULL,
+        staff_id     INTEGER NOT NULL,
+        item_name    TEXT    NOT NULL,
+        quantity     INTEGER NOT NULL,
+        price        REAL    NOT NULL,
+        total        REAL    NOT NULL,
+        payment_mode TEXT    NOT NULL,
+        created_at   INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_misc_sales_date    ON misc_sales(sale_date);
+      CREATE INDEX IF NOT EXISTS idx_misc_sales_staff   ON misc_sales(staff_id, sale_date);
+    `)
+    db.prepare(`INSERT OR REPLACE INTO schema_meta VALUES ('version', '2')`).run()
+  }
+
+  if (currentVersion < 3) {
+    db.exec(`
+      ALTER TABLE staff_cache ADD COLUMN face_profile_json TEXT;
+    `)
+    db.prepare(`INSERT OR REPLACE INTO schema_meta VALUES ('version', '3')`).run()
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -235,7 +274,7 @@ export type StaffRow = {
   name: string
   role: string
   pin: string | null
-  fingerprint_template: string | null
+  face_profile_json: string | null
   active: number
 }
 
@@ -245,11 +284,11 @@ export function getStaff(db: Database.Database): StaffRow[] {
 
 export function upsertStaff(db: Database.Database, rows: StaffRow[]): void {
   const stmt = db.prepare(`
-    INSERT INTO staff_cache (id, name, role, pin, fingerprint_template, active, synced_at)
-    VALUES (@id, @name, @role, @pin, @fingerprint_template, @active, @synced_at)
+    INSERT INTO staff_cache (id, name, role, pin, face_profile_json, active, synced_at)
+    VALUES (@id, @name, @role, @pin, @face_profile_json, @active, @synced_at)
     ON CONFLICT(id) DO UPDATE SET
       name=excluded.name, role=excluded.role, pin=excluded.pin,
-      fingerprint_template=excluded.fingerprint_template, active=excluded.active,
+      face_profile_json=excluded.face_profile_json, active=excluded.active,
       synced_at=excluded.synced_at
   `)
   const ts = nowMs()
@@ -314,9 +353,11 @@ export function insertSale(db: Database.Database, input: SaleInput): SaleRow {
        @upi_amount,@scan_method,@customer_name,0,@created_at)
   `).run(row)
 
-  // Optimistically deduct from local stock
-  db.prepare(`UPDATE products_cache SET stock = MAX(0, stock - ?) WHERE size_id = ?`)
-    .run(input.quantity, input.product_size_id)
+  // Optimistically deduct from local stock (skip for misc items, product_size_id === 0)
+  if (input.product_size_id !== 0) {
+    db.prepare(`UPDATE products_cache SET stock = MAX(0, stock - ?) WHERE size_id = ?`)
+      .run(input.quantity, input.product_size_id)
+  }
 
   return row
 }
@@ -548,6 +589,81 @@ export function logSync(db: Database.Database, operation: string, entity: string
     INSERT INTO sync_log (operation,entity,record_count,success,error,created_at)
     VALUES (?,?,?,?,?,?)
   `).run(operation, entity, count, success ? 1 : 0, error ?? null, nowMs())
+}
+
+// ── Misc items catalog ────────────────────────────────────────────────────────
+export type MiscItemRow = {
+  id: number
+  name: string
+  price: number
+  barcode: string | null
+  active: number
+  created_at: number
+  updated_at: number
+}
+
+export function getMiscItems(db: Database.Database): MiscItemRow[] {
+  return db.prepare(`SELECT * FROM misc_items WHERE active=1 ORDER BY name`).all() as MiscItemRow[]
+}
+
+export function getMiscItemByBarcode(db: Database.Database, barcode: string): MiscItemRow | null {
+  return (db.prepare(`SELECT * FROM misc_items WHERE barcode=? AND active=1`).get(barcode) as MiscItemRow | undefined) ?? null
+}
+
+export function saveMiscItem(
+  db: Database.Database,
+  item: { id?: number; name: string; price: number; barcode?: string | null }
+): MiscItemRow {
+  const now = nowMs()
+  if (item.id) {
+    db.prepare(
+      `UPDATE misc_items SET name=?, price=?, barcode=?, updated_at=? WHERE id=?`
+    ).run(item.name, item.price, item.barcode ?? null, now, item.id)
+    return db.prepare(`SELECT * FROM misc_items WHERE id=?`).get(item.id) as MiscItemRow
+  }
+  const r = db.prepare(
+    `INSERT INTO misc_items (name, price, barcode, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, ?, ?)`
+  ).run(item.name, item.price, item.barcode ?? null, now, now)
+  return db.prepare(`SELECT * FROM misc_items WHERE id=?`).get(r.lastInsertRowid) as MiscItemRow
+}
+
+export function deleteMiscItem(db: Database.Database, id: number): void {
+  db.prepare(`UPDATE misc_items SET active=0 WHERE id=?`).run(id)
+}
+
+// ── Misc sales (local-only, cashier earnings tracker) ─────────────────────────
+export type MiscSaleInput = {
+  staff_id: number
+  item_name: string
+  quantity: number
+  price: number
+  total: number
+  payment_mode: string
+}
+
+export function insertMiscSale(db: Database.Database, input: MiscSaleInput): void {
+  db.prepare(`
+    INSERT INTO misc_sales (sale_date, staff_id, item_name, quantity, price, total, payment_mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(todayStr(), input.staff_id, input.item_name, input.quantity, input.price, input.total, input.payment_mode, nowMs())
+}
+
+export function getMiscSalesToday(db: Database.Database): { staff_id: number; item_name: string; quantity: number; total: number }[] {
+  return db.prepare(`
+    SELECT staff_id, item_name, SUM(quantity) AS quantity, SUM(total) AS total
+    FROM misc_sales WHERE sale_date=?
+    GROUP BY staff_id, item_name
+    ORDER BY staff_id, item_name
+  `).all(todayStr()) as { staff_id: number; item_name: string; quantity: number; total: number }[]
+}
+
+export function getMiscTotalsToday(db: Database.Database): { misc_revenue: number; misc_items_sold: number } {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(total), 0) AS misc_revenue, COALESCE(SUM(quantity), 0) AS misc_items_sold
+    FROM misc_sales WHERE sale_date=?
+  `).get(todayStr()) as { misc_revenue: number; misc_items_sold: number }
+  return row
 }
 
 // ── App settings ──────────────────────────────────────────────────────────────

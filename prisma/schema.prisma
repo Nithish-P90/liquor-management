@@ -122,7 +122,7 @@ model Staff {
   monthlySalary Decimal?         @db.Decimal(12, 2)
   dailyWage     Decimal?         @db.Decimal(10, 2)
   active             Boolean            @default(true)
-  fingerprintTemplate String?           @db.Text
+  faceProfile        FaceProfile?
   sales              Sale[]
   adjustments        StockAdjustment[]  @relation("CreatedBy")
   approvals          StockAdjustment[]  @relation("ApprovedBy")
@@ -130,6 +130,32 @@ model Staff {
   receipts           Receipt[]
   attendanceLogs     AttendanceLog[]
   createdAt          DateTime           @default(now())
+}
+
+model FaceProfile {
+  id             Int           @id @default(autoincrement())
+  staff          Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId        Int           @unique
+  threshold      Float         @default(0.48)
+  sampleCount    Int           @default(0)
+  descriptor     Json?
+  enrolledAt     DateTime?
+  lastMatchedAt  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  samples        FaceSample[]
+}
+
+model FaceSample {
+  id            Int          @id @default(autoincrement())
+  profile       FaceProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     Int
+  descriptor    Json
+  detectionScore Float
+  qualityScore  Float
+  createdAt     DateTime     @default(now())
+
+  @@index([profileId])
 }
 
 // ─── ATTENDANCE LOG ─────────────────────────────────────────────────────────

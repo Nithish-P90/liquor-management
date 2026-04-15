@@ -1,17 +1,12 @@
-/**
- * Attendance screen — check-in / check-out via fingerprint or PIN.
- *
- * On Windows, the vendor RD Service runs on port 11100 (same as the web app).
- * The biometric capture is done via HTTP exactly the same way as the web UI.
- * No special drivers needed — the Cogent/Mantra Windows RD Service handles hardware.
- */
-import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle, Clock, UserCheck, UserX, Fingerprint, AlertCircle, RefreshCw } from 'lucide-react'
+'use client'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { UserCheck, UserX, Camera, RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
 import type { Staff, AttendanceRecord } from '../types'
+import { captureFaceSample, ensureFaceModelsLoaded } from '../../../lib/face-client'
+import { findBestFaceMatch, toFaceDescriptor, type FaceProfileSummary } from '../../../lib/face-matching'
 
-type ScannerStatus = 'idle' | 'scanning' | 'ok' | 'err'
-
-const DEFAULT_RD_URL = 'http://127.0.0.1:11100'
+type ScannerStatus = 'idle' | 'scanning' | 'ok' | 'err' | 'info'
+type ScanResult = { text: string; type: 'success' | 'error' | 'info' } | null
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—'
@@ -20,203 +15,226 @@ function formatTime(iso: string | null): string {
 
 function formatDuration(checkIn: string, checkOut: string | null): string {
   const start = new Date(checkIn).getTime()
-  const end   = checkOut ? new Date(checkOut).getTime() : Date.now()
-  const mins  = Math.floor((end - start) / 60000)
-  const h     = Math.floor(mins / 60)
-  const m     = mins % 60
+  const end = checkOut ? new Date(checkOut).getTime() : Date.now()
+  const mins = Math.floor((end - start) / 60000)
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+function beep(type: 'ok' | 'err') {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    osc.type = type === 'ok' ? 'sine' : 'sawtooth'
+    osc.frequency.setValueAtTime(type === 'ok' ? 1200 : 220, ctx.currentTime)
+    osc.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + (type === 'ok' ? 0.12 : 0.35))
+  } catch {
+    // Audio is optional.
+  }
+}
+
+function parseFaceProfiles(staffList: Staff[]): FaceProfileSummary[] {
+  return staffList.flatMap(staff => {
+    if (!staff.face_profile_json) return []
+    try {
+      const profile = JSON.parse(staff.face_profile_json) as {
+        threshold?: number
+        sampleCount?: number
+        descriptor?: unknown
+        samples?: Array<{ descriptor?: unknown }>
+      }
+
+      const descriptor = toFaceDescriptor(profile.descriptor)
+      const samples = Array.isArray(profile.samples)
+        ? profile.samples
+            .map(sample => toFaceDescriptor(sample.descriptor))
+            .filter((value): value is number[] => Boolean(value))
+            .map(descriptorValue => ({ descriptor: descriptorValue }))
+        : []
+
+      return [{
+        staffId: staff.id,
+        staffName: staff.name,
+        role: staff.role,
+        threshold: profile.threshold ?? 0.48,
+        sampleCount: profile.sampleCount ?? samples.length,
+        descriptor,
+        samples,
+      }]
+    } catch {
+      return []
+    }
+  })
+}
+
 export default function Attendance() {
-  const [staff, setStaff]         = useState<Staff[]>([])
-  const [records, setRecords]     = useState<AttendanceRecord[]>([])
-  const [scanStatus, setScanStatus]       = useState<ScannerStatus>('idle')
-  const [scanMessage, setScanMessage]     = useState('')
-  const [rdAvailable, setRdAvailable]     = useState<boolean | null>(null)
-  const [rdBaseUrl, setRdBaseUrl]         = useState<string>(DEFAULT_RD_URL)
-  const [isChecking, setIsChecking]       = useState(false)
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
-  const [pinInput, setPinInput]           = useState('')
-  const [mode, setMode]                   = useState<'auto' | 'pin'>('auto')
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [scanStatus, setScanStatus] = useState<ScannerStatus>('idle')
+  const [scanMessage, setScanMessage] = useState('')
+  const [scanResult, setScanResult] = useState<ScanResult>(null)
+  const [showCamera, setShowCamera] = useState(false)
+  const [faceReady, setFaceReady] = useState(false)
+  const [modelMessage, setModelMessage] = useState('Loading face models...')
+  const [capturing, setCapturing] = useState(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  const faceProfiles = useMemo(() => parseFaceProfiles(staff), [staff])
 
   const loadData = useCallback(async () => {
-    const [stf, att] = await Promise.all([
+    const [staffList, attendanceList] = await Promise.all([
       window.posAPI.getStaff(),
       window.posAPI.getTodayAttendance(),
     ])
-    setStaff(stf)
-    setRecords(att)
+    setStaff(staffList)
+    setRecords(attendanceList)
   }, [])
 
   useEffect(() => {
     loadData()
-    checkRdService()
     const interval = setInterval(loadData, 30_000)
     return () => clearInterval(interval)
   }, [loadData])
 
-  async function checkRdService() {
-    // Respect a stored developer override first, else try default and scan 11100–11105
-    try {
-      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('FP_BRIDGE_PORT') : null
-      if (stored) {
-        const url = `http://127.0.0.1:${Number(stored)}`
-        try {
-          const r = await fetch(`${url}/rd/info`, { signal: AbortSignal.timeout(1200) })
-          if (r.ok) { setRdBaseUrl(url); setRdAvailable(true); return }
-        } catch {}
-      }
-    } catch {}
-
-    // Try default port first, then scan 11100–11105 and pick the first working one
-    try {
-      const res = await fetch(`${DEFAULT_RD_URL}/rd/info`, { signal: AbortSignal.timeout(1500) })
-      if (res.ok) { setRdBaseUrl(DEFAULT_RD_URL); setRdAvailable(true); return }
-    } catch {}
-
-    let found: string | null = null
-    for (let port = 11100; port <= 11105; port++) {
-      try {
-        const url = `http://127.0.0.1:${port}`
-        const res = await fetch(`${url}/rd/info`, { signal: AbortSignal.timeout(1000) })
-        if (res.ok) { found = url; break }
-      } catch { continue }
-    }
-    if (found) { setRdBaseUrl(found); setRdAvailable(true) }
-    else { setRdAvailable(false) }
-  }
-
-  // ── Fingerprint capture via Windows RD Service ────────────────────────────
-  async function captureFingerprint(): Promise<string | null> {
-    try {
-      const res = await fetch(`${rdBaseUrl}/rd/capture`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: '<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>',
-        signal: AbortSignal.timeout(15_000),
+  useEffect(() => {
+    ensureFaceModelsLoaded()
+      .then(() => {
+        setFaceReady(true)
+        setModelMessage('Face models ready')
       })
+      .catch(error => {
+        setFaceReady(false)
+        setModelMessage(error instanceof Error ? error.message : 'Unable to load face models')
+      })
+  }, [])
 
-      const xml = await res.text()
-
-      // Check for error
-      const errMatch = xml.match(/errCode="([^"]+)"/)
-      const errCode = errMatch ? errMatch[1] : null
-      if (errCode && errCode !== '0') {
-        const infoMatch = xml.match(/errInfo="([^"]+)"/)
-        throw new Error(infoMatch ? infoMatch[1] : `RD error code ${errCode}`)
-      }
-
-      // Extract template
-      const dataMatch = xml.match(/<Data[^>]*type="X"[^>]*>([\s\S]+?)<\/Data>/)
-      if (!dataMatch) throw new Error('No fingerprint data in response')
-      return dataMatch[1].trim()
-    } catch (e) {
-      throw e
-    }
-  }
-
-  // ── Match fingerprint against local staff cache ───────────────────────────
-  function matchFingerprint(capturedTemplate: string): Staff | null {
-    // Simple byte comparison — in production replace with ISO 19794-2 minutiae matching
-    // The web app uses fingerprint-matcher.ts for proper matching
-    // For the Electron app, we call the cloud API for matching when online,
-    // or fall back to base64 string comparison offline
-    return staff.find(s => {
-      if (!s.fingerprint_template) return false
-      const a = capturedTemplate.replace(/\s/g, '')
-      const b = s.fingerprint_template.replace(/\s/g, '')
-      return a === b
-    }) ?? null
-  }
-
-  // ── Handle biometric attendance ───────────────────────────────────────────
-  async function handleBiometricScan() {
-    if (isChecking) return
-    setIsChecking(true)
-    setScanStatus('scanning')
-    setScanMessage('Place finger on scanner...')
-
+  async function startCamera() {
     try {
-      const template = await captureFingerprint()
-      if (!template) throw new Error('No template captured')
-
-      setScanMessage('Matching...')
-      const matched = matchFingerprint(template)
-
-      if (!matched) {
-        setScanStatus('err')
-        setScanMessage('Fingerprint not recognised. Use PIN mode.')
-        return
-      }
-
-      await processAttendance(matched)
-    } catch (e) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+      setShowCamera(true)
+      setScanStatus('info')
+      setScanMessage('Center one face in the frame, then capture.')
+      setScanResult({ text: 'Ready to capture face.', type: 'info' })
+    } catch {
+      beep('err')
       setScanStatus('err')
-      setScanMessage(String(e))
-    } finally {
-      setIsChecking(false)
-      setTimeout(() => { setScanStatus('idle'); setScanMessage('') }, 4000)
+      setScanMessage('Could not access camera')
+      setScanResult({ text: 'Could not access camera', type: 'error' })
     }
   }
 
-  // ── Handle PIN attendance ──────────────────────────────────────────────────
-  async function handlePinSubmit() {
-    if (!pinInput) return
-    const found = staff.find(s => s.pin === pinInput)
-    if (!found) {
-      setScanStatus('err')
-      setScanMessage('Invalid PIN')
-      setPinInput('')
-      setTimeout(() => { setScanStatus('idle'); setScanMessage('') }, 3000)
-      return
+  function stopCamera() {
+    try {
+      streamRef.current?.getTracks().forEach(track => track.stop())
+    } catch {
+      // ignore shutdown issues
     }
-    setPinInput('')
-    await processAttendance(found)
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setShowCamera(false)
+    setCapturing(false)
   }
 
-  // ── Record check-in or check-out ──────────────────────────────────────────
   async function processAttendance(staffMember: Staff) {
     const existing = await window.posAPI.getAttendanceForStaffToday(staffMember.id)
 
     if (!existing || !existing.check_in) {
-      // Check-in
       const result = await window.posAPI.checkIn(staffMember.id, staffMember.name)
       if (result.ok) {
         setScanStatus('ok')
         setScanMessage(`✓ ${staffMember.name} checked IN at ${formatTime(result.record?.check_in ?? null)}`)
+        setScanResult({ text: `${staffMember.name} checked IN`, type: 'success' })
       } else {
         setScanStatus('err')
         setScanMessage(result.error ?? 'Check-in failed')
+        setScanResult({ text: result.error ?? 'Check-in failed', type: 'error' })
       }
     } else if (!existing.check_out) {
-      // Check-out
       const result = await window.posAPI.checkOut(staffMember.id)
       if (result.ok) {
-        const dur = existing.check_in ? formatDuration(existing.check_in, result.record?.check_out ?? null) : ''
+        const duration = existing.check_in ? formatDuration(existing.check_in, result.record?.check_out ?? null) : ''
         setScanStatus('ok')
-        setScanMessage(`✓ ${staffMember.name} checked OUT — ${dur}`)
+        setScanMessage(`✓ ${staffMember.name} checked OUT — ${duration}`)
+        setScanResult({ text: `${staffMember.name} checked OUT`, type: 'success' })
       } else {
         setScanStatus('err')
         setScanMessage(result.error ?? 'Check-out failed')
+        setScanResult({ text: result.error ?? 'Check-out failed', type: 'error' })
       }
     } else {
       setScanStatus('ok')
       setScanMessage(`${staffMember.name} already completed for today`)
+      setScanResult({ text: `${staffMember.name} already completed for today`, type: 'info' })
     }
 
-    loadData()
-    setTimeout(() => { setScanStatus('idle'); setScanMessage('') }, 4000)
+    await loadData()
+    setTimeout(() => {
+      setScanStatus('idle')
+      setScanMessage('')
+    }, 4000)
   }
 
-  const present = records.filter(r => r.check_in)
-  const checkedOut = records.filter(r => r.check_out)
-  const stillIn    = records.filter(r => r.check_in && !r.check_out)
+  async function captureAndMark() {
+    if (!videoRef.current) return
+    if (!faceReady) {
+      setScanStatus('err')
+      setScanMessage(modelMessage)
+      return
+    }
+    if (faceProfiles.length === 0) {
+      setScanStatus('err')
+      setScanMessage('No face profiles have been enrolled yet.')
+      return
+    }
+
+    setCapturing(true)
+    setScanStatus('scanning')
+    setScanMessage('Analyzing face...')
+
+    try {
+      const sample = await captureFaceSample(videoRef.current)
+      const matchOutcome = findBestFaceMatch(sample.descriptor, faceProfiles, { defaultThreshold: 0.48, margin: 0.05 })
+
+      if (!matchOutcome.match) {
+        throw new Error(matchOutcome.reason ?? 'No reliable face match found')
+      }
+
+      const staffMember = staff.find(item => item.id === matchOutcome.match?.staffId)
+      if (!staffMember) {
+        throw new Error('Matched face could not be resolved to a staff member')
+      }
+
+      await processAttendance(staffMember)
+      stopCamera()
+    } catch (error: any) {
+      beep('err')
+      setScanStatus('err')
+      setScanMessage(error?.message ?? 'Face capture failed')
+      setScanResult({ text: error?.message ?? 'Face capture failed', type: 'error' })
+    } finally {
+      setCapturing(false)
+    }
+  }
+
+  async function markDirect(staffId: number) {
+    const staffMember = staff.find(item => item.id === staffId)
+    if (!staffMember) return
+    await processAttendance(staffMember)
+  }
+
+  const present = records.filter(record => record.check_in)
+  const checkedOut = records.filter(record => record.check_out)
+  const stillIn = records.filter(record => record.check_in && !record.check_out)
 
   return (
     <div className="flex h-full bg-slate-900">
-      {/* Left: scan panel */}
       <div className="w-80 flex-shrink-0 border-r border-slate-700 flex flex-col">
-        {/* Header */}
         <div className="px-4 py-3 bg-slate-800 border-b border-slate-700">
           <h2 className="text-sm font-semibold text-slate-200">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -228,129 +246,76 @@ export default function Attendance() {
           </div>
         </div>
 
-        {/* Mode tabs */}
         <div className="flex border-b border-slate-700">
-          <button
-            onClick={() => setMode('auto')}
-            className={`flex-1 py-2 text-xs font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors
-              ${mode === 'auto' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-          >
-            <Fingerprint size={14} />
-            Biometric
-          </button>
-          <button
-            onClick={() => setMode('pin')}
-            className={`flex-1 py-2 text-xs font-medium border-b-2 transition-colors
-              ${mode === 'pin' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-          >
-            PIN
-          </button>
+          <div className="flex-1 py-2 text-xs font-medium flex items-center justify-center gap-1.5 border-b-2 border-indigo-500 text-indigo-400">
+            <Camera size={14} />
+            Face
+          </div>
         </div>
 
-        {/* Scan area */}
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
-          {mode === 'auto' ? (
+          {showCamera ? (
             <>
-              {/* RD Service status */}
-              <div className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full
-                ${rdAvailable === null ? 'bg-slate-700 text-slate-400'
-                : rdAvailable ? 'bg-emerald-900/50 text-emerald-400'
-                : 'bg-red-900/50 text-red-400'}`}>
-                {rdAvailable ? <CheckCircle size={11} /> : <AlertCircle size={11} />}
-                {rdAvailable === null ? 'Checking scanner...'
-                : rdAvailable ? 'Scanner ready'
-                : 'Scanner offline (install RD Service)'}
+              <video ref={videoRef} autoPlay playsInline muted className="w-56 h-40 bg-black rounded-xl object-cover" />
+              <div className="flex gap-2">
+                <button
+                  onClick={captureAndMark}
+                  disabled={capturing}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {capturing ? 'Analyzing...' : 'Capture & Mark'}
+                </button>
+                <button onClick={stopCamera} className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg">
+                  Stop
+                </button>
               </div>
-
-              {/* Fingerprint button */}
-              <button
-                onClick={handleBiometricScan}
-                disabled={isChecking || !rdAvailable}
-                className={`w-32 h-32 rounded-full flex items-center justify-center transition-all
-                  ${scanStatus === 'ok'       ? 'bg-emerald-600 scale-95'
-                  : scanStatus === 'err'      ? 'bg-red-900 border-2 border-red-500'
-                  : scanStatus === 'scanning' ? 'bg-indigo-900 border-2 border-indigo-400 animate-pulse'
-                  : rdAvailable
-                    ? 'bg-slate-700 border-2 border-slate-600 hover:border-indigo-500 hover:bg-slate-600 active:scale-95'
-                    : 'bg-slate-800 border-2 border-slate-700 opacity-50 cursor-not-allowed'}`}
-              >
-                {scanStatus === 'scanning' ? (
-                  <RefreshCw size={36} className="animate-spin text-indigo-400" />
-                ) : scanStatus === 'ok' ? (
-                  <CheckCircle size={36} className="text-emerald-400" />
-                ) : scanStatus === 'err' ? (
-                  <AlertCircle size={36} className="text-red-400" />
-                ) : (
-                  <Fingerprint size={36} className="text-slate-400" />
-                )}
-              </button>
-
               {scanMessage && (
-                <p className={`text-xs text-center px-4 ${
-                  scanStatus === 'ok' ? 'text-emerald-400' :
-                  scanStatus === 'err' ? 'text-red-400' : 'text-slate-400'
-                }`}>
+                <p className={`text-xs text-center px-4 ${scanStatus === 'ok' ? 'text-emerald-400' : scanStatus === 'err' ? 'text-red-400' : 'text-slate-300'}`}>
                   {scanMessage}
                 </p>
               )}
-              {!scanMessage && (
-                <p className="text-xs text-slate-500 text-center">Tap to scan fingerprint</p>
-              )}
-
-              <button
-                onClick={checkRdService}
-                className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1"
-              >
-                <RefreshCw size={10} /> Refresh scanner
-              </button>
             </>
           ) : (
-            /* PIN mode */
-            <div className="w-full space-y-3">
-              <p className="text-xs text-slate-400 text-center">Enter your 4-digit PIN</p>
-              <input
-                type="password"
-                maxLength={6}
-                value={pinInput}
-                onChange={e => setPinInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handlePinSubmit()}
-                autoFocus
-                className="w-full bg-slate-700 text-white text-center text-xl tracking-widest rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="••••"
-              />
-
-              {scanMessage && (
-                <p className={`text-xs text-center ${scanStatus === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {scanMessage}
-                </p>
+            <>
+              <p className="text-xs text-slate-400 text-center">Use the camera to capture a face and mark attendance</p>
+              <button
+                onClick={startCamera}
+                className={`w-40 rounded-lg py-2.5 text-sm font-medium transition-colors ${faceReady ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300'}`}
+              >
+                Start camera
+              </button>
+              <p className="text-[11px] text-slate-500 text-center px-2">{modelMessage}</p>
+              {scanResult && (
+                <div className={`rounded-xl px-4 py-3 text-xs font-semibold text-center ${
+                  scanResult.type === 'success'
+                    ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-700/50'
+                    : scanResult.type === 'info'
+                      ? 'bg-blue-950/50 text-blue-300 border border-blue-700/50'
+                      : 'bg-red-950/50 text-red-300 border border-red-700/50'
+                }`}>
+                  {scanResult.type === 'success' ? '✓ ' : scanResult.type === 'error' ? '✗ ' : 'i '}{scanResult.text}
+                </div>
               )}
 
-              <button
-                onClick={handlePinSubmit}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
-              >
-                Submit
-              </button>
-
-              {/* Quick select for manual override */}
-              <div className="space-y-1">
-                <p className="text-xs text-slate-500 text-center">Or select staff:</p>
-                {staff.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => processAttendance(s)}
-                    className="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 transition-colors"
-                  >
-                    {s.name} <span className="text-slate-500">({s.role})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+              <details className="w-full mt-2">
+                <summary className="text-xs text-slate-500 mb-1 text-center cursor-pointer">Manual override</summary>
+                <div className="space-y-1 max-h-40 overflow-auto">
+                  {staff.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => markDirect(item.id)}
+                      className="w-full text-left px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition-colors"
+                    >
+                      {item.name} <span className="text-slate-500">({item.role})</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </>
           )}
         </div>
       </div>
 
-      {/* Right: today's attendance log */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-700 bg-slate-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-200">Today's Attendance</h2>
@@ -360,57 +325,62 @@ export default function Attendance() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
-          {/* Present grid */}
           {records.length === 0 ? (
             <div className="text-center text-slate-600 py-12 text-sm">No attendance recorded today</div>
           ) : (
             <div className="space-y-2">
-              {records.map(r => (
-                <div key={r.local_id} className="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${r.check_out ? 'bg-slate-500' : 'bg-emerald-400'}`} />
+              {records.map(record => (
+                <div key={record.local_id} className="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2.5">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${record.check_out ? 'bg-slate-500' : 'bg-emerald-400'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-200">{r.staff_name}</div>
+                    <div className="text-sm font-medium text-slate-200">{record.staff_name}</div>
                     <div className="text-xs text-slate-400">
-                      IN {formatTime(r.check_in)} {r.check_out ? `→ OUT ${formatTime(r.check_out)}` : '(still in)'}
+                      IN {formatTime(record.check_in)} {record.check_out ? `→ OUT ${formatTime(record.check_out)}` : '(still in)'}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {r.check_in && (
-                      <span className="text-xs text-slate-500">
-                        {formatDuration(r.check_in, r.check_out)}
-                      </span>
-                    )}
-                    {r.check_out ? (
-                      <UserX size={14} className="text-slate-500" />
-                    ) : (
-                      <UserCheck size={14} className="text-emerald-400" />
-                    )}
-                    {r.synced === 0 && <span className="text-xs text-amber-400 w-4">●</span>}
+                    {record.check_in && <span className="text-xs text-slate-500">{formatDuration(record.check_in, record.check_out)}</span>}
+                    {record.check_out ? <UserX size={14} className="text-slate-500" /> : <UserCheck size={14} className="text-emerald-400" />}
+                    {record.synced === 0 && <span className="text-xs text-amber-400 w-4">●</span>}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Staff not yet recorded */}
           {staff.length > 0 && (
             <div className="mt-4">
               <p className="text-xs text-slate-500 mb-2">Not yet recorded today:</p>
               <div className="flex flex-wrap gap-2">
-                {staff
-                  .filter(s => !records.find(r => r.staff_id === s.id))
-                  .map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => processAttendance(s)}
-                      className="px-2 py-1 rounded bg-slate-800 text-xs text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700 transition-colors"
-                    >
-                      {s.name}
-                    </button>
-                  ))}
+                {staff.filter(item => !records.find(record => record.staff_id === item.id)).map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => markDirect(item.id)}
+                    className="px-2 py-1 rounded bg-slate-800 text-xs text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700 transition-colors"
+                  >
+                    {item.name}
+                  </button>
+                ))}
               </div>
             </div>
           )}
+
+          <div className="mt-4 bg-slate-800/70 border border-slate-700 rounded-lg p-3 text-xs text-slate-400 flex items-start gap-2">
+            <AlertTriangle size={14} className="mt-0.5 text-amber-400" />
+            <div>
+              <span className="font-semibold text-slate-200">Face data cache:</span> {faceProfiles.length} enrolled profile{faceProfiles.length === 1 ? '' : 's'} loaded locally.
+            </div>
+          </div>
+
+          <div className="mt-3 bg-slate-800/70 border border-slate-700 rounded-lg p-3 text-[11px] text-slate-500 space-y-2">
+            <div className="font-bold text-slate-200 uppercase tracking-tighter flex items-center gap-2">
+              <ShieldAlert size={12} />
+              Reliability note
+            </div>
+            <div className="pl-4 border-l-2 border-slate-700 py-1">
+              Use clear lighting and keep one face centered. If the app reports ambiguity, recapture before marking.
+            </div>
+          </div>
         </div>
       </div>
     </div>

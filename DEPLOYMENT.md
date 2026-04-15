@@ -18,8 +18,8 @@
 │  └────────────────┬────────────────────────────────┘  │
 │                   │ HTTPS (token auth)                 │
 │  ┌────────────────▼────────────────────────────────┐  │
-│  │   Vendor RD Service (for fingerprint scanner)   │  │
-│  │   Port 11100 (install from scanner CD/website)  │  │
+│  │   Camera access + vendored face models          │  │
+│  │   No external biometric service required        │  │
 │  └─────────────────────────────────────────────────┘  │
 └──────────────────────┬─────────────────────────────────┘
                        │ Internet
@@ -102,15 +102,15 @@ Notes:
 
 ## Step 2 — Windows POS Setup
 
-### 2a. Install the fingerprint scanner RD Service
+### 2a. Set up camera access for attendance
 
-For **Cogent CSD200i** on Windows:
-1. Insert the device CD or download from Cogent/Thales website
-2. Install the **RD Service** (runs as a Windows service on port 11100)
-3. After installation, verify: open browser → http://127.0.0.1:11100/rd/info → should return XML
+The attendance flow now uses the built-in camera and the bundled face models.
 
-For **Mantra MFS100**:
-- Download from https://www.mantrafintech.com/mfs100_rd_service.html
+1. Make sure the POS app has camera permission on the Windows machine.
+2. Open the Staff page and enroll each staff member with 3 to 5 clear face samples.
+3. Test attendance from the Attendance screen. No external biometric service is required.
+
+If Windows blocks camera access, enable camera permission for desktop apps and relaunch the POS app.
 
 ### 2b. Install the POS App
 
@@ -220,11 +220,21 @@ When you're ready to add more outlets or upgrade:
 
 ### Vercel (Next.js web app)
 ```env
-DATABASE_URL=           # Neon PostgreSQL connection string
+DATABASE_URL=           # Neon POOLED connection string (use the "-pooler" URL from Neon dashboard)
+                        # Example: postgresql://user:pass@ep-xxx-pooler.us-east-1.aws.neon.tech/pos?sslmode=require
+DIRECT_URL=             # Neon DIRECT connection string (non-pooled, used by Prisma for migrations)
+                        # Example: postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/pos?sslmode=require
 NEXTAUTH_SECRET=        # Random 64-char string for auth encryption
 NEXTAUTH_URL=           # Your Vercel deployment URL
 SYNC_TOKEN=             # Shared secret between app and Windows POS
 ```
+
+> **Why two URLs?** Neon's connection pooler (PgBouncer) keeps connections warm and eliminates the
+> 1–3 minute cold start on the free tier. `DATABASE_URL` uses the pooled endpoint for all app queries.
+> `DIRECT_URL` uses the direct endpoint so Prisma migrations work correctly (PgBouncer doesn't
+> support the advisory locks that Prisma needs for migrations).
+>
+> To get the pooled URL: Neon Dashboard → your project → Connection Details → enable "Connection pooling".
 
 ### Windows POS app (stored in app settings, not env file)
 Set via the Settings screen in the app:
@@ -243,10 +253,10 @@ Set via the Settings screen in the app:
 2. Click the sync icon in the sidebar
 3. If still failing, check Vercel logs for errors
 
-### Fingerprint scanner not detected
-1. Confirm the vendor RD Service is installed and running
-2. Open Services (services.msc) and verify the service is "Running"
-3. Test: open browser → http://127.0.0.1:11100/rd/info
+### Camera not detected
+1. Confirm the Windows camera permission is enabled for desktop apps.
+2. Close any other app using the camera and relaunch the POS app.
+3. Re-enroll the staff member if the face profile was captured with poor lighting.
 
 ### After update, app shows blank screen
 → `Ctrl+Shift+I` → Console tab — check for errors

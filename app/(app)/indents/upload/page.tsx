@@ -383,14 +383,14 @@ export default function IndentUploadPage() {
                 </div>
                 <div className="h-[680px] border rounded overflow-hidden">
                   <iframe
-                    src={`/${pdfPath}`}
+                    src={pdfPath?.startsWith('data:') ? pdfPath : `/${pdfPath}`}
                     title="Indent PDF Preview"
                     className="w-full h-full"
                   />
                 </div>
                 <div className="mt-3 flex gap-3">
-                  <a href={`/${pdfPath}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">Open in new tab</a>
-                  <a href={`/${pdfPath}`} download className="text-sm text-gray-600 hover:underline">Download PDF</a>
+                  <a href={pdfPath?.startsWith('data:') ? pdfPath : `/${pdfPath}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">Open in new tab</a>
+                  <a href={pdfPath?.startsWith('data:') ? pdfPath : `/${pdfPath}`} download className="text-sm text-gray-600 hover:underline">Download PDF</a>
                   <button
                     onClick={async () => {
                       if (!pdfPath) return

@@ -34,6 +34,14 @@ contextBridge.exposeInMainWorld('posAPI', {
   getTodayCashRecord: () => ipcRenderer.invoke('db:getTodayCashRecord'),
   upsertCashRecord: (data: unknown) => ipcRenderer.invoke('db:upsertCashRecord', data),
 
+  // ── Misc items ────────────────────────────────────────────────────────────
+  getMiscItems: () => ipcRenderer.invoke('db:getMiscItems'),
+  getMiscItemByBarcode: (barcode: string) => ipcRenderer.invoke('db:getMiscItemByBarcode', barcode),
+  saveMiscItem: (item: unknown) => ipcRenderer.invoke('db:saveMiscItem', item),
+  deleteMiscItem: (id: number) => ipcRenderer.invoke('db:deleteMiscItem', id),
+  insertMiscSale: (input: unknown) => ipcRenderer.invoke('db:insertMiscSale', input),
+  getMiscTotalsToday: () => ipcRenderer.invoke('db:getMiscTotalsToday'),
+
   // ── Sync ──────────────────────────────────────────────────────────────────
   getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
   triggerSync: () => ipcRenderer.invoke('sync:trigger'),

@@ -5,7 +5,36 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const staff = await prisma.staff.findMany({
-    select: { id: true, name: true, email: true, role: true, active: true, pin: true, createdAt: true, fingerprintTemplate: true, payrollType: true, monthlySalary: true, dailyWage: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      active: true,
+      pin: true,
+      createdAt: true,
+      payrollType: true,
+      monthlySalary: true,
+      dailyWage: true,
+      faceProfile: {
+        select: {
+          threshold: true,
+          sampleCount: true,
+          descriptor: true,
+          enrolledAt: true,
+          lastMatchedAt: true,
+          updatedAt: true,
+          samples: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              descriptor: true,
+              detectionScore: true,
+              qualityScore: true,
+            },
+          },
+        },
+      },
+    },
     orderBy: { name: 'asc' },
   })
   return NextResponse.json(staff)

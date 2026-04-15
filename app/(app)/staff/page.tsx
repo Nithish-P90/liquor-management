@@ -1,6 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { Camera, Trash2, X, ShieldAlert } from 'lucide-react'
+import { captureFaceSample, ensureFaceModelsLoaded, type FaceCaptureSample } from '../../../lib/face-client'
 
 export default function StaffPage() {
   const { data: session } = useSession()
@@ -12,21 +14,42 @@ export default function StaffPage() {
   const [formError, setFormError] = useState('')
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null)
   const [showMetrics, setShowMetrics] = useState(false)
-  const [metricsFrom, setMetricsFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10))
-  const [metricsTo, setMetricsTo] = useState(new Date().toISOString().slice(0,10))
+  const [metricsFrom, setMetricsFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10))
+  const [metricsTo, setMetricsTo] = useState(new Date().toISOString().slice(0, 10))
   const [metricsData, setMetricsData] = useState<any[]>([])
   const [metricsLoading, setMetricsLoading] = useState(false)
 
-  // Per-staff enrollment state: staffId → { status, message }
-  const [enrollStatus, setEnrollStatus] = useState<Record<number, { status: 'scanning' | 'ok' | 'err'; msg: string }>>({})
+  const [faceReady, setFaceReady] = useState(false)
+  const [faceModelMessage, setFaceModelMessage] = useState('Loading face models...')
+  const [faceModalOpen, setFaceModalOpen] = useState(false)
+  const [faceEnrollmentStaff, setFaceEnrollmentStaff] = useState<any | null>(null)
+  const [faceSamples, setFaceSamples] = useState<FaceCaptureSample[]>([])
+  const [faceCaptureStatus, setFaceCaptureStatus] = useState<'idle' | 'loading' | 'ready' | 'saving' | 'error'>('idle')
+  const [faceCaptureMessage, setFaceCaptureMessage] = useState('')
+  const faceVideoRef = useRef<HTMLVideoElement | null>(null)
+  const faceStreamRef = useRef<MediaStream | null>(null)
 
-  async function load() { setStaff(await fetch('/api/staff').then(r => r.json())) }
+  async function load() {
+    setStaff(await fetch('/api/staff').then(r => r.json()))
+  }
+
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    ensureFaceModelsLoaded()
+      .then(() => {
+        setFaceReady(true)
+        setFaceModelMessage('Face models ready')
+      })
+      .catch(error => {
+        setFaceReady(false)
+        setFaceModelMessage(error instanceof Error ? error.message : 'Unable to load face models')
+      })
+  }, [])
 
   async function submitStaff(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setFormError('')
     try {
-      // Client-side validation: only CASHIER requires a 4-digit PIN
       if (form.role === 'CASHIER') {
         if (!form.pin || String(form.pin).length !== 4) {
           setFormError('Cashiers must have a 4-digit PIN')
@@ -70,9 +93,9 @@ export default function StaffPage() {
       } else {
         setFormError(data.error ?? 'Failed to save staff')
       }
-    } catch (err: any) {
+    } catch (error: any) {
       setLoading(false)
-      setFormError(err?.message || 'Unknown error')
+      setFormError(error?.message || 'Unknown error')
     }
   }
 
@@ -112,81 +135,129 @@ export default function StaffPage() {
     }
   }
 
-  async function registerFingerprint(staffId: number) {
-    setEnrollStatus(prev => ({ ...prev, [staffId]: { status: 'scanning', msg: 'Place finger on scanner…' } }))
+  function resetFaceModal() {
+    setFaceSamples([])
+    setFaceCaptureStatus('idle')
+    setFaceCaptureMessage('')
+    setFaceEnrollmentStaff(null)
+    setFaceModalOpen(false)
     try {
-      // Step 1 — capture from bridge (use localStorage override or scan common ports 11100–11105)
-      let captureRes: Response
-      let activePort: number | null = null
-      try {
-        const stored = typeof window !== 'undefined' ? window.localStorage.getItem('FP_BRIDGE_PORT') : null
-        if (stored) {
-          const p = Number(stored)
-          try {
-            const check = await fetch(`http://127.0.0.1:${p}/rd/info`)
-            if (check.ok) activePort = p
-          } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
+      faceStreamRef.current?.getTracks().forEach(track => track.stop())
+    } catch {
+      // ignore
+    }
+    faceStreamRef.current = null
+    if (faceVideoRef.current) faceVideoRef.current.srcObject = null
+  }
 
-      if (!activePort) {
-        for (let port = 11100; port <= 11105; port++) {
-          try {
-            const check = await fetch(`http://127.0.0.1:${port}/rd/info`)
-            if (check.ok) { activePort = port; break }
-          } catch { continue }
-        }
-      }
+  async function openFaceEnrollment(s: any) {
+    setFaceEnrollmentStaff(s)
+    setFaceSamples([])
+    setFaceCaptureStatus('ready')
+    setFaceCaptureMessage('Capture 3 to 5 samples with good lighting. Slightly vary your angle between captures.')
+    setFaceModalOpen(true)
+  }
 
-      if (!activePort) throw new Error('Bridge not reachable — run: npm run fingerprint-bridge')
-
-      const xml = `<?xml version="1.0"?><PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" otp="" wadh="" posh=""/></PidOptions>`
-      captureRes = await fetch(`http://127.0.0.1:${activePort}/rd/capture`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: xml,
-      })
-
-      const template = await captureRes.text()
-
-      // Parse bridge error if capture failed
-      if (!captureRes.ok) {
-        // Extract errInfo from PID XML if present
-        const errMatch = template.match(/errInfo="([^"]+)"/)
-        throw new Error(errMatch ? errMatch[1] : 'Scanner capture failed')
-      }
-
-      // Step 2 — save template
-      const saveRes = await fetch('/api/staff/biometric', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId, template }),
-      })
-      const result = await saveRes.json()
-      if (!saveRes.ok) throw new Error(result.error ?? 'Save failed')
-
-      setEnrollStatus(prev => ({
-        ...prev,
-        [staffId]: { status: 'ok', msg: `Scan ${result.samplesStored}/3 saved — ${result.samplesStored < 3 ? `add ${3 - result.samplesStored} more for best accuracy` : 'enrollment complete'}` },
-      }))
-      load()
-
-      // Clear success message after 4 seconds
-      setTimeout(() => setEnrollStatus(prev => { const n = { ...prev }; delete n[staffId]; return n }), 4000)
-    } catch (e: any) {
-      setEnrollStatus(prev => ({ ...prev, [staffId]: { status: 'err', msg: e.message ?? 'Unknown error' } }))
+  async function startFaceCamera() {
+    if (!faceEnrollmentStaff) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      faceStreamRef.current = stream
+      if (faceVideoRef.current) faceVideoRef.current.srcObject = stream
+      setFaceCaptureStatus('ready')
+      setFaceCaptureMessage('Camera ready. Capture a clear sample.')
+    } catch {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage('Could not access camera')
     }
   }
 
-  async function clearFingerprint(staffId: number) {
-    if (!confirm('Remove all fingerprint scans for this staff member?')) return
-    await fetch('/api/staff/biometric', {
+  function stopFaceCamera() {
+    try {
+      faceStreamRef.current?.getTracks().forEach(track => track.stop())
+    } catch {
+      // ignore
+    }
+    faceStreamRef.current = null
+    if (faceVideoRef.current) faceVideoRef.current.srcObject = null
+  }
+
+  async function captureFaceEnrollmentSample() {
+    if (!faceVideoRef.current) return
+    if (!faceReady) {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage(faceModelMessage)
+      return
+    }
+    if (faceSamples.length >= 5) {
+      setFaceCaptureStatus('ready')
+      setFaceCaptureMessage('Maximum of 5 samples reached. Save or remove one.')
+      return
+    }
+
+    setFaceCaptureStatus('loading')
+    setFaceCaptureMessage('Analyzing face...')
+    try {
+      const sample = await captureFaceSample(faceVideoRef.current)
+      setFaceSamples(prev => [...prev, sample])
+      setFaceCaptureStatus('ready')
+      setFaceCaptureMessage(`Captured sample ${faceSamples.length + 1}/5. Collect at least 3.`)
+    } catch (error: any) {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage(error?.message ?? 'Failed to capture face sample')
+    }
+  }
+
+  function removeLastFaceSample() {
+    setFaceSamples(prev => prev.slice(0, -1))
+    setFaceCaptureStatus('ready')
+    setFaceCaptureMessage('Removed last sample.')
+  }
+
+  async function saveFaceEnrollment() {
+    if (!faceEnrollmentStaff) return
+    if (faceSamples.length < 3) {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage('Capture at least 3 samples for a reliable profile.')
+      return
+    }
+
+    setFaceCaptureStatus('saving')
+    setFaceCaptureMessage('Saving face profile...')
+    try {
+      const res = await fetch('/api/staff/face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: faceEnrollmentStaff.id,
+          samples: faceSamples.map(sample => ({
+            descriptor: sample.descriptor,
+            detectionScore: sample.detectionScore,
+            qualityScore: sample.qualityScore,
+          })),
+          replaceExisting: true,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to save face profile')
+      setFaceCaptureStatus('ready')
+      setFaceCaptureMessage(data.message ?? 'Face profile saved')
+      await load()
+      setTimeout(() => resetFaceModal(), 1200)
+    } catch (error: any) {
+      setFaceCaptureStatus('error')
+      setFaceCaptureMessage(error?.message ?? 'Failed to save face profile')
+    }
+  }
+
+  async function clearFaceEnrollment(staffId: number) {
+    if (!confirm('Remove all face samples for this staff member?')) return
+    await fetch('/api/staff/face', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ staffId }),
     })
-    setEnrollStatus(prev => { const n = { ...prev }; delete n[staffId]; return n })
-    load()
+    await load()
   }
 
   if (user?.role !== 'ADMIN') return (
@@ -218,19 +289,15 @@ export default function StaffPage() {
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Email</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Role</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Payroll</th>
-              <th className="text-center px-4 py-3 font-semibold text-gray-600">Biometrics</th>
+              <th className="text-center px-4 py-3 font-semibold text-gray-600">Face</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {staff.map((s: any) => {
-              const enroll = enrollStatus[s.id]
-              let samples = 0
-              try {
-                const t = s.fingerprintTemplate?.trim()
-                if (t) samples = t.startsWith('[') ? JSON.parse(t).length : 1
-              } catch { /* ignore */ }
+              const enrolledSamples = s.faceProfile?.sampleCount ?? 0
+              const faceReadyState = enrolledSamples > 0
 
               return (
                 <tr key={s.id} className={!s.active ? 'opacity-50' : ''}>
@@ -238,67 +305,12 @@ export default function StaffPage() {
                   <td className="px-4 py-3 text-gray-500">{s.email}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      s.role === 'ADMIN'    ? 'bg-indigo-100 text-indigo-700' :
-                      s.role === 'CASHIER'  ? 'bg-blue-100 text-blue-700' :
-                                              'bg-slate-100 text-slate-500'
+                      s.role === 'ADMIN' ? 'bg-indigo-100 text-indigo-700' :
+                      s.role === 'CASHIER' ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-500'
                     }`}>
                       {s.role}
                     </span>
-                  </td>
-
-                  {/* Biometrics cell */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col items-center gap-1.5 min-w-[140px]">
-                      {/* Enrollment status badge */}
-                      {enroll ? (
-                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full w-full text-center ${
-                          enroll.status === 'scanning' ? 'bg-blue-50 text-blue-600 animate-pulse' :
-                          enroll.status === 'ok'       ? 'bg-green-50 text-green-700' :
-                                                         'bg-red-50 text-red-600'
-                        }`}>
-                          {enroll.status === 'scanning' ? '⏳ ' : enroll.status === 'ok' ? '✓ ' : '✗ '}
-                          {enroll.msg}
-                        </span>
-                      ) : samples > 0 ? (
-                        <span className="text-emerald-600 font-bold text-xs flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.092 2.027-.273 3M15 19l2-2m0 0l2-2m-2 2h-6"/>
-                          </svg>
-                          {samples}/3 scans enrolled
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-[11px]">No fingerprint</span>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="flex gap-1">
-                        {(samples < 3 && !enroll?.status) && (
-                          <button
-                            onClick={() => registerFingerprint(s.id)}
-                            disabled={enroll?.status === 'scanning'}
-                            className="text-[11px] px-2 py-0.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
-                          >
-                            {samples === 0 ? '+ Enroll' : '+Scan'}
-                          </button>
-                        )}
-                        {samples > 0 && enroll?.status !== 'scanning' && (
-                          <button
-                            onClick={() => clearFingerprint(s.id)}
-                            className="text-[11px] px-2 py-0.5 bg-red-50 text-red-500 rounded-md hover:bg-red-100 font-medium"
-                          >
-                            Clear
-                          </button>
-                        )}
-                        {enroll?.status === 'err' && (
-                          <button
-                            onClick={() => registerFingerprint(s.id)}
-                            className="text-[11px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 font-medium"
-                          >
-                            Retry
-                          </button>
-                        )}
-                      </div>
-                    </div>
                   </td>
 
                   <td className="px-4 py-3 text-center">
@@ -311,6 +323,38 @@ export default function StaffPage() {
                       ) : null}
                     </div>
                   </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-center gap-1.5 min-w-[180px]">
+                      {faceReadyState ? (
+                        <span className="text-emerald-600 font-bold text-xs flex items-center gap-1">
+                          <Camera size={13} />
+                          {enrolledSamples}/5 samples enrolled
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-[11px]">No face enrolled</span>
+                      )}
+
+                      <div className="flex gap-1 flex-wrap justify-center">
+                        <button
+                          onClick={() => openFaceEnrollment(s)}
+                          className="text-[11px] px-2 py-0.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium transition-colors"
+                        >
+                          {faceReadyState ? 'Re-enroll face' : '+ Enroll face'}
+                        </button>
+                        {faceReadyState && (
+                          <button
+                            onClick={() => clearFaceEnrollment(s.id)}
+                            className="text-[11px] px-2 py-0.5 bg-red-50 text-red-500 rounded-md hover:bg-red-100 font-medium inline-flex items-center gap-1"
+                          >
+                            <Trash2 size={11} />
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button onClick={() => openEdit(s)} className="text-xs px-3 py-1.5 rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100">Edit</button>
@@ -329,39 +373,33 @@ export default function StaffPage() {
 
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 w-96 shadow-xl">
+          <div className="bg-white rounded-2xl p-6 w-96 shadow-xl">
             <h3 className="font-bold text-gray-900 text-lg mb-5">{editingStaffId ? 'Edit Staff Member' : 'Add Staff Member'}</h3>
             <form onSubmit={submitStaff} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email (Optional)</label>
-                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})}
-                  placeholder="Only for Admins/Cashiers"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="Only for Admins/Cashiers" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {form.role === 'CASHIER' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">4-Digit PIN</label>
-                    <input value={form.pin} onChange={e => setForm({...form, pin: e.target.value.slice(0,4)})} maxLength={4} inputMode="numeric"
-                      placeholder="1234" pattern="[0-9]{4}"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center font-mono tracking-widest focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value.slice(0, 4) })} maxLength={4} inputMode="numeric" placeholder="1234" pattern="[0-9]{4}" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center font-mono tracking-widest focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
                 ) : (
                   <div />
                 )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Rank / Role</label>
-                  <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="CASHIER">Cashier</option>
                     <option value="SUPPLIER">Supplier</option>
                     <option value="CLEANER">Cleaner</option>
-                    {form.role && !['CASHIER','SUPPLIER','CLEANER'].includes(form.role) && (
+                    {form.role && !['CASHIER', 'SUPPLIER', 'CLEANER'].includes(form.role) && (
                       <option value={form.role}>{form.role}</option>
                     )}
                   </select>
@@ -371,17 +409,14 @@ export default function StaffPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payroll Type</label>
                 <div className="flex gap-2">
-                  <select value={form.payrollType} onChange={e => setForm({...form, payrollType: e.target.value})}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  <select value={form.payrollType} onChange={e => setForm({ ...form, payrollType: e.target.value })} className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="SALARY">Fixed Monthly Salary</option>
                     <option value="DAILY">Daily Wage</option>
                   </select>
                   {form.payrollType === 'SALARY' ? (
-                    <input value={form.monthlySalary} onChange={e => setForm({...form, monthlySalary: e.target.value})} placeholder="Monthly ₹"
-                      inputMode="decimal" className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input value={form.monthlySalary} onChange={e => setForm({ ...form, monthlySalary: e.target.value })} placeholder="Monthly ₹" inputMode="decimal" className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   ) : (
-                    <input value={form.dailyWage} onChange={e => setForm({...form, dailyWage: e.target.value})} placeholder="Per-day ₹"
-                      inputMode="decimal" className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input value={form.dailyWage} onChange={e => setForm({ ...form, dailyWage: e.target.value })} placeholder="Per-day ₹" inputMode="decimal" className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   )}
                 </div>
               </div>
@@ -439,6 +474,116 @@ export default function StaffPage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {faceModalOpen && faceEnrollmentStaff && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-slate-950 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Face enrollment</h3>
+                <p className="text-xs text-slate-400">{faceEnrollmentStaff.name} · {faceEnrollmentStaff.role}</p>
+              </div>
+              <button onClick={resetFaceModal} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+              <div className="p-5 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800">
+                <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 text-xs text-slate-300 space-y-2">
+                  <div className="font-bold text-slate-100 uppercase tracking-widest flex items-center gap-2">
+                    <ShieldAlert size={12} />
+                    Quality rules
+                  </div>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li>Capture at least 3 samples.</li>
+                    <li>Keep one face in frame, centered, and well lit.</li>
+                    <li>Vary angle slightly between captures for better accuracy.</li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={startFaceCamera}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 font-medium"
+                  >
+                    Start camera
+                  </button>
+                  <button
+                    onClick={captureFaceEnrollmentSample}
+                    disabled={!faceReady || faceCaptureStatus === 'loading' || faceSamples.length >= 5}
+                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 disabled:opacity-50 font-medium"
+                  >
+                    {faceCaptureStatus === 'loading' ? 'Capturing...' : 'Capture sample'}
+                  </button>
+                  <button
+                    onClick={removeLastFaceSample}
+                    disabled={faceSamples.length === 0}
+                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 disabled:opacity-50 font-medium"
+                  >
+                    Remove last
+                  </button>
+                  <button
+                    onClick={stopFaceCamera}
+                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 font-medium"
+                  >
+                    Stop camera
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-400">{faceModelMessage}</p>
+                <p className={`text-xs ${faceCaptureStatus === 'error' ? 'text-red-400' : faceCaptureStatus === 'saving' ? 'text-amber-300' : 'text-slate-300'}`}>
+                  {faceCaptureMessage || 'No samples captured yet.'}
+                </p>
+
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <Camera size={14} className="text-indigo-400" />
+                  Captured {faceSamples.length}/5 samples
+                </div>
+
+                {faceVideoRef.current ? null : null}
+                <video ref={faceVideoRef} autoPlay playsInline muted className="w-full aspect-video bg-black rounded-xl object-cover border border-slate-700" />
+              </div>
+
+              <div className="p-5 space-y-4 bg-slate-950/60">
+                <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Captured samples</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[320px] overflow-auto pr-1">
+                  {faceSamples.length === 0 ? (
+                    <div className="col-span-full text-sm text-slate-500 border border-dashed border-slate-700 rounded-xl p-4 text-center">
+                      Samples will appear here after capture.
+                    </div>
+                  ) : faceSamples.map((sample, index) => (
+                    <div key={`${index}-${sample.detectionScore}`} className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+                      <img src={sample.previewDataUrl} alt={`Face sample ${index + 1}`} className="w-full h-40 object-cover" />
+                      <div className="p-3 text-xs text-slate-300 space-y-1">
+                        <div className="font-semibold text-slate-100">Sample {index + 1}</div>
+                        <div>Detection: {Math.round(sample.detectionScore * 100)}%</div>
+                        <div>Quality: {Math.round(sample.qualityScore * 100)}%</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={saveFaceEnrollment}
+                    disabled={faceCaptureStatus === 'saving' || faceSamples.length < 3}
+                    className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 font-semibold"
+                  >
+                    {faceCaptureStatus === 'saving' ? 'Saving...' : 'Save face profile'}
+                  </button>
+                  <button
+                    onClick={resetFaceModal}
+                    className="px-4 py-2.5 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

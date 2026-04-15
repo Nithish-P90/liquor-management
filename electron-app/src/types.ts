@@ -19,7 +19,7 @@ export type Staff = {
   name: string
   role: string
   pin: string | null
-  fingerprint_template: string | null
+  face_profile_json: string | null
   active: number
 }
 
@@ -85,6 +85,19 @@ export type CashRecord = {
   synced: number
 }
 
+export type MiscItem = {
+  id: number
+  name: string
+  price: number
+  barcode: string | null
+  active: number
+}
+
+export type MiscTotals = {
+  misc_revenue: number
+  misc_items_sold: number
+}
+
 export type DailyTotals = {
   bill_count: number
   total_bottles: number
@@ -124,6 +137,12 @@ export interface PosAPI {
   triggerSync: () => Promise<SyncStatus>
   getSettings: () => Promise<{ cloud_url: string; sync_token: string; outlet_name: string }>
   saveSettings: (data: { cloud_url?: string; sync_token?: string; outlet_name?: string }) => Promise<{ ok: boolean }>
+  getMiscItems: () => Promise<MiscItem[]>
+  getMiscItemByBarcode: (barcode: string) => Promise<MiscItem | null>
+  saveMiscItem: (item: { id?: number; name: string; price: number; barcode?: string | null }) => Promise<{ ok: boolean; item?: MiscItem; error?: string }>
+  deleteMiscItem: (id: number) => Promise<{ ok: boolean; error?: string }>
+  insertMiscSale: (input: { staff_id: number; item_name: string; quantity: number; price: number; total: number; payment_mode: string }) => Promise<{ ok: boolean; error?: string }>
+  getMiscTotalsToday: () => Promise<MiscTotals>
   onSyncEvent: (callback: (event: string, data: unknown) => void) => () => void
   onUpdaterEvent: (callback: (event: 'available' | 'downloaded', info: unknown) => void) => () => void
   installUpdate: () => Promise<void>

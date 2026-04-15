@@ -9,7 +9,9 @@
     "build": "tsc -p tsconfig.electron.json && vite build",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node ../scripts/sync-face-assets.js",
+    "sync-face-assets": "node ../scripts/sync-face-assets.js"
   },
   "dependencies": {
     "better-sqlite3": "^9.6.0",

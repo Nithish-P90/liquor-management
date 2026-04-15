@@ -20,6 +20,8 @@ import {
   checkInStaff, checkOutStaff, getAttendanceForDate, getAttendanceForStaffToday,
   insertExpense, getTodayExpenses,
   getTodayCashRecord, upsertCashRecord,
+  getMiscItems, getMiscItemByBarcode, saveMiscItem, deleteMiscItem,
+  insertMiscSale, getMiscTotalsToday,
   todayStr,
 } from './db'
 import {
@@ -271,6 +273,42 @@ ipcMain.handle('settings:save', (_, data: { cloud_url?: string; sync_token?: str
 ipcMain.handle('updater:install', () => {
   autoUpdater.quitAndInstall()
 })
+
+// ── IPC Handlers — Misc items ─────────────────────────────────────────────────
+ipcMain.handle('db:getMiscItems', () => getMiscItems(getDb()))
+
+ipcMain.handle('db:getMiscItemByBarcode', (_, barcode: string) =>
+  getMiscItemByBarcode(getDb(), barcode)
+)
+
+ipcMain.handle('db:saveMiscItem', (_, item) => {
+  try {
+    const saved = saveMiscItem(getDb(), item)
+    return { ok: true, item: saved }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+ipcMain.handle('db:deleteMiscItem', (_, id: number) => {
+  try {
+    deleteMiscItem(getDb(), id)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+ipcMain.handle('db:insertMiscSale', (_, input) => {
+  try {
+    insertMiscSale(getDb(), input)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+ipcMain.handle('db:getMiscTotalsToday', () => getMiscTotalsToday(getDb()))
 
 // ── IPC Handlers — App ────────────────────────────────────────────────────────
 ipcMain.handle('app:getVersion', () => {
