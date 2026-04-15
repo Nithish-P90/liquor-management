@@ -151,8 +151,15 @@ export async function GET() {
     take: 5,
   })
 
+  const miscAgg = await prisma.miscSale.aggregate({
+    where: { saleDate: today },
+    _sum: { totalAmount: true },
+  })
+  const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
+
   return NextResponse.json({
     todaySales,
+    miscSaleTotal,
     alerts: { total: alerts, high: highAlerts },
     pendingIndents,
     clerkBilling: clerkBillingData,

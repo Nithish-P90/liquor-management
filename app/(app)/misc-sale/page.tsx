@@ -21,7 +21,6 @@ type SaleRecord = {
   quantity: number
   unitPrice: number
   totalAmount: number
-  paymentMode: string
   saleTime: string
   item: MiscItem
 }
@@ -45,7 +44,6 @@ function rupee(n: number) {
 export default function MiscSalePage() {
   const [barcode, setBarcode] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
-  const [payMode, setPayMode] = useState<'CASH' | 'CARD' | 'UPI'>('CASH')
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [sales, setSales] = useState<SaleRecord[]>([])
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
@@ -124,7 +122,6 @@ export default function MiscSalePage() {
           unitPrice: c.item.price,
           totalAmount: c.item.price * c.quantity,
         })),
-        paymentMode: payMode,
         saleDate: date,
       }),
     })
@@ -231,14 +228,8 @@ export default function MiscSalePage() {
             ))}
           </div>
           <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
-            <div className="flex gap-2">
-              {(['CASH', 'CARD', 'UPI'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setPayMode(m)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${payMode === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}`}
-                >{m}</button>
-              ))}
+            <div className="text-xs font-semibold text-slate-500">
+              Separate misc ledger entry
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm font-bold text-slate-700">Total: {rupee(cartTotal)}</span>

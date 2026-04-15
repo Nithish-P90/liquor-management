@@ -24,6 +24,7 @@ type ClerkBillingRow = { staffId: number; name: string; bills: number; bottles: 
 
 type DashboardData = {
   todaySales: { total: number; bottles: number; cash: number; card: number; upi: number; credit: number }
+  miscSaleTotal: number
   alerts: { total: number; high: number }
   pendingIndents: number
   clerkBilling: ClerkBillingRow[]
@@ -89,8 +90,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Today's stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Today's Revenue" value={rupee(today.total)} sub={`${today.bottles} bottles sold`} accent="blue" />
+        <StatCard label="Misc Sale" value={rupee(data.miscSaleTotal)} sub="Separate misc ledger" accent="sky" />
         <StatCard label="Cash" value={rupee(Number(today.cash))} sub="Counter collections" accent="emerald" />
         <StatCard label="Card + UPI" value={rupee(Number(today.card) + Number(today.upi))} sub="Digital payments" accent="violet" />
         <StatCard label="Credit" value={rupee(Number(today.credit))} sub="Outstanding bills" accent="amber" />
@@ -269,7 +271,7 @@ export default function DashboardPage() {
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent: string }) {
   const accents: Record<string, string> = {
     blue: 'border-l-blue-500', emerald: 'border-l-emerald-500',
-    violet: 'border-l-violet-500', amber: 'border-l-amber-500',
+    violet: 'border-l-violet-500', amber: 'border-l-amber-500', sky: 'border-l-cyan-500',
   }
   return (
     <div className={`bg-white border border-slate-200 border-l-4 ${accents[accent]} rounded-xl p-5`}>

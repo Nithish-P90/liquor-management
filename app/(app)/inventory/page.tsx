@@ -1,13 +1,19 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
 export default function InventoryPage() {
   const router = useRouter()
+  const { data: session } = useSession()
+  const user = session?.user as { role?: string } | undefined
+  const isAdmin = user?.role === 'ADMIN'
+
   const [stock, setStock] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sessions, setSessions] = useState<any[]>([])
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -22,6 +28,41 @@ export default function InventoryPage() {
 
   const lowStock = stock.filter(s => s.currentStock >= 0 && s.currentStock <= 6).length
   const currentSession = sessions[0]
+
+  async function editStock(item: any) {
+    if (!isAdmin) return
+    const input = window.prompt(
+      `Set stock for ${item.productName} ${item.sizeMl}ml (bottles):`,
+      String(item.currentStock)
+    )
+    if (input == null) return
+
+    const newStock = Number(input)
+    if (!Number.isInteger(newStock) || newStock < 0) {
+      window.alert('Please enter a valid non-negative whole number')
+      return
+    }
+
+    const reason = window.prompt('Reason for stock correction (optional):', 'Manual admin stock correction') || ''
+    setEditingId(item.id)
+    try {
+      const res = await fetch('/api/inventory/current', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productSizeId: item.id, newStock, reason }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Stock update failed')
+
+      const refreshed = await fetch('/api/inventory/current').then(r => r.json())
+      setStock(refreshed)
+      window.alert(`Stock updated to ${newStock} bottles`) 
+    } catch (e: any) {
+      window.alert(e?.message || 'Stock update failed')
+    } finally {
+      setEditingId(null)
+    }
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -76,6 +117,7 @@ export default function InventoryPage() {
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">Current Stock</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">Selling Price</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
+                {isAdmin && <th className="text-center px-4 py-3 font-semibold text-gray-600">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -100,6 +142,17 @@ export default function InventoryPage() {
                       <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">OK</span>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-2.5 text-center">
+                      <button
+                        onClick={() => editStock(s)}
+                        disabled={editingId === s.id}
+                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        {editingId === s.id ? 'Updating...' : 'Edit Stock'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
