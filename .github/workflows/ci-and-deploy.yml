@@ -36,9 +36,10 @@ jobs:
 
       - name: Build (and generate Prisma client)
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://ci:ci@localhost/ci' }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-build-secret-not-used-at-runtime' }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://ci:ci@localhost/ci' }}
         run: npm run build
 
       - name: Lint
