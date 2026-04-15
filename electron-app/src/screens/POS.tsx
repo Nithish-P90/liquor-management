@@ -368,12 +368,42 @@ export default function POS() {
     setCart(prev => prev.filter(i => i.key !== key))
   }
 
-  // Void pending cart (before checkout) — just clears UI state.
-  // Stock is only deducted on insertSale, so nothing to restore.
-  function voidCart() {
-    setCart([])
-    setCustomerName('')
-    setShowSplit(false)
+  // Void cart — logs each liquor item as a VOID bill (adds stock back)
+  // and clears the cart. Misc items are just removed (no inventory to restore).
+  async function voidCart() {
+    if (cartEmpty || !activeStaffId || isSubmitting) {
+      setCart([]); setCustomerName(''); setShowSplit(false); return
+    }
+    setIsSubmitting(true)
+    try {
+      const liquorItems = cart.filter(i => !i.isMisc)
+      for (const item of liquorItems) {
+        await window.posAPI.insertSale({
+          staff_id:        activeStaffId,
+          product_size_id: item.product!.size_id,
+          product_name:    item.product!.name,
+          size_ml:         item.product!.size_ml,
+          quantity:        -item.quantity,   // negative = return
+          selling_price:   item.unitPrice,
+          total_amount:    0,
+          payment_mode:    'VOID' as any,
+          cash_amount:     null,
+          card_amount:     null,
+          upi_amount:      null,
+          scan_method:     'MANUAL',
+          customer_name:   customerName || null,
+        })
+      }
+      setCart([])
+      setCustomerName('')
+      setShowSplit(false)
+      showToast('ok', 'Cart voided — items returned to inventory')
+      refreshTotals()
+    } catch (e) {
+      showToast('err', String(e))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Open "Void Last Bill" modal — fetch today's sales first

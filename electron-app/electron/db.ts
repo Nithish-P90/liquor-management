@@ -353,10 +353,17 @@ export function insertSale(db: Database.Database, input: SaleInput): SaleRow {
        @upi_amount,@scan_method,@customer_name,0,@created_at)
   `).run(row)
 
-  // Optimistically deduct from local stock (skip for misc items, product_size_id === 0)
+  // Optimistically adjust local stock (skip for misc items, product_size_id === 0)
+  // Negative quantity (VOID/return) adds stock back; positive deducts.
   if (input.product_size_id !== 0) {
-    db.prepare(`UPDATE products_cache SET stock = MAX(0, stock - ?) WHERE size_id = ?`)
-      .run(input.quantity, input.product_size_id)
+    if (input.quantity < 0) {
+      // Return: add back to stock
+      db.prepare(`UPDATE products_cache SET stock = stock + ? WHERE size_id = ?`)
+        .run(-input.quantity, input.product_size_id)
+    } else {
+      db.prepare(`UPDATE products_cache SET stock = MAX(0, stock - ?) WHERE size_id = ?`)
+        .run(input.quantity, input.product_size_id)
+    }
   }
 
   return row
