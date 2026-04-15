@@ -318,32 +318,49 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
 
 function EditProductModal({ product, onClose }: { product: any; onClose: () => void }) {
   const [form, setForm] = useState({ itemCode: product.itemCode, name: product.name, category: product.category })
+  const [sizes, setSizes] = useState<any[]>(
+    (product.sizes ?? []).map((s: any) => ({
+      id: s.id,
+      sizeMl: s.sizeMl,
+      bottlesPerCase: s.bottlesPerCase,
+      mrp: Number(s.mrp),
+      sellingPrice: Number(s.sellingPrice),
+      barcode: s.barcode ?? '',
+    }))
+  )
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  function updateSize(index: number, updates: Partial<(typeof sizes)[number]>) {
+    const next = [...sizes]
+    next[index] = { ...next[index], ...updates }
+    setSizes(next)
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     setLoading(true)
     const res = await fetch(`/api/products/${product.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, sizes }),
     })
     setLoading(false)
-
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      window.alert(data.error ?? 'Unable to save product')
+      setError(data.error ?? 'Unable to save product')
       return
     }
-
     onClose()
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-auto py-8">
-      <div className="bg-white rounded-2xl p-6 w-[640px] max-w-[calc(100vw-2rem)] shadow-xl">
+      <div className="bg-white rounded-2xl p-6 w-[760px] max-w-[calc(100vw-2rem)] shadow-xl">
         <h3 className="font-bold text-gray-900 text-lg mb-5">Edit Product</h3>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-5">
+          {/* Header fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Item Code (KSBCL)</label>
@@ -364,14 +381,76 @@ function EditProductModal({ product, onClose }: { product: any; onClose: () => v
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600">
-            Barcode and size changes can still be managed from the row actions and inline barcode controls.
+          {/* Size pricing */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sizes & Pricing</label>
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-500 text-xs">Size (ml)</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-500 text-xs">Btls/Case</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-500 text-xs">MRP ₹</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-500 text-xs">Selling ₹</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-500 text-xs">Barcode</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sizes.map((s, i) => (
+                    <tr key={s.id}>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={s.sizeMl}
+                          onChange={e => updateSize(i, { sizeMl: +e.target.value })}
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={s.bottlesPerCase}
+                          onChange={e => updateSize(i, { bottlesPerCase: +e.target.value })}
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={s.mrp}
+                          onChange={e => updateSize(i, { mrp: +e.target.value })}
+                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={s.sellingPrice}
+                          onChange={e => updateSize(i, { sellingPrice: +e.target.value })}
+                          className="w-24 px-2 py-1 border border-blue-300 rounded text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50 font-semibold"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          value={s.barcode}
+                          onChange={e => updateSize(i, { barcode: e.target.value })}
+                          placeholder="—"
+                          className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={loading} className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {loading ? 'Saving...' : 'Save Changes'}
+              {loading ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </form>
