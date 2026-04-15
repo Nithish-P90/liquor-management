@@ -427,35 +427,39 @@ export default function POS() {
       const liquorItems = cart.filter(i => !i.isMisc)
       const miscCartItems = cart.filter(i => i.isMisc)
 
-      for (const item of liquorItems) {
-        const result = await window.posAPI.insertSale({
-          staff_id:        activeStaffId,
-          product_size_id: item.product!.size_id,
-          product_name:    item.product!.name,
-          size_ml:         item.product!.size_ml,
-          quantity:        item.quantity,
-          selling_price:   item.unitPrice,
-          total_amount:    item.unitPrice * item.quantity,
-          payment_mode:    mode,
-          cash_amount:  mode === 'CASH'  ? cartTotal : mode === 'SPLIT' ? (splits?.cash ?? null) : null,
-          card_amount:  mode === 'CARD'  ? cartTotal : mode === 'SPLIT' ? (splits?.card ?? null) : null,
-          upi_amount:   mode === 'UPI'   ? cartTotal : mode === 'SPLIT' ? (splits?.upi  ?? null) : null,
-          scan_method:   'MANUAL',
-          customer_name: customerName || null,
-        })
-        if (!result.ok) throw new Error(result.error ?? 'Sale failed')
-      }
+      // Run all inserts in parallel — SQLite handles concurrent writes via WAL
+      const [liquorResults] = await Promise.all([
+        Promise.all(liquorItems.map(item =>
+          window.posAPI.insertSale({
+            staff_id:        activeStaffId,
+            product_size_id: item.product!.size_id,
+            product_name:    item.product!.name,
+            size_ml:         item.product!.size_ml,
+            quantity:        item.quantity,
+            selling_price:   item.unitPrice,
+            total_amount:    item.unitPrice * item.quantity,
+            payment_mode:    mode,
+            cash_amount:  mode === 'CASH'  ? cartTotal : mode === 'SPLIT' ? (splits?.cash ?? null) : null,
+            card_amount:  mode === 'CARD'  ? cartTotal : mode === 'SPLIT' ? (splits?.card ?? null) : null,
+            upi_amount:   mode === 'UPI'   ? cartTotal : mode === 'SPLIT' ? (splits?.upi  ?? null) : null,
+            scan_method:   'MANUAL',
+            customer_name: customerName || null,
+          })
+        )),
+        Promise.all(miscCartItems.map(item =>
+          window.posAPI.insertMiscSale({
+            staff_id:     activeStaffId,
+            item_name:    item.miscItemName ?? item.label,
+            quantity:     item.quantity,
+            price:        item.unitPrice,
+            total:        item.unitPrice * item.quantity,
+            payment_mode: mode,
+          })
+        )),
+      ])
 
-      for (const item of miscCartItems) {
-        await window.posAPI.insertMiscSale({
-          staff_id:     activeStaffId,
-          item_name:    item.miscItemName ?? item.label,
-          quantity:     item.quantity,
-          price:        item.unitPrice,
-          total:        item.unitPrice * item.quantity,
-          payment_mode: mode,
-        })
-      }
+      const failed = liquorResults.find(r => !r.ok)
+      if (failed) throw new Error(failed.error ?? 'Sale failed')
 
       const savedTotal = cartTotal
       voidCart()

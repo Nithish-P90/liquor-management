@@ -49,11 +49,13 @@ export async function GET() {
       : prisma.receiptItem.findMany({ select: { productSizeId: true, totalBottles: true } }),
 
     // Sales since session start (or all time) — group by productSizeId
+    // quantityBottles > 0 excludes VOID rows (which store negative qty) without
+    // requiring the VOID enum value to exist in the DB yet.
     prisma.sale.groupBy({
       by: ['productSizeId'],
       where: {
         ...(periodStart ? { saleDate: { gte: periodStart } } : {}),
-        paymentMode: { not: 'VOID' },  // exclude void rows
+        quantityBottles: { gt: 0 },
       },
       _sum: { quantityBottles: true },
     }),
