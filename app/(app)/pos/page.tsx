@@ -128,6 +128,7 @@ export default function POSPage() {
     () => clerkOptions.find(c => c.key === activeClerkKey) ?? clerkOptions[0] ?? null,
     [clerkOptions, activeClerkKey]
   )
+  const topClerkOptions = useMemo(() => clerkOptions.slice(0, 5), [clerkOptions])
 
   useEffect(() => {
     loadProducts()
@@ -397,33 +398,39 @@ export default function POSPage() {
     }
   }
 
-  async function voidBill(bill: RecentBill) {
-    const names = bill.items.map(i => `${i.productName} ${i.sizeMl}ml ×${i.quantityBottles}`).join(', ')
-    if (!confirm(`Void bill (${names})? Stock and payment totals will be reversed.`)) return
+  async function voidCartItems() {
+    if (!cart.length) return
+    const totalBottles = cart.reduce((sum, item) => sum + item.qty, 0)
+    if (!confirm(`Void ${totalBottles} bottle(s) from current cart? Inventory will be added back and cash totals reduced by refund.`)) return
 
-    const merged = new Map<number, { productSizeId: number; quantityBottles: number }>()
-    for (const item of bill.items) {
-      const ex = merged.get(item.productSizeId)
-      if (ex) ex.quantityBottles += item.quantityBottles
-      else merged.set(item.productSizeId, { productSizeId: item.productSizeId, quantityBottles: item.quantityBottles })
-    }
+    setVoidProcessing(true)
+    try {
+      const res = await fetch('/api/sales/void', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map(item => ({ productSizeId: item.productSizeId, quantityBottles: item.qty })),
+          reason: 'POS cart void/refund',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Void failed')
 
-    const res = await fetch('/api/sales/void', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        items: Array.from(merged.values()),
-        reason: `POS bill void (${bill.id})`,
-      }),
-    })
-
-    if (res.ok) {
-      flash('Bill voided — stock returned', 'ok')
+      const refund = data.refund as { total?: number; cash?: number; card?: number; upi?: number } | undefined
+      flash(
+        refund?.total != null
+          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))} deducted)`
+          : 'Void complete — stock returned',
+        'ok'
+      )
+      resetSale()
       loadRecent()
       loadProducts()
-    } else {
-      const e = await res.json()
-      flash(e.error || 'Void failed', 'err')
+      scanRef.current?.focus()
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : 'Void failed', 'err')
+    } finally {
+      setVoidProcessing(false)
     }
   }
 
@@ -604,12 +611,12 @@ export default function POSPage() {
             <div className="text-[10px] uppercase tracking-[0.18em] font-black text-slate-400">Suppliers</div>
             <div className="text-[10px] text-slate-400 font-black uppercase tracking-[0.18em]">Tap a box</div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {clerkOptions.map(c => (
+          <div className="grid grid-cols-5 gap-2">
+            {topClerkOptions.map(c => (
               <button
                 key={c.key}
                 onClick={() => setActiveClerkKey(c.key)}
-                className={`aspect-square min-h-[88px] rounded-2xl border px-3 py-4 text-center text-sm font-black transition-all flex items-center justify-center leading-tight ${
+                className={`h-20 rounded-2xl border px-2 text-center text-sm font-black transition-all flex items-center justify-center leading-tight min-w-0 ${
                   activeClerk?.key === c.key
                     ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-100 scale-[0.98]'
                     : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
@@ -618,8 +625,8 @@ export default function POSPage() {
                 <span className="line-clamp-2">{c.label}</span>
               </button>
             ))}
-            {clerkOptions.length === 0 && (
-              <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs font-bold text-slate-400">
+            {topClerkOptions.length === 0 && (
+              <div className="col-span-5 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs font-bold text-slate-400">
                 No active suppliers found
               </div>
             )}
@@ -719,14 +726,6 @@ export default function POSPage() {
                     {bill.items.map(i => `${i.productName} ${i.sizeMl}ml ×${i.quantityBottles}`).join(', ')}
                   </p>
 
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      onClick={() => voidBill(bill)}
-                      className="text-[10px] text-red-500 hover:text-red-700 font-black uppercase tracking-wide px-2 py-1 rounded border border-red-200 hover:border-red-400 hover:bg-red-50 transition-colors"
-                    >
-                      Void Bill
-                    </button>
-                  </div>
                 </div>
               ))}
             </div>
@@ -752,13 +751,22 @@ export default function POSPage() {
             {/* Payment mode selection */}
             {!showPayment ? (
               <div className="px-6 pb-6">
-                <button onClick={() => setShowPayment(true)}
-                  className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white font-black text-base rounded-2xl transition-all active:scale-[0.98] shadow-2xl shadow-blue-200 flex items-center justify-center gap-3">
-                  Proceed to Payment
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={voidCartItems}
+                    disabled={voidProcessing || processing}
+                    className="py-4 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black text-sm rounded-2xl transition-all shadow-xl shadow-red-100"
+                  >
+                    {voidProcessing ? 'Voiding...' : 'Void / Return'}
+                  </button>
+                  <button onClick={() => setShowPayment(true)}
+                    className="py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-2xl transition-all active:scale-[0.98] shadow-xl shadow-blue-100 flex items-center justify-center gap-2">
+                    Proceed to Payment
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="px-6 pb-6 space-y-4">
@@ -779,11 +787,11 @@ export default function POSPage() {
                 {/* Cash — tendered */}
                 {payMode === 'CASH' && (
                   <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <span className="text-[11px] text-slate-400 font-black uppercase tracking-widest w-20">Received</span>
                       <input type="number" value={tendered} onChange={e => setTendered(e.target.value)}
                         placeholder={cartTotal.toString()} autoFocus
-                        className="flex-1 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all" />
+                        className="flex-1 w-full min-w-0 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all" />
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {[{ add: 0, label: 'Exact' }, { add: 50, label: '+50' }, { add: 100, label: '+100' }, { add: 200, label: '+200' }].map((opt, idx) => (
@@ -808,11 +816,11 @@ export default function POSPage() {
                 {/* Split */}
                 {payMode === 'SPLIT' && (
                   <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <span className="text-[11px] text-slate-400 font-black uppercase tracking-widest w-20">Cash</span>
                       <input type="number" value={splitCash} onChange={e => setSplitCash(e.target.value)}
                         placeholder="0" autoFocus
-                        className="flex-1 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-violet-500 shadow-sm transition-all" />
+                        className="flex-1 w-full min-w-0 text-lg px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl text-right font-black outline-none focus:ring-2 focus:ring-violet-500 shadow-sm transition-all" />
                     </div>
                     <div className="flex items-center gap-3">
                       <select value={splitMethod} onChange={e => setSplitMethod(e.target.value === 'CARD' ? 'CARD' : 'UPI')}
@@ -827,22 +835,30 @@ export default function POSPage() {
                   </div>
                 )}
 
-                {/* Collect button */}
-                <button onClick={completeSale} disabled={processing}
-                  className={`w-full py-5 text-lg font-black rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 tracking-tight ${
-                    payMode === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' :
-                    payMode === 'SPLIT' ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-200' :
-                    'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
-                  }`}>
-                  {processing ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                      Finalizing...
-                    </div>
-                  ) : (
-                    `Complete Transaction`
-                  )}
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={voidCartItems}
+                    disabled={voidProcessing || processing}
+                    className="py-4 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black text-sm rounded-2xl transition-all shadow-xl shadow-red-100"
+                  >
+                    {voidProcessing ? 'Voiding...' : 'Void / Return'}
+                  </button>
+                  <button onClick={completeSale} disabled={processing || voidProcessing}
+                    className={`py-4 text-sm font-black rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 tracking-tight ${
+                      payMode === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' :
+                      payMode === 'SPLIT' ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-200' :
+                      'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
+                    }`}>
+                    {processing ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                        Finalizing...
+                      </div>
+                    ) : (
+                      `Complete Transaction`
+                    )}
+                  </button>
+                </div>
 
                 {/* Back */}
                 <button onClick={() => setShowPayment(false)}
