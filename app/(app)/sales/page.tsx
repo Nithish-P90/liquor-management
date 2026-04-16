@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 
 const PAYMENT_STYLES: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  CASH:  { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Cash' },
-  UPI:   { bg: 'bg-blue-100',    text: 'text-blue-700',    dot: 'bg-blue-500',    label: 'UPI' },
-  CARD:  { bg: 'bg-violet-100',  text: 'text-violet-700',  dot: 'bg-violet-500',  label: 'Card' },
+  CASH:  { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Cash'  },
+  UPI:   { bg: 'bg-blue-100',    text: 'text-blue-700',    dot: 'bg-blue-500',    label: 'UPI'   },
+  CARD:  { bg: 'bg-violet-100',  text: 'text-violet-700',  dot: 'bg-violet-500',  label: 'Card'  },
   SPLIT: { bg: 'bg-amber-100',   text: 'text-amber-700',   dot: 'bg-amber-500',   label: 'Split' },
+  VOID:  { bg: 'bg-red-100',     text: 'text-red-600',     dot: 'bg-red-500',     label: 'Void'  },
 }
 
 function PaymentBadge({ mode }: { mode: string }) {
@@ -49,9 +50,19 @@ export default function SalesPage() {
 
   const filtered = paymentFilter ? sales.filter(s => s.paymentMode === paymentFilter) : sales
 
-  const totalAmount  = filtered.reduce((s, x) => s + Number(x.totalAmount), 0)
-  const totalBottles = filtered.reduce((s, x) => s + x.quantityBottles, 0)
-  const paymentTotals = sales.reduce((acc, s) => {
+  // Totals only count real sales (positive qty), not voids
+  const realSales    = sales.filter(s => s.quantityBottles > 0)
+  const totalAmount  = paymentFilter
+    ? filtered.filter(s => s.quantityBottles > 0).reduce((s, x) => s + Number(x.totalAmount), 0)
+    : realSales.reduce((s, x) => s + Number(x.totalAmount), 0)
+  const totalBottles = paymentFilter
+    ? filtered.filter(s => s.quantityBottles > 0).reduce((s, x) => s + x.quantityBottles, 0)
+    : realSales.reduce((s, x) => s + x.quantityBottles, 0)
+
+  const voidCount   = sales.filter(s => s.paymentMode === 'VOID').length
+  const voidBottles = sales.filter(s => s.paymentMode === 'VOID').reduce((s, x) => s + Math.abs(x.quantityBottles), 0)
+
+  const paymentTotals = realSales.reduce((acc, s) => {
     acc[s.paymentMode] = (acc[s.paymentMode] ?? 0) + Number(s.totalAmount)
     return acc
   }, {} as Record<string, number>)
@@ -69,7 +80,7 @@ export default function SalesPage() {
     setShowCal(false)
   }
 
-  const PAYMENT_MODES = Object.keys(PAYMENT_STYLES)
+  const PAYMENT_MODES = ['CASH', 'UPI', 'CARD', 'SPLIT', 'VOID']
 
   return (
     <div className="p-6 space-y-5">
@@ -194,6 +205,17 @@ export default function SalesPage() {
             </button>
           )
         })}
+        {voidCount > 0 && (
+          <button onClick={() => setPaymentFilter(paymentFilter === 'VOID' ? '' : 'VOID')}
+            className={`rounded-xl px-5 py-3 min-w-[120px] text-left border-2 transition-all bg-red-50
+              ${paymentFilter === 'VOID' ? 'border-red-400 shadow-md scale-105' : 'border-transparent'}`}>
+            <div className="text-xs font-bold flex items-center gap-1.5 text-red-600">
+              <span className="w-2 h-2 rounded-full bg-red-500" />Voided
+            </div>
+            <div className="text-lg font-bold text-red-600">{voidCount} txns</div>
+            <div className="text-xs text-red-400">{voidBottles} btls returned</div>
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -217,25 +239,41 @@ export default function SalesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(s => (
-                <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${s.isManualOverride ? 'bg-yellow-50' : ''}`}>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs tabular-nums">
-                    {new Date(s.saleTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="px-4 py-2.5 font-medium text-gray-800">
-                    {s.productSize?.product?.name}
-                    {s.isManualOverride && <span className="ml-1 text-xs text-yellow-600" title={s.overrideReason}>⚠️</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-center text-gray-500 text-xs">{s.productSize?.sizeMl}ml</td>
-                  <td className="px-4 py-2.5 text-center font-bold text-gray-800">{s.quantityBottles}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">₹{Number(s.sellingPrice).toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-gray-900 tabular-nums">₹{Number(s.totalAmount).toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-2.5 text-center"><PaymentBadge mode={s.paymentMode} /></td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{s.staff?.name}</td>
-                </tr>
-              ))}
+              {filtered.map(s => {
+                const isVoid = s.paymentMode === 'VOID' || s.quantityBottles < 0
+                return (
+                  <tr key={s.id} className={`transition-colors ${
+                    isVoid ? 'bg-red-50/60 hover:bg-red-50' :
+                    s.isManualOverride ? 'bg-yellow-50 hover:bg-yellow-50/80' :
+                    'hover:bg-gray-50'
+                  }`}>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs tabular-nums">
+                      {new Date(s.saleTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                    </td>
+                    <td className="px-4 py-2.5 font-medium">
+                      <span className={isVoid ? 'line-through text-red-400' : 'text-gray-800'}>
+                        {s.productSize?.product?.name}
+                      </span>
+                      {isVoid && <span className="ml-2 text-xs text-red-500 font-semibold no-underline" style={{textDecoration:'none'}}>↩ returned</span>}
+                      {s.isManualOverride && !isVoid && <span className="ml-1 text-xs text-yellow-600" title={s.overrideReason}>⚠️</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-center text-gray-500 text-xs">{s.productSize?.sizeMl}ml</td>
+                    <td className={`px-4 py-2.5 text-center font-bold ${isVoid ? 'text-red-500' : 'text-gray-800'}`}>
+                      {isVoid ? `−${Math.abs(s.quantityBottles)}` : s.quantityBottles}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">
+                      {isVoid ? <span className="text-red-300">—</span> : `₹${Number(s.sellingPrice).toLocaleString('en-IN')}`}
+                    </td>
+                    <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${isVoid ? 'text-red-400 line-through' : 'text-gray-900'}`}>
+                      ₹{Number(s.totalAmount).toLocaleString('en-IN')}
+                    </td>
+                    <td className="px-4 py-2.5 text-center"><PaymentBadge mode={s.paymentMode} /></td>
+                    <td className="px-4 py-2.5 text-gray-500 text-xs">{s.staff?.name}</td>
+                  </tr>
+                )
+              })}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">No sales for this date</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">No transactions for this date</td></tr>
               )}
             </tbody>
           </table>
