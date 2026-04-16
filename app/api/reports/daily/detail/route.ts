@@ -56,17 +56,21 @@ export async function GET(req: NextRequest) {
     }))
 
     // ── 2. Clerk breakup ───────────────────────────────────────────────────────
+    // All CASHIER-role sales are pooled under a single "Clerk" row (staffId = -1)
+    const CLERK_POOL_ID = -1
     const clerkMap = new Map<number, { name: string; role: string; bottles: number; total: number; bills: Set<string> }>()
     for (const s of salesRows) {
-      const existing = clerkMap.get(s.staffId)
+      const isCashier = s.staff.role === 'CASHIER'
+      const key = isCashier ? CLERK_POOL_ID : s.staffId
+      const existing = clerkMap.get(key)
       if (existing) {
         existing.bottles += s.quantityBottles
         existing.total   += Number(s.totalAmount)
         existing.bills.add(String(s.id))
       } else {
-        clerkMap.set(s.staffId, {
-          name:    s.staff.name,
-          role:    s.staff.role,
+        clerkMap.set(key, {
+          name:    isCashier ? 'Clerk' : s.staff.name,
+          role:    isCashier ? 'CASHIER' : s.staff.role,
           bottles: s.quantityBottles,
           total:   Number(s.totalAmount),
           bills:   new Set([String(s.id)]),

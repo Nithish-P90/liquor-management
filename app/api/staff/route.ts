@@ -67,13 +67,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Default schedule for CASHIER and SUPPLIER: 10:00 in, 22:30 out
+    const defaultsSchedule = (role === 'CASHIER' || role === 'SUPPLIER')
     const data: Record<string, unknown> = { name, email: email || null, role }
     if (role === 'CASHIER') data.pin = pin
     if (payrollType) data.payrollType = payrollType
     if (monthlySalary !== undefined) data.monthlySalary = monthlySalary
     if (dailyWage !== undefined) data.dailyWage = dailyWage
-    if (expectedCheckIn  !== undefined) data.expectedCheckIn  = expectedCheckIn  || null
-    if (expectedCheckOut !== undefined) data.expectedCheckOut = expectedCheckOut || null
+    data.expectedCheckIn  = expectedCheckIn  !== undefined ? (expectedCheckIn  || null) : (defaultsSchedule ? '10:00' : null)
+    data.expectedCheckOut = expectedCheckOut !== undefined ? (expectedCheckOut || null) : (defaultsSchedule ? '22:30' : null)
     if (lateGraceMinutes !== undefined) data.lateGraceMinutes = lateGraceMinutes
 
     const staff = await prisma.staff.create({
