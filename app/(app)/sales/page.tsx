@@ -326,22 +326,17 @@ export default function SalesPage() {
             )}
           </div>
 
-          {/* Payment filter tabs */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
-            <button onClick={() => setPaymentFilter('')}
-              className={`px-3 py-2 ${paymentFilter === '' ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-              All
-            </button>
-            {PAYMENT_MODES.map(m => {
-              const s = PAYMENT_STYLES[m]
-              return (
-                <button key={m} onClick={() => setPaymentFilter(paymentFilter === m ? '' : m)}
-                  className={`px-3 py-2 transition-colors ${paymentFilter === m ? `${s.bg} ${s.text}` : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                  {s.label}
-                </button>
-              )
-            })}
-          </div>
+          {/* Payment filter dropdown */}
+          <select
+            value={paymentFilter}
+            onChange={e => setPaymentFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="">All Types</option>
+            {PAYMENT_MODES.map(m => (
+              <option key={m} value={m}>{PAYMENT_STYLES[m].label}</option>
+            ))}
+          </select>
 
           {/* Staff filter */}
           <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)}
@@ -353,36 +348,34 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="bg-slate-800 text-white rounded-xl px-5 py-3 min-w-[140px]">
-          <div className="text-xs text-slate-400 font-medium">Total Sales</div>
+      {/* Summary strip */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="bg-slate-800 text-white rounded-xl px-5 py-3 min-w-[160px]">
+          <div className="text-xs text-slate-400 font-medium">
+            {paymentFilter ? `${PAYMENT_STYLES[paymentFilter]?.label ?? paymentFilter} Sales` : 'Total Sales'}
+          </div>
           <div className="text-xl font-bold">{fmt(totalAmount)}</div>
           <div className="text-xs text-slate-400">{totalBottles} bottles</div>
         </div>
+        {/* Per-mode breakdown pills — read-only, no click */}
         {Object.entries(paymentTotals).map(([mode, amount]) => {
           const s = PAYMENT_STYLES[mode] ?? { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400', label: mode }
           return (
-            <button key={mode} onClick={() => setPaymentFilter(paymentFilter === mode ? '' : mode)}
-              className={`rounded-xl px-5 py-3 min-w-[120px] text-left border-2 transition-all ${s.bg}
-                ${paymentFilter === mode ? 'border-current shadow-md scale-105' : 'border-transparent'}`}>
+            <div key={mode} className={`rounded-xl px-4 py-2.5 ${s.bg} ${paymentFilter && paymentFilter !== mode ? 'opacity-40' : ''}`}>
               <div className={`text-xs font-bold flex items-center gap-1.5 ${s.text}`}>
                 <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
               </div>
-              <div className={`text-lg font-bold ${s.text}`}>{fmt(Number(amount))}</div>
-            </button>
+              <div className={`text-base font-bold ${s.text}`}>{fmt(Number(amount))}</div>
+            </div>
           )
         })}
         {voidCount > 0 && (
-          <button onClick={() => setPaymentFilter(paymentFilter === 'VOID' ? '' : 'VOID')}
-            className={`rounded-xl px-5 py-3 min-w-[120px] text-left border-2 transition-all bg-red-50
-              ${paymentFilter === 'VOID' ? 'border-red-400 shadow-md scale-105' : 'border-transparent'}`}>
+          <div className={`rounded-xl px-4 py-2.5 bg-red-50 ${paymentFilter && paymentFilter !== 'VOID' ? 'opacity-40' : ''}`}>
             <div className="text-xs font-bold flex items-center gap-1.5 text-red-600">
               <span className="w-2 h-2 rounded-full bg-red-500" />Voided
             </div>
-            <div className="text-lg font-bold text-red-600">{voidCount} txns</div>
-            <div className="text-xs text-red-400">{voidBottles} btls returned</div>
-          </button>
+            <div className="text-base font-bold text-red-600">{voidCount} txns · {voidBottles} btls</div>
+          </div>
         )}
       </div>
 
