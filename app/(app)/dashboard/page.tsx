@@ -23,7 +23,7 @@ const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.Respons
 type ClerkBillingRow = { staffId: number; name: string; bills: number; bottles: number; amount: number }
 
 type DashboardData = {
-  todaySales: { total: number; bottles: number; cash: number; card: number; upi: number; credit: number }
+  todaySales: { total: number; bottles: number; cash: number; card: number; upi: number }
   miscSaleTotal: number
   alerts: { total: number; high: number }
   pendingIndents: number
@@ -92,10 +92,10 @@ export default function DashboardPage() {
       {/* Today's stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Today's Revenue" value={rupee(today.total)} sub={`${today.bottles} bottles sold`} accent="blue" />
-        <StatCard label="Misc Sale" value={rupee(data.miscSaleTotal)} sub="Separate misc ledger" accent="sky" />
         <StatCard label="Cash" value={rupee(Number(today.cash))} sub="Counter collections" accent="emerald" />
-        <StatCard label="Card + UPI" value={rupee(Number(today.card) + Number(today.upi))} sub="Digital payments" accent="violet" />
-        <StatCard label="Credit" value={rupee(Number(today.credit))} sub="Outstanding bills" accent="amber" />
+        <StatCard label="Card" value={rupee(Number(today.card))} sub="Card payments" accent="violet" />
+        <StatCard label="UPI" value={rupee(Number(today.upi))} sub="Digital payments" accent="indigo" />
+        <StatCard label="Misc Sale" value={rupee(data.miscSaleTotal)} sub="Cigarettes / snacks" accent="sky" />
       </div>
 
       {/* Notifications (price drops, system alerts) */}
@@ -271,7 +271,8 @@ export default function DashboardPage() {
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent: string }) {
   const accents: Record<string, string> = {
     blue: 'border-l-blue-500', emerald: 'border-l-emerald-500',
-    violet: 'border-l-violet-500', amber: 'border-l-amber-500', sky: 'border-l-cyan-500',
+    violet: 'border-l-violet-500', amber: 'border-l-amber-500',
+    sky: 'border-l-cyan-500', indigo: 'border-l-indigo-500',
   }
   return (
     <div className={`bg-white border border-slate-200 border-l-4 ${accents[accent]} rounded-xl p-5`}>

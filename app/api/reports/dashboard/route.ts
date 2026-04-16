@@ -16,7 +16,7 @@ export async function GET() {
   const today = toUtcNoonDate(new Date())
 
   const todayRows = await prisma.sale.findMany({
-    where: { saleDate: today, paymentMode: { not: 'VOID' } },
+    where: { saleDate: today, quantityBottles: { gt: 0 }, paymentMode: { notIn: ['VOID', 'CREDIT'] } },
     select: {
       id: true,
       saleTime: true,
@@ -48,7 +48,6 @@ export async function GET() {
     cash: 0,
     card: 0,
     upi: 0,
-    credit: 0,
   }
 
   for (const sale of todayRows) {
@@ -66,8 +65,6 @@ export async function GET() {
       todaySales.card += saleAmount
     } else if (sale.paymentMode === 'UPI') {
       todaySales.upi += saleAmount
-    } else if (sale.paymentMode === 'CREDIT') {
-      todaySales.credit += saleAmount
     }
 
     const isCounter = sale.staff.role === 'CASHIER'

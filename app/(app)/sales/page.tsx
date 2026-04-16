@@ -7,7 +7,6 @@ const PAYMENT_STYLES: Record<string, { bg: string; text: string; dot: string; la
   CARD:  { bg: 'bg-violet-100',  text: 'text-violet-700',  dot: 'bg-violet-500',  label: 'Card'  },
   SPLIT: { bg: 'bg-amber-100',   text: 'text-amber-700',   dot: 'bg-amber-500',   label: 'Split' },
   VOID:  { bg: 'bg-red-100',     text: 'text-red-600',     dot: 'bg-red-500',     label: 'Void'  },
-  CREDIT:{ bg: 'bg-orange-100',  text: 'text-orange-700',  dot: 'bg-orange-500',  label: 'Credit'},
 }
 
 function PaymentBadge({ mode }: { mode: string }) {
@@ -255,7 +254,7 @@ export default function SalesPage() {
     setShowCal(false)
   }
 
-  const PAYMENT_MODES = ['CASH', 'UPI', 'CARD', 'SPLIT', 'CREDIT', 'VOID']
+  const PAYMENT_MODES = ['CASH', 'UPI', 'CARD', 'SPLIT', 'VOID']
 
   return (
     <div className="p-6 space-y-5">
