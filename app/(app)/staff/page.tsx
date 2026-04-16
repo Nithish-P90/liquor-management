@@ -9,7 +9,7 @@ export default function StaffPage() {
   const user = session?.user as { id?: string; name?: string; role?: string } | undefined
   const [staff, setStaff] = useState<any[]>([])
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState<any>({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
+  const [form, setForm] = useState<any>({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '', expectedCheckIn: '', expectedCheckOut: '', lateGraceMinutes: 15 })
   const [loading, setLoading] = useState(false)
   const [formError, setFormError] = useState('')
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null)
@@ -65,6 +65,9 @@ export default function StaffPage() {
         payrollType: form.payrollType,
         monthlySalary: form.monthlySalary ? Number(form.monthlySalary) : undefined,
         dailyWage: form.dailyWage ? Number(form.dailyWage) : undefined,
+        expectedCheckIn: form.expectedCheckIn || null,
+        expectedCheckOut: form.expectedCheckOut || null,
+        lateGraceMinutes: Number(form.lateGraceMinutes) || 15,
       }
       if (form.role === 'CASHIER') payload.pin = form.pin
 
@@ -88,7 +91,7 @@ export default function StaffPage() {
       if (res.ok) {
         setShowAdd(false)
         setEditingStaffId(null)
-        setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' })
+        setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '', expectedCheckIn: '', expectedCheckOut: '', lateGraceMinutes: 15 })
         load()
       } else {
         setFormError(data.error ?? 'Failed to save staff')
@@ -118,6 +121,9 @@ export default function StaffPage() {
       payrollType: s.payrollType || 'SALARY',
       monthlySalary: s.monthlySalary ? String(s.monthlySalary) : '',
       dailyWage: s.dailyWage ? String(s.dailyWage) : '',
+      expectedCheckIn: s.expectedCheckIn || '',
+      expectedCheckOut: s.expectedCheckOut || '',
+      lateGraceMinutes: s.lateGraceMinutes ?? 15,
     })
     setShowAdd(true)
   }
@@ -288,7 +294,7 @@ export default function StaffPage() {
           <button onClick={() => { setShowMetrics(true); loadMetrics() }} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors">
             Attendance Metrics
           </button>
-          <button onClick={() => { setEditingStaffId(null); setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '' }); setShowAdd(true) }} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+          <button onClick={() => { setEditingStaffId(null); setForm({ name: '', email: '', pin: '', role: 'SUPPLIER', payrollType: 'SALARY', monthlySalary: '', dailyWage: '', expectedCheckIn: '', expectedCheckOut: '', lateGraceMinutes: 15 }); setShowAdd(true) }} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
             + Add Staff
           </button>
         </div>
@@ -302,6 +308,7 @@ export default function StaffPage() {
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Email</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Role</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Payroll</th>
+              <th className="text-center px-4 py-3 font-semibold text-gray-600">Schedule</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Face</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Actions</th>
@@ -335,6 +342,18 @@ export default function StaffPage() {
                         <div className="text-xs text-gray-500">₹{s.dailyWage}/day</div>
                       ) : null}
                     </div>
+                  </td>
+
+                  <td className="px-4 py-3 text-center text-xs text-gray-500">
+                    {s.expectedCheckIn || s.expectedCheckOut ? (
+                      <div className="space-y-0.5">
+                        {s.expectedCheckIn && <div>In: <span className="font-medium text-gray-700">{s.expectedCheckIn}</span></div>}
+                        {s.expectedCheckOut && <div>Out: <span className="font-medium text-gray-700">{s.expectedCheckOut}</span></div>}
+                        <div className="text-[10px] text-gray-400">{s.lateGraceMinutes ?? 15}m grace</div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
 
                   <td className="px-4 py-3">
@@ -432,6 +451,24 @@ export default function StaffPage() {
                   ) : (
                     <input value={form.dailyWage} onChange={e => setForm({ ...form, dailyWage: e.target.value })} placeholder="Per-day ₹" inputMode="decimal" className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Expected Check-in</label>
+                    <input type="time" value={form.expectedCheckIn} onChange={e => setForm({ ...form, expectedCheckIn: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Expected Check-out</label>
+                    <input type="time" value={form.expectedCheckOut} onChange={e => setForm({ ...form, expectedCheckOut: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="block text-xs text-gray-500 mb-1">Grace window (minutes before marked late)</label>
+                  <input type="number" min={0} max={60} value={form.lateGraceMinutes} onChange={e => setForm({ ...form, lateGraceMinutes: Number(e.target.value) })} className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
 

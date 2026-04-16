@@ -42,6 +42,8 @@ type DayDetail = {
     staffId: number; staffName: string; role: string
     checkIn: string | null; checkOut: string | null
     hoursWorked: number | null; status: string
+    lateCheckIn: boolean; lateCheckOut: boolean
+    expectedCheckIn: string | null; expectedCheckOut: string | null
   }>
   adjustments: Array<{
     id: number; productName: string; sizeMl: number; category: string
@@ -536,36 +538,88 @@ export default function DailyLedgerPage() {
 
                         {/* ── ATTENDANCE ───────────────────────────────────── */}
                         {activeTab === 'attendance' && (
-                          <DataTable
-                            empty="No staff records."
-                            rows={detail.attendance}
-                            cols={[
-                              { header: 'Staff', render: r => (
-                                <div>
-                                  <div className="font-semibold text-gray-900">{r.staffName}</div>
-                                  <div className="text-xs text-gray-400">{r.role}</div>
+                          detail.attendance.length === 0
+                            ? <Empty>No staff records.</Empty>
+                            : (
+                              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 border-b border-gray-200">
+                                      <tr>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Staff</th>
+                                        <th className="px-4 py-2.5 text-center font-semibold text-gray-600">Status</th>
+                                        <th className="px-4 py-2.5 text-center font-semibold text-gray-600">Check In</th>
+                                        <th className="px-4 py-2.5 text-center font-semibold text-gray-600">Check Out</th>
+                                        <th className="px-4 py-2.5 text-right font-semibold text-gray-600">Hours</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {detail.attendance.map(r => {
+                                        const hasLate = r.lateCheckIn || r.lateCheckOut
+                                        const offense =
+                                          r.lateCheckIn && r.lateCheckOut ? 'Late IN & Late OUT'
+                                          : r.lateCheckIn  ? 'Late IN'
+                                          : r.lateCheckOut ? 'Late OUT'
+                                          : null
+                                        return (
+                                          <tr key={r.staffId} className={hasLate ? 'bg-red-50' : 'hover:bg-gray-50/50'}>
+                                            <td className="px-4 py-3">
+                                              <div className={`font-semibold ${hasLate ? 'text-red-700' : 'text-gray-900'}`}>
+                                                {r.staffName}
+                                                {offense && (
+                                                  <span className="ml-2 px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded">
+                                                    {offense}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="text-xs text-gray-400">{r.role}</div>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                                r.status === 'IN'  ? 'bg-emerald-100 text-emerald-700'
+                                                : r.status === 'OUT' ? 'bg-blue-100 text-blue-700'
+                                                : 'bg-gray-100 text-gray-500'
+                                              }`}>{r.status}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                              <div className={r.lateCheckIn ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+                                                {fmtT(r.checkIn)}
+                                              </div>
+                                              {r.lateCheckIn && (
+                                                <div className="text-[10px] text-red-500 font-bold">LATE</div>
+                                              )}
+                                              {r.expectedCheckIn && (
+                                                <div className="text-[10px] text-gray-400">exp {r.expectedCheckIn}</div>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                              <div className={r.lateCheckOut ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+                                                {fmtT(r.checkOut)}
+                                              </div>
+                                              {r.lateCheckOut && (
+                                                <div className="text-[10px] text-red-500 font-bold">LATE</div>
+                                              )}
+                                              {r.expectedCheckOut && (
+                                                <div className="text-[10px] text-gray-400">exp {r.expectedCheckOut}</div>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-gray-700">{fmtH(r.hoursWorked)}</td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="bg-gray-50 border-t font-bold">
+                                        <td className="px-4 py-2.5 text-gray-600" colSpan={4}>Total man-hours</td>
+                                        <td className="px-4 py-2.5 text-right">
+                                          {fmtH(detail.attendance.reduce((s, a) => s + (a.hoursWorked ?? 0), 0))}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
                                 </div>
-                              )},
-                              { header: 'Status', render: r => (
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                  r.status === 'IN'  ? 'bg-emerald-100 text-emerald-700'
-                                  : r.status === 'OUT' ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-gray-100 text-gray-500'
-                                }`}>{r.status}</span>
-                              )},
-                              { header: 'Check In',  render: r => fmtT(r.checkIn),     align: 'center' },
-                              { header: 'Check Out', render: r => fmtT(r.checkOut),    align: 'center' },
-                              { header: 'Hours',     render: r => fmtH(r.hoursWorked), align: 'right'  },
-                            ]}
-                            footer={() => (
-                              <tr className="bg-gray-50 border-t font-bold">
-                                <td className="px-4 py-2.5 text-gray-600" colSpan={4}>Total man-hours</td>
-                                <td className="px-4 py-2.5 text-right">
-                                  {fmtH(detail.attendance.reduce((s, a) => s + (a.hoursWorked ?? 0), 0))}
-                                </td>
-                              </tr>
-                            )}
-                          />
+                              </div>
+                            )
                         )}
 
                         {/* ── STOCK ────────────────────────────────────────── */}

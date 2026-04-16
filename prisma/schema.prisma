@@ -121,9 +121,12 @@ model Staff {
   passwordHash String?
   pin          String?            @unique
   role         Role
-  payrollType  PayrollType        @default(SALARY)
-  monthlySalary Decimal?         @db.Decimal(12, 2)
-  dailyWage     Decimal?         @db.Decimal(10, 2)
+  payrollType       PayrollType        @default(SALARY)
+  monthlySalary     Decimal?           @db.Decimal(12, 2)
+  dailyWage         Decimal?           @db.Decimal(10, 2)
+  expectedCheckIn   String?            // "HH:MM" 24-hour, e.g. "09:00"
+  expectedCheckOut  String?            // "HH:MM" 24-hour, e.g. "18:00"
+  lateGraceMinutes  Int                @default(15)
   active             Boolean            @default(true)
   faceProfile        FaceProfile?
   sales              Sale[]

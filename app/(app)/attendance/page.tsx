@@ -16,6 +16,11 @@ type StaffStatus = {
   hoursWorked: number | null
   status: 'IN' | 'OUT' | 'ABSENT'
   scanCount: number
+  expectedCheckIn:  string | null
+  expectedCheckOut: string | null
+  lateGraceMinutes: number
+  lateCheckIn:  boolean
+  lateCheckOut: boolean
 }
 
 type IdentifiedPerson = {
@@ -558,40 +563,63 @@ export default function AttendancePage() {
                       <td colSpan={5} className="text-center py-8 text-gray-400">No active staff found.</td>
                     </tr>
                   )}
-                  {statusList.map(item => (
-                    <tr
-                      key={item.staffId}
-                      className={`transition-colors ${
-                        identified?.staffId === item.staffId ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' :
-                        item.status === 'IN' ? 'bg-emerald-50/40' :
-                        item.status === 'OUT' ? 'bg-blue-50/20' : ''
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-gray-900">{item.staffName}</div>
-                        <div className="text-xs text-gray-400">{item.role}</div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex gap-1">
-                            <div className={`w-3 h-1.5 rounded-full ${item.scanCount >= 1 ? 'bg-emerald-500' : 'bg-gray-200'}`} />
-                            <div className={`w-3 h-1.5 rounded-full ${item.scanCount >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                  {statusList.map(item => {
+                    const hasOffense = item.lateCheckIn || item.lateCheckOut
+                    return (
+                      <tr
+                        key={item.staffId}
+                        className={`transition-colors ${
+                          identified?.staffId === item.staffId ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' :
+                          hasOffense ? 'bg-red-50/60' :
+                          item.status === 'IN' ? 'bg-emerald-50/40' :
+                          item.status === 'OUT' ? 'bg-blue-50/20' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className={`font-semibold ${hasOffense ? 'text-red-700' : 'text-gray-900'}`}>
+                            {item.staffName}
+                            {hasOffense && (
+                              <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                {item.lateCheckIn && item.lateCheckOut ? 'Late IN & OUT' : item.lateCheckIn ? 'Late IN' : 'Early OUT'}
+                              </span>
+                            )}
                           </div>
-                          <span className={`text-[10px] font-black ${item.scanCount === 2 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {item.scanCount}/2
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono text-gray-600">{fmtTime(item.checkIn)}</td>
-                      <td className="px-4 py-3 text-center font-mono text-gray-600">{fmtTime(item.checkOut)}</td>
-                      <td className="px-4 py-3 text-center font-semibold text-gray-700">
-                        {item.status === 'IN'
-                          ? <span className="text-emerald-600">{fmtHours(item.hoursWorked)} ▸</span>
-                          : fmtHours(item.hoursWorked)
-                        }
-                      </td>
-                    </tr>
-                  ))}
+                          <div className="text-xs text-gray-400">{item.role}</div>
+                          {item.expectedCheckIn && (
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              Sched: {item.expectedCheckIn}{item.expectedCheckOut ? ` – ${item.expectedCheckOut}` : ''}
+                              {item.lateGraceMinutes > 0 && ` (${item.lateGraceMinutes}m grace)`}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex gap-1">
+                              <div className={`w-3 h-1.5 rounded-full ${item.scanCount >= 1 ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                              <div className={`w-3 h-1.5 rounded-full ${item.scanCount >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                            </div>
+                            <span className={`text-[10px] font-black ${item.scanCount === 2 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {item.scanCount}/2
+                            </span>
+                          </div>
+                        </td>
+                        <td className={`px-4 py-3 text-center font-mono ${item.lateCheckIn ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                          {fmtTime(item.checkIn)}
+                          {item.lateCheckIn && <div className="text-[10px] text-red-500 font-semibold">LATE</div>}
+                        </td>
+                        <td className={`px-4 py-3 text-center font-mono ${item.lateCheckOut ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                          {fmtTime(item.checkOut)}
+                          {item.lateCheckOut && <div className="text-[10px] text-red-500 font-semibold">LATE</div>}
+                        </td>
+                        <td className="px-4 py-3 text-center font-semibold text-gray-700">
+                          {item.status === 'IN'
+                            ? <span className="text-emerald-600">{fmtHours(item.hoursWorked)} ▸</span>
+                            : fmtHours(item.hoursWorked)
+                          }
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
                 {statusList.some(s => s.hoursWorked !== null) && (
                   <tfoot>

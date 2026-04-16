@@ -100,10 +100,19 @@ export async function GET(req: NextRequest) {
     const allStaff = await prisma.staff.findMany({
       where:   { active: true },
       orderBy: { name: 'asc' },
-      select:  { id: true, name: true, role: true },
+      select:  { id: true, name: true, role: true, expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
     })
     const attLogs = await prisma.attendanceLog.findMany({ where: { date: dateOnly } })
     const logMap  = new Map(attLogs.map(l => [l.staffId, l]))
+
+    function isLate(actualIso: Date | string | null | undefined, scheduledHHMM: string | null | undefined, graceMinutes: number): boolean {
+      if (!actualIso || !scheduledHHMM) return false
+      const actual = new Date(actualIso)
+      const [sh, sm] = scheduledHHMM.split(':').map(Number)
+      const scheduled = new Date(actual)
+      scheduled.setHours(sh, sm + graceMinutes, 0, 0)
+      return actual > scheduled
+    }
 
     const attendance = allStaff.map(s => {
       const log = logMap.get(s.id)
@@ -113,14 +122,19 @@ export async function GET(req: NextRequest) {
       } else if (log?.checkIn && isToday) {
         hoursWorked = (now.getTime() - new Date(log.checkIn).getTime()) / 3_600_000
       }
+      const grace = s.lateGraceMinutes ?? 15
       return {
-        staffId:     s.id,
-        staffName:   s.name,
-        role:        s.role,
-        checkIn:     log?.checkIn  ?? null,
-        checkOut:    log?.checkOut ?? null,
-        hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
-        status:      !log ? 'ABSENT' : !log.checkOut ? 'IN' : 'OUT',
+        staffId:          s.id,
+        staffName:        s.name,
+        role:             s.role,
+        checkIn:          log?.checkIn  ?? null,
+        checkOut:         log?.checkOut ?? null,
+        hoursWorked:      hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
+        status:           !log ? 'ABSENT' : !log.checkOut ? 'IN' : 'OUT',
+        lateCheckIn:      isLate(log?.checkIn,  s.expectedCheckIn,  grace),
+        lateCheckOut:     isLate(log?.checkOut, s.expectedCheckOut, grace),
+        expectedCheckIn:  s.expectedCheckIn  ?? null,
+        expectedCheckOut: s.expectedCheckOut ?? null,
       }
     })
 

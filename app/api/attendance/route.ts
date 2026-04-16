@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
     const allStaff = await prisma.staff.findMany({
       where:   { active: true },
       orderBy: { name: 'asc' },
-      select:  { id: true, name: true, role: true },
+      select:  { id: true, name: true, role: true,
+                 expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
     })
 
     const logs = await prisma.attendanceLog.findMany({
@@ -27,6 +28,18 @@ export async function GET(req: NextRequest) {
     })
 
     const logMap = new Map<number, typeof logs[0]>(logs.map((l: any) => [l.staffId, l] as [number, typeof logs[0]]))
+
+    // Helper: compare actual HH:MM time against scheduled HH:MM + grace window
+    function isLate(actualIso: string | null | undefined, scheduledHHMM: string | null | undefined, graceMinutes: number): boolean {
+      if (!actualIso || !scheduledHHMM) return false
+      const actual = new Date(actualIso)
+      const [sh, sm] = scheduledHHMM.split(':').map(Number)
+      // Build a Date for the scheduled time on the same calendar day as actualIso
+      const scheduled = new Date(actual)
+      scheduled.setHours(sh, sm + graceMinutes, 0, 0)
+      return actual > scheduled
+    }
+
     const result = allStaff.map((s: any) => {
       const log = logMap.get(s.id)
       let hoursWorked: number | null = null
@@ -35,7 +48,6 @@ export async function GET(req: NextRequest) {
         hoursWorked =
           (new Date(log.checkOut).getTime() - new Date(log.checkIn).getTime()) / 3_600_000
       } else if (log?.checkIn) {
-        // Still clocked in — compute running duration
         hoursWorked =
           (Date.now() - new Date(log.checkIn).getTime()) / 3_600_000
       }
@@ -50,15 +62,24 @@ export async function GET(req: NextRequest) {
         : scanCount === 1 ? 'IN'
         : 'OUT'
 
+      const grace = s.lateGraceMinutes ?? 15
+      const lateCheckIn  = isLate(log?.checkIn,  s.expectedCheckIn,  grace)
+      const lateCheckOut = isLate(log?.checkOut, s.expectedCheckOut, grace)
+
       return {
-        staffId:     s.id,
-        staffName:   s.name,
-        role:        s.role,
-        checkIn:     log?.checkIn  ?? null,
-        checkOut:    log?.checkOut ?? null,
-        hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
+        staffId:          s.id,
+        staffName:        s.name,
+        role:             s.role,
+        checkIn:          log?.checkIn  ?? null,
+        checkOut:         log?.checkOut ?? null,
+        hoursWorked:      hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
         status,
-        scanCount, // New data for UI progress bars
+        scanCount,
+        expectedCheckIn:  s.expectedCheckIn  ?? null,
+        expectedCheckOut: s.expectedCheckOut ?? null,
+        lateGraceMinutes: grace,
+        lateCheckIn,
+        lateCheckOut,
       }
     })
 

@@ -16,6 +16,9 @@ export async function GET() {
       payrollType: true,
       monthlySalary: true,
       dailyWage: true,
+      expectedCheckIn: true,
+      expectedCheckOut: true,
+      lateGraceMinutes: true,
       faceProfile: {
         select: {
           threshold: true,
@@ -44,9 +47,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as Partial<{
       name: string; email?: string | null; pin?: string | null; role?: string;
-      payrollType?: string; monthlySalary?: number; dailyWage?: number
+      payrollType?: string; monthlySalary?: number; dailyWage?: number;
+      expectedCheckIn?: string | null; expectedCheckOut?: string | null; lateGraceMinutes?: number;
     }>
-    const { name, email, pin, role, payrollType, monthlySalary, dailyWage } = body
+    const { name, email, pin, role, payrollType, monthlySalary, dailyWage,
+            expectedCheckIn, expectedCheckOut, lateGraceMinutes } = body
 
     // Enforce PIN only for cashiers
     if (role === 'CASHIER') {
@@ -67,10 +72,15 @@ export async function POST(req: NextRequest) {
     if (payrollType) data.payrollType = payrollType
     if (monthlySalary !== undefined) data.monthlySalary = monthlySalary
     if (dailyWage !== undefined) data.dailyWage = dailyWage
+    if (expectedCheckIn  !== undefined) data.expectedCheckIn  = expectedCheckIn  || null
+    if (expectedCheckOut !== undefined) data.expectedCheckOut = expectedCheckOut || null
+    if (lateGraceMinutes !== undefined) data.lateGraceMinutes = lateGraceMinutes
 
     const staff = await prisma.staff.create({
       data,
-      select: { id: true, name: true, email: true, role: true, active: true, pin: true, payrollType: true, monthlySalary: true, dailyWage: true },
+      select: { id: true, name: true, email: true, role: true, active: true, pin: true,
+                payrollType: true, monthlySalary: true, dailyWage: true,
+                expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
     })
     return NextResponse.json(staff)
   } catch (error) {
@@ -82,9 +92,11 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json() as Partial<{
     id?: number; active?: boolean; pin?: string | null; name?: string; role?: string;
-    payrollType?: string; monthlySalary?: number; dailyWage?: number
+    payrollType?: string; monthlySalary?: number; dailyWage?: number;
+    expectedCheckIn?: string | null; expectedCheckOut?: string | null; lateGraceMinutes?: number;
   }>
-  const { id, active, pin, name, role, payrollType, monthlySalary, dailyWage } = body
+  const { id, active, pin, name, role, payrollType, monthlySalary, dailyWage,
+          expectedCheckIn, expectedCheckOut, lateGraceMinutes } = body
 
   const existingStaff = await prisma.staff.findUnique({ where: { id } })
   if (!existingStaff) return NextResponse.json({ error: 'Staff not found' }, { status: 404 })
@@ -96,6 +108,9 @@ export async function PATCH(req: NextRequest) {
     ...(payrollType && { payrollType }),
     ...(monthlySalary !== undefined && { monthlySalary }),
     ...(dailyWage !== undefined && { dailyWage }),
+    ...(expectedCheckIn  !== undefined && { expectedCheckIn:  expectedCheckIn  || null }),
+    ...(expectedCheckOut !== undefined && { expectedCheckOut: expectedCheckOut || null }),
+    ...(lateGraceMinutes !== undefined && { lateGraceMinutes }),
   }
 
   // If role is changed away from CASHIER, clear the PIN
@@ -116,7 +131,9 @@ export async function PATCH(req: NextRequest) {
   const staff = await prisma.staff.update({
     where: { id },
     data: updateData,
-    select: { id: true, name: true, email: true, role: true, active: true, pin: true, payrollType: true, monthlySalary: true, dailyWage: true },
+    select: { id: true, name: true, email: true, role: true, active: true, pin: true,
+              payrollType: true, monthlySalary: true, dailyWage: true,
+              expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
   })
   return NextResponse.json(staff)
 }
