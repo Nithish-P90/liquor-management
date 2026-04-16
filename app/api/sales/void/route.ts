@@ -102,24 +102,7 @@ export async function POST(req: NextRequest) {
     const sale = await prisma.sale.findUnique({ where: { id: saleId } })
     if (!sale) return NextResponse.json({ error: 'Sale not found' }, { status: 404 })
 
-    const saleDate = toUtcNoonDate(sale.saleDate)
-
-    await prisma.$transaction(async tx => {
-      await tx.sale.delete({ where: { id: saleId } })
-
-      await tx.stockAdjustment.create({
-        data: {
-          adjustmentDate: saleDate,
-          productSizeId: sale.productSizeId,
-          adjustmentType: 'RETURN',
-          quantityBottles: sale.quantityBottles,
-          reason: reason ?? `Void of Sale #${saleId}`,
-          createdById: staffId,
-          approvedById: staffId,
-          approved: true,
-        },
-      })
-    })
+    await prisma.sale.delete({ where: { id: saleId } })
 
     addRefundFromSale(refund, {
       paymentMode: sale.paymentMode,
@@ -193,19 +176,6 @@ export async function POST(req: NextRequest) {
             })
           }
         }
-
-        await tx.stockAdjustment.create({
-          data: {
-            adjustmentDate: today,
-            productSizeId: item.productSizeId,
-            adjustmentType: 'RETURN',
-            quantityBottles: item.quantityBottles,
-            reason: reason ?? `POS return/void (${item.quantityBottles} bottles)`,
-            createdById: staffId,
-            approvedById: staffId,
-            approved: true,
-          },
-        })
       }
     })
   } catch (error) {
