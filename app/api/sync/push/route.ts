@@ -82,6 +82,7 @@ async function processSales(records: Record<string, unknown>[]): Promise<Ack[]> 
             customerName: r.customer_name as string | null ?? null,
             isManualOverride: false,
             overrideReason: `sync:${localId}`,
+            billId: r.bill_id as string | null ?? null,
           },
         })
 
@@ -107,6 +108,7 @@ async function processSales(records: Record<string, unknown>[]): Promise<Ack[]> 
             customerName: r.customer_name as string | null ?? null,
             isManualOverride: false,
             overrideReason: `sync:${localId}`,  // store localId for idempotency
+            billId: r.bill_id as string | null ?? null,
           },
         })
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })

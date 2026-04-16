@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     productSizeId, quantityBottles, paymentMode, scanMethod,
     customerName, isManualOverride, overrideReason, staffId,
     cashAmount, cardAmount, upiAmount,
-    saleTime,
+    saleTime, billId,
   } = body
 
   const requestedQuantity = Number(quantityBottles)
@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
           customerName: customerName || null,
           isManualOverride: isManualOverride ?? false,
           overrideReason: overrideReason || null,
+          billId: billId || null,
         },
         include: {
           productSize: { include: { product: true } },
