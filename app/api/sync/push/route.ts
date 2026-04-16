@@ -58,45 +58,32 @@ async function processSales(records: Record<string, unknown>[]): Promise<Ack[]> 
         continue
       }
 
-      // VOID records: restore inventory under the clerk who voided, log as a sale with VOID mode
+      // VOID records: log as a sale row with negative qty and VOID paymentMode.
+      // The stock formula (opening + receipts + adj - sold) uses quantityBottles > 0
+      // for "sold", so the negative VOID row is automatically excluded from deductions —
+      // the original positive sale row cancels itself by not being summed.
+      // DO NOT create a stockAdjustment here — that would double-count the return.
       if (r.payment_mode === 'VOID') {
         const qty = Math.abs(r.quantity as number) // stored as negative locally
-        const sale = await prisma.$transaction(async (tx: TxClient) => {
-          // Log the void as a sale row (qty negative = return, totalAmount = 0)
-          const s = await tx.sale.create({
-            data: {
-              saleDate,
-              saleTime,
-              staffId: r.staff_id as number,
-              productSizeId: r.product_size_id as number,
-              quantityBottles: -(qty),
-              sellingPrice: r.selling_price as number,
-              totalAmount: 0,
-              paymentMode: 'VOID',
-              cashAmount: null,
-              cardAmount: null,
-              upiAmount: null,
-              scanMethod: 'MANUAL',
-              customerName: r.customer_name as string | null ?? null,
-              isManualOverride: false,
-              overrideReason: `sync:${localId}`,
-            },
-          })
-          // Restore cloud inventory via stockAdjustment (RETURN)
-          await tx.stockAdjustment.create({
-            data: {
-              adjustmentDate: saleDate,
-              productSizeId: r.product_size_id as number,
-              adjustmentType: 'RETURN',
-              quantityBottles: qty,
-              reason: `POS void by staff #${r.staff_id} (local:${localId})`,
-              createdById: r.staff_id as number,
-              approvedById: r.staff_id as number,
-              approved: true,
-            },
-          })
-          return s
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+        const sale = await prisma.sale.create({
+          data: {
+            saleDate,
+            saleTime,
+            staffId: r.staff_id as number,
+            productSizeId: r.product_size_id as number,
+            quantityBottles: -(qty),
+            sellingPrice: r.selling_price as number,
+            totalAmount: 0,
+            paymentMode: 'VOID',
+            cashAmount: null,
+            cardAmount: null,
+            upiAmount: null,
+            scanMethod: 'MANUAL',
+            customerName: r.customer_name as string | null ?? null,
+            isManualOverride: false,
+            overrideReason: `sync:${localId}`,
+          },
+        })
 
         acks.push({ local_id: localId, server_id: sale.id })
         continue

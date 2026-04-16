@@ -37,6 +37,7 @@ async function getAvailableStock(tx: TxClient, productSizeId: number): Promise<n
         where: {
           productSizeId,
           saleDate: { gte: latestSession!.periodStart },
+          quantityBottles: { gt: 0 },
         },
         _sum: { quantityBottles: true },
       }),
@@ -64,7 +65,7 @@ async function getAvailableStock(tx: TxClient, productSizeId: number): Promise<n
       _sum: { totalBottles: true },
     }),
     tx.sale.aggregate({
-      where: { productSizeId },
+      where: { productSizeId, quantityBottles: { gt: 0 } },
       _sum: { quantityBottles: true },
     }),
     tx.stockAdjustment.aggregate({

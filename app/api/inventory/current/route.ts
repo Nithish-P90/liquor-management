@@ -150,7 +150,7 @@ export async function PATCH(req: Request) {
       _sum: { totalBottles: true },
     }),
     prisma.sale.aggregate({
-      where: { productSizeId, paymentMode: { not: 'VOID' }, ...(periodStart ? { saleDate: { gte: periodStart } } : {}) },
+      where: { productSizeId, quantityBottles: { gt: 0 }, ...(periodStart ? { saleDate: { gte: periodStart } } : {}) },
       _sum: { quantityBottles: true },
     }),
     prisma.stockAdjustment.aggregate({

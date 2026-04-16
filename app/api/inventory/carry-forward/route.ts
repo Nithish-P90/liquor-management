@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
       where: {
         productSizeId: { in: psIdArr },
         saleDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd },
+        quantityBottles: { gt: 0 },
       },
       _sum: { quantityBottles: true },
     }),

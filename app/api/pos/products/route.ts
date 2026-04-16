@@ -39,7 +39,7 @@ export async function GET() {
 
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: sessionStart } },
+      where: { saleDate: { gte: sessionStart }, quantityBottles: { gt: 0 } },
       _sum: { quantityBottles: true },
     }),
 
