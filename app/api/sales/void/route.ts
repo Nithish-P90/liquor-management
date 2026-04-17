@@ -97,12 +97,13 @@ export async function POST(req: NextRequest) {
 
   const refund: RefundTotals = { cash: 0, card: 0, upi: 0, credit: 0, total: 0 }
 
+  const now = new Date()
+  const today = toUtcNoonDate(now)
+
   // Backward-compatible single-sale void
   if (saleId) {
     const sale = await prisma.sale.findUnique({ where: { id: saleId } })
     if (!sale) return NextResponse.json({ error: 'Sale not found' }, { status: 404 })
-
-    await prisma.sale.delete({ where: { id: saleId } })
 
     addRefundFromSale(refund, {
       paymentMode: sale.paymentMode,
@@ -112,6 +113,23 @@ export async function POST(req: NextRequest) {
       cardAmount: sale.cardAmount,
       upiAmount: sale.upiAmount,
     }, sale.quantityBottles)
+
+    // Insert a negative VOID row as audit trail instead of deleting the original
+    await prisma.sale.create({
+      data: {
+        saleDate:        sale.saleDate,
+        saleTime:        now,
+        staffId:         staffId,
+        productSizeId:   sale.productSizeId,
+        quantityBottles: -sale.quantityBottles,
+        sellingPrice:    sale.sellingPrice,
+        totalAmount:     0,
+        paymentMode:     'VOID',
+        scanMethod:      'MANUAL',
+        billId:          sale.billId,
+        overrideReason:  reason ?? `void:sale#${sale.id}`,
+      },
+    })
 
     return NextResponse.json({
       success: true,
@@ -127,8 +145,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Batch/product-based void for quick returns
-  const today = toUtcNoonDate(new Date())
-
   try {
     await prisma.$transaction(async tx => {
       for (const item of items) {
@@ -136,6 +152,7 @@ export async function POST(req: NextRequest) {
           where: {
             saleDate: today,
             productSizeId: item.productSizeId,
+            quantityBottles: { gt: 0 },
           },
           orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
         })
@@ -160,21 +177,22 @@ export async function POST(req: NextRequest) {
             upiAmount: line.upiAmount,
           }, voidQty)
 
-          if (voidQty === line.quantityBottles) {
-            await tx.sale.delete({ where: { id: line.id } })
-          } else {
-            const keepRatio = (line.quantityBottles - voidQty) / line.quantityBottles
-            await tx.sale.update({
-              where: { id: line.id },
-              data: {
-                quantityBottles: line.quantityBottles - voidQty,
-                totalAmount: round2(Number(line.totalAmount) * keepRatio),
-                cashAmount: line.cashAmount == null ? null : round2(Number(line.cashAmount) * keepRatio),
-                cardAmount: line.cardAmount == null ? null : round2(Number(line.cardAmount) * keepRatio),
-                upiAmount: line.upiAmount == null ? null : round2(Number(line.upiAmount) * keepRatio),
-              },
-            })
-          }
+          // Insert a negative VOID row as audit trail
+          await tx.sale.create({
+            data: {
+              saleDate:        line.saleDate,
+              saleTime:        now,
+              staffId:         staffId,
+              productSizeId:   line.productSizeId,
+              quantityBottles: -voidQty,
+              sellingPrice:    line.sellingPrice,
+              totalAmount:     0,
+              paymentMode:     'VOID',
+              scanMethod:      'MANUAL',
+              billId:          line.billId,
+              overrideReason:  reason ?? `void:sale#${line.id}`,
+            },
+          })
         }
       }
     })
