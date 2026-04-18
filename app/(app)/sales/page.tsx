@@ -39,6 +39,9 @@ type SaleRow = {
   sellingPrice: string
   totalAmount: string
   paymentMode: string
+  cashAmount?: string | null
+  cardAmount?: string | null
+  upiAmount?: string | null
   isManualOverride: boolean
   overrideReason: string | null
   billId: string | null
@@ -225,9 +228,36 @@ export default function SalesPage() {
   const filtered = paymentFilter ? sales.filter(s => s.paymentMode === paymentFilter) : sales
 
   const realSales    = sales.filter(s => s.quantityBottles > 0)
-  const totalAmount  = (paymentFilter
-    ? filtered.filter(s => s.quantityBottles > 0)
-    : realSales).reduce((s, x) => s + Number(x.totalAmount), 0)
+
+  function computeNetHistoryTotal(rows: SaleRowFull[]) {
+    let cash = 0
+    let card = 0
+    let upi = 0
+    let voidAmount = 0
+
+    for (const row of rows) {
+      const amount = Number(row.totalAmount)
+      if (row.paymentMode === 'VOID') {
+        voidAmount += Math.abs(amount)
+        continue
+      }
+      if (row.paymentMode === 'SPLIT') {
+        cash += Number(row.cashAmount ?? 0)
+        card += Number(row.cardAmount ?? 0)
+        upi += Number(row.upiAmount ?? 0)
+        continue
+      }
+      if (row.paymentMode === 'CASH') cash += amount
+      if (row.paymentMode === 'CARD') card += amount
+      if (row.paymentMode === 'UPI') upi += amount
+    }
+
+    return cash + card + upi - voidAmount
+  }
+
+  const totalAmount  = paymentFilter
+    ? filtered.filter(s => s.quantityBottles > 0).reduce((s, x) => s + Number(x.totalAmount), 0)
+    : computeNetHistoryTotal(sales)
   const totalBottles = (paymentFilter
     ? filtered.filter(s => s.quantityBottles > 0)
     : realSales).reduce((s, x) => s + x.quantityBottles, 0)
