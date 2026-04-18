@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
       bankDeposits,
       pendingUnpaid,
       pendingTotalAgg,
+      voidAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
         where:   { saleDate: dateOnly, quantityBottles: { gt: 0 } },
@@ -88,6 +89,10 @@ export async function GET(req: NextRequest) {
       prisma.bankTransaction.findMany({ where: { txDate: dateOnly, txType: 'DEPOSIT' }, orderBy: { createdAt: 'asc' } }),
       prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
       prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
+      prisma.sale.aggregate({
+        where: { saleDate: dateOnly, paymentMode: 'VOID' },
+        _sum: { totalAmount: true },
+      }),
     ])
 
     const pendingUnpaidAmount = Number(pendingTotalAgg._sum.totalAmount ?? 0)
@@ -281,6 +286,7 @@ export async function GET(req: NextRequest) {
     const miscSalesTotal = miscSales.reduce((sum, row) => sum + row.total, 0)
     const miscItemsSold = miscSales.reduce((sum, row) => sum + row.qty, 0)
     const miscEntries = miscSales.length
+    const voidAmount = Number(voidAgg._sum.totalAmount ?? 0)
 
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
     const closingTotal  = closingStock.reduce((s, r) => s + r.totalBottles, 0)
@@ -302,9 +308,9 @@ export async function GET(req: NextRequest) {
       isToday,
       hasSession: !!session,
       financials: {
-        totalSales,
+        totalSales: totalSales + voidAmount,
         totalExpenses,
-        netCash: salesByMode.CASH - totalExpenses,
+        netCash: salesByMode.CASH + voidAmount - totalExpenses,
         salesByMode, totalBottlesSold, totalBills,
         miscSalesTotal,
         miscItemsSold,
