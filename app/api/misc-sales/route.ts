@@ -39,14 +39,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Only admins and cashiers can record misc sales' }, { status: 403 })
   }
 
-  const staffId = Number(user?.id ?? 0)
-  if (!Number.isInteger(staffId) || staffId <= 0) {
-    return NextResponse.json({ error: 'Unable to resolve staff for misc sale' }, { status: 400 })
-  }
-
   const body = await req.json()
   if (!Array.isArray(body?.items) || !body?.saleDate) {
     return NextResponse.json({ error: 'saleDate and items[] are required' }, { status: 400 })
+  }
+
+  let staffId = Number(body?.staffId ?? user?.id ?? 0)
+  if (!Number.isInteger(staffId) || staffId <= 0) {
+    const fallbackStaff = await prisma.staff.findFirst({
+      where: { active: true, role: { in: ['ADMIN', 'CASHIER'] } },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    })
+    if (!fallbackStaff) {
+      return NextResponse.json({ error: 'No active cashier/admin found for misc sale attribution' }, { status: 400 })
+    }
+    staffId = fallbackStaff.id
   }
 
   const items = body.items as Array<{ itemId: number; quantity: number; unitPrice: number; totalAmount: number }>
