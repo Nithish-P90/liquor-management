@@ -939,7 +939,7 @@ export default function POSPage() {
                     {tx.retries > 0 && ` · ${tx.retries} attempt(s)`}
                   </p>
                   <p className="text-[11px] text-red-300 mt-1 truncate">
-                    {tx.items.map(i => `${i.name} ${i.sizeMl}${i.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×${i.qty}`).join(', ')}
+                    {tx.items.map(i => `${i.name} ${i.sizeMl}ml ×${i.qty}`).join(', ')}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
@@ -974,7 +974,7 @@ export default function POSPage() {
                 </h3>
                 <p className="text-sm text-gray-500">
                   {settleTarget.customerName && <span className="font-mono text-xs text-gray-400 mr-1">{settleTarget.billRef} ·</span>}
-                  {settleTarget.staff.name} · {new Date(settleTarget.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                  {(settleTarget.staff?.name ?? 'Unknown')} · {new Date(settleTarget.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                 </p>
               </div>
               <button onClick={() => { setSettleTarget(null); setPendingVoidMode(false); setPendingVoidItems(new Set()) }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
@@ -995,7 +995,7 @@ export default function POSPage() {
                       <input type="checkbox" checked={pendingVoidItems.has(item.id)} readOnly
                              className="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500" />
                     )}
-                    <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}{item.productSize.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×{item.quantityBottles}</span>
+                    <span className="text-gray-700">{item.productSize?.product?.name ?? 'Item'} {item.productSize?.sizeMl ?? 0}ml ×{item.quantityBottles}</span>
                   </div>
                   <span className="font-semibold text-gray-900">{fmt(Number(item.totalAmount))}</span>
                 </div>
@@ -1269,7 +1269,7 @@ export default function POSPage() {
                           {pb.customerName || pb.billRef}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1">
-                          {pb.billRef} · {pb.staff.name} · {pb.items.length} item(s)
+                          {pb.billRef} · {(pb.staff?.name ?? 'Unknown')} · {pb.items.length} item(s)
                         </p>
                         <p className="text-[10px] text-slate-400">
                           {new Date(pb.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
