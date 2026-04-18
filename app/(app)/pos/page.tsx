@@ -94,6 +94,7 @@ type PendingBill = {
   }>
 }
 type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: number }
+type PosNetworkState = 'CHECKING' | 'LIVE' | 'CONNECTED' | 'RECONNECTING' | 'OFFLINE'
 const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
 
 function fmt(n: number) { return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) }
@@ -149,6 +150,13 @@ export default function POSPage() {
   const [voidProcessing, setVoidProcessing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [showPayment, setShowPayment] = useState(false)
+  const [lastTxSuccessAt, setLastTxSuccessAt] = useState<number | null>(null)
+  const [lastTxErrorAt, setLastTxErrorAt] = useState<number | null>(null)
+  const [heartbeatOkAt, setHeartbeatOkAt] = useState<number | null>(null)
+  const [lastHeartbeatAttemptAt, setLastHeartbeatAttemptAt] = useState<number | null>(null)
+  const [heartbeatFails, setHeartbeatFails] = useState(0)
+  const [heartbeatConsecutiveOk, setHeartbeatConsecutiveOk] = useState(0)
+  const [browserOnline, setBrowserOnline] = useState<boolean>(true)
 
   // Pending bill settlement modal
   const [settleTarget, setSettleTarget] = useState<PendingBill | null>(null)
@@ -245,10 +253,13 @@ export default function POSPage() {
       // Success — remove from journal and orphan list
       journalClear(tx.id)
       setOrphanedTx(prev => prev.filter(t => t.id !== tx.id))
+      setLastTxSuccessAt(Date.now())
+      setLastTxErrorAt(null)
       flash(`Recovered: ${fmt(tx.total)} posted successfully`, 'ok')
       loadProducts(); loadRecent()
     } catch (e: unknown) {
       flash(`Retry failed: ${e instanceof Error ? e.message : 'Unknown error'} — transaction still saved`, 'err')
+      setLastTxErrorAt(Date.now())
       // Update retry count but keep in journal
       setOrphanedTx(journalRead().filter(t => t.status === 'pending'))
     } finally {
@@ -387,6 +398,126 @@ export default function POSPage() {
   const effectiveTendered = payMode === 'CASH' && tendered === '' ? cartTotal : tenderedNum
   const change = payMode === 'CASH' && effectiveTendered > cartTotal ? effectiveTendered - cartTotal : 0
 
+  useEffect(() => {
+    setBrowserOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+
+    const onOnline = () => setBrowserOnline(true)
+    const onOffline = () => setBrowserOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    const ping = async () => {
+      setLastHeartbeatAttemptAt(Date.now())
+      const ctrl = new AbortController()
+      const timeout = setTimeout(() => ctrl.abort(), 5000)
+
+      try {
+        const res = await fetch('/api/pos/heartbeat', {
+          cache: 'no-store',
+          signal: ctrl.signal,
+        })
+
+        if (!active) return
+        if (res.ok) {
+          const now = Date.now()
+          setHeartbeatOkAt(now)
+          setHeartbeatFails(0)
+          setHeartbeatConsecutiveOk(prev => prev + 1)
+          return
+        }
+      } catch {
+        // Heartbeat failures are represented via retry counters.
+      } finally {
+        clearTimeout(timeout)
+      }
+
+      if (!active) return
+      setHeartbeatFails(prev => prev + 1)
+      setHeartbeatConsecutiveOk(0)
+    }
+
+    void ping()
+    const id = setInterval(() => { void ping() }, 8000)
+
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [])
+
+  const networkState = useMemo<PosNetworkState>(() => {
+    if (!browserOnline) return 'OFFLINE'
+    if (!lastHeartbeatAttemptAt) return 'CHECKING'
+    if (!heartbeatOkAt) return heartbeatFails > 0 ? 'RECONNECTING' : 'CHECKING'
+
+    const now = Date.now()
+    const staleHeartbeat = now - heartbeatOkAt > 20000
+    if (staleHeartbeat || heartbeatFails >= 2) return 'RECONNECTING'
+
+    const recentTxWindowMs = 5 * 60 * 1000
+    const hasRecentTx = lastTxSuccessAt != null && now - lastTxSuccessAt <= recentTxWindowMs
+    if (hasRecentTx && heartbeatConsecutiveOk >= 2) return 'LIVE'
+    return 'CONNECTED'
+  }, [
+    browserOnline,
+    heartbeatFails,
+    heartbeatConsecutiveOk,
+    heartbeatOkAt,
+    lastHeartbeatAttemptAt,
+    lastTxSuccessAt,
+  ])
+
+  const networkTone = networkState === 'LIVE'
+    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+    : networkState === 'CONNECTED'
+      ? 'bg-blue-50 border-blue-200 text-blue-700'
+      : networkState === 'OFFLINE'
+        ? 'bg-red-50 border-red-200 text-red-700'
+        : 'bg-amber-50 border-amber-200 text-amber-700'
+
+  const networkLabel = networkState === 'LIVE'
+    ? 'LIVE'
+    : networkState === 'CONNECTED'
+      ? 'CONNECTED'
+      : networkState === 'OFFLINE'
+        ? 'OFFLINE'
+        : networkState === 'CHECKING'
+          ? 'CHECKING'
+          : 'RECONNECTING'
+
+  const networkHint = networkState === 'LIVE'
+    ? 'Server reachable and transactions are posting'
+    : networkState === 'CONNECTED'
+      ? 'Server reachable; waiting for a recent successful transaction'
+      : networkState === 'OFFLINE'
+        ? 'Network disconnected. Switch to alternate network.'
+        : networkState === 'CHECKING'
+          ? 'Checking server connectivity...'
+          : 'Connection unstable. Switch network if this persists.'
+
+  const hasRecentTxError = lastTxErrorAt != null && Date.now() - lastTxErrorAt <= 3 * 60 * 1000
+  const showNetworkAdvice = networkState === 'OFFLINE' || networkState === 'RECONNECTING' || (networkState !== 'LIVE' && hasRecentTxError)
+  const adviceTone = networkState === 'OFFLINE'
+    ? 'bg-red-50 border-red-200 text-red-800'
+    : 'bg-amber-50 border-amber-200 text-amber-800'
+  const adviceTitle = networkState === 'OFFLINE'
+    ? 'Network offline'
+    : 'Network unstable'
+  const adviceText = networkState === 'OFFLINE'
+    ? 'POS is not connected. Move to alternate Wi-Fi or mobile hotspot immediately.'
+    : networkState === 'RECONNECTING'
+      ? `Heartbeat failed ${heartbeatFails} time(s). Keep billing paused and switch network if this continues for 30 seconds.`
+      : 'Recent transaction posting issue detected. Confirm signal quality or switch to alternate network before taking large bills.'
+
   // ── Checkout ───────────────────────────────────────────────────────────────
   async function completeSale() {
     if (!cart.length || !activeClerk) return
@@ -488,6 +619,8 @@ export default function POSPage() {
 
       // ── All good — clear from journal ─────────────────────────────────────
       journalClear(txId)
+      setLastTxSuccessAt(Date.now())
+      setLastTxErrorAt(null)
 
       // Background refresh (non-blocking)
       loadProducts()
@@ -496,6 +629,7 @@ export default function POSPage() {
       // API failed after optimistic reset. Journal entry stays — show recovery UI.
       const msg = e instanceof Error ? e.message : 'Sale failed'
       flash(`${msg} — saved for recovery`, 'err')
+      setLastTxErrorAt(Date.now())
       // Surface in the orphan list immediately so cashier sees it
       setOrphanedTx(prev => [...prev.filter(t => t.id !== txId), { ...journalEntry, retries: 1 }])
     } finally {
@@ -533,13 +667,17 @@ export default function POSPage() {
         setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
         setPayMode('PENDING'); setShowPayment(true)
         flash(e.error || 'Failed to create pending bill', 'err')
+        setLastTxErrorAt(Date.now())
         return
       }
+      setLastTxSuccessAt(Date.now())
+      setLastTxErrorAt(null)
       loadPending()
     } catch (e: unknown) {
       setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
       setPayMode('PENDING'); setShowPayment(true)
       flash(e instanceof Error ? e.message : 'Failed', 'err')
+      setLastTxErrorAt(Date.now())
     } finally {
       setProcessing(false)
       scanRef.current?.focus()
@@ -767,6 +905,10 @@ export default function POSPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${networkTone}`} title={networkHint}>
+              <span className={`w-2 h-2 rounded-full ${networkState === 'LIVE' ? 'bg-emerald-500 animate-pulse' : networkState === 'CONNECTED' ? 'bg-blue-500' : networkState === 'OFFLINE' ? 'bg-red-500' : 'bg-amber-500 animate-pulse'}`} />
+              <span className="text-xs font-bold">{networkLabel}</span>
+            </div>
             {/* Pending bills badge */}
             {pendingCount > 0 && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
@@ -781,6 +923,13 @@ export default function POSPage() {
             )}
           </div>
         </div>
+
+        {showNetworkAdvice && (
+          <div className={`mx-4 mt-2 rounded-xl border px-3 py-2.5 ${adviceTone}`}>
+            <p className="text-xs font-bold uppercase tracking-wide">{adviceTitle}</p>
+            <p className="text-xs mt-1">{adviceText}</p>
+          </div>
+        )}
 
         {/* ── Category Pills ───────────────── */}
         <div className="bg-white border-b border-slate-100 flex overflow-x-auto px-4 py-2.5 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
@@ -1139,7 +1288,7 @@ export default function POSPage() {
         {/* Empty footer */}
         {cart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && (
           <div className="border-t border-[#252836] px-4 py-3 text-center">
-            <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}</p>
+            <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}{lastTxErrorAt ? ' · recent transaction issue detected' : ''}</p>
           </div>
         )}
       </div>
