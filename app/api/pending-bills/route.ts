@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
+import { getAvailableStock } from '@/lib/stock-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,23 @@ export async function POST(req: NextRequest) {
   const { staffId, customerName, items } = body
   if (!staffId || !items?.length) {
     return NextResponse.json({ error: 'staffId and items required' }, { status: 400 })
+  }
+
+  // Check stock availability for each item
+  for (const item of items) {
+    const productSize = await prisma.productSize.findUnique({
+      where: { id: item.productSizeId },
+      include: { product: { select: { category: true } } },
+    })
+    if (!productSize) {
+      return NextResponse.json({ error: `Product size ${item.productSizeId} not found` }, { status: 404 })
+    }
+    if (productSize.product.category !== 'MISCELLANEOUS') {
+      const available = await getAvailableStock(prisma, item.productSizeId)
+      if (item.quantityBottles > available) {
+        return NextResponse.json({ error: `Only ${available} bottles available for ${productSize.size}` }, { status: 409 })
+      }
+    }
   }
 
   const today = toUtcNoonDate(new Date())

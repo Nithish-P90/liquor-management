@@ -18,7 +18,7 @@ export async function GET() {
   const periodEnd    = latestSession?.periodEnd   ?? null
 
   // ── 2. Bulk-fetch everything in parallel (5 queries total) ───────────────
-  const [productSizes, openingEntries, receiptItems, salesAgg, adjAgg] = await Promise.all([
+  const [productSizes, openingEntries, receiptItems, salesAgg, adjAgg, pendingAgg] = await Promise.all([
     // All product sizes + product info
     prisma.productSize.findMany({
       include: { product: true },
@@ -69,6 +69,16 @@ export async function GET() {
       },
       _sum: { quantityBottles: true },
     }),
+
+    // Pending bill items since session start (or all time) — group by productSizeId
+    prisma.pendingBillItem.groupBy({
+      by: ['productSizeId'],
+      where: {
+        bill: { settled: false },
+        ...(periodStart ? { bill: { saleDate: { gte: periodStart } } } : {}),
+      },
+      _sum: { quantityBottles: true },
+    }),
   ])
 
   // ── 3. Build lookup maps ─────────────────────────────────────────────────
@@ -84,13 +94,17 @@ export async function GET() {
   const adjMap = new Map<number, number>()
   for (const a of adjAgg) adjMap.set(a.productSizeId, a._sum.quantityBottles ?? 0)
 
+  const pendingMap = new Map<number, number>()
+  for (const p of pendingAgg) pendingMap.set(p.productSizeId, p._sum.quantityBottles ?? 0)
+
   // ── 4. Compute current stock per product in memory ───────────────────────
   const stock = productSizes.map(ps => {
     const opening     = openingMap.get(ps.id) ?? 0
     const receipts    = receiptMap.get(ps.id) ?? 0
     const sold        = salesMap.get(ps.id)   ?? 0
     const adjustments = adjMap.get(ps.id)     ?? 0
-    const currentStock = opening + receipts + adjustments - sold
+    const pending     = pendingMap.get(ps.id) ?? 0
+    const currentStock = opening + receipts + adjustments - sold - pending
 
     return {
       id: ps.id,

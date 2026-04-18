@@ -23,7 +23,7 @@ export async function GET() {
   const sessionStart = session?.periodStart ?? new Date(0)
 
   // Batch all aggregations in parallel with raw SQL for speed
-  const [openingEntries, receiptAgg, salesAgg, adjAgg] = await Promise.all([
+  const [openingEntries, receiptAgg, salesAgg, adjAgg, pendingAgg] = await Promise.all([
     session
       ? prisma.stockEntry.findMany({
           where: { sessionId: session.id, entryType: 'OPENING' },
@@ -48,6 +48,14 @@ export async function GET() {
       where: { approved: true, adjustmentDate: { gte: sessionStart } },
       _sum: { quantityBottles: true },
     }),
+
+    prisma.pendingBillItem.groupBy({
+      by: ['productSizeId'],
+      where: {
+        bill: { settled: false, saleDate: { gte: sessionStart } },
+      },
+      _sum: { quantityBottles: true },
+    }),
   ])
 
   // Build O(1) lookup maps
@@ -63,12 +71,16 @@ export async function GET() {
   const adjMap = new Map<number, number>()
   for (const a of adjAgg) adjMap.set(a.productSizeId, a._sum.quantityBottles ?? 0)
 
+  const pendingMap = new Map<number, number>()
+  for (const p of pendingAgg) pendingMap.set(p.productSizeId, p._sum.quantityBottles ?? 0)
+
   const result = productSizes.map(ps => {
     const opening = openingMap.get(ps.id) ?? 0
     const receipts = receiptMap.get(ps.id) ?? 0
     const sold = salesMap.get(ps.id) ?? 0
     const adj = adjMap.get(ps.id) ?? 0
-    const computedStock = Math.max(0, opening + receipts + adj - sold)
+    const pending = pendingMap.get(ps.id) ?? 0
+    const computedStock = Math.max(0, opening + receipts + adj - sold - pending)
     const currentStock = ps.product.category === 'MISCELLANEOUS' ? 999999 : computedStock
 
     return {

@@ -57,7 +57,17 @@ export async function runReconciliation(date: Date, sessionId: number) {
     })
     const adjustmentBottles = adjAgg._sum.quantityBottles ?? 0
 
-    const expectedClosing = openingBottles + receiptBottles + adjustmentBottles - soldBottles
+    // Get pending bill items for this date
+    const pendingAgg = await prisma.pendingBillItem.aggregate({
+      where: {
+        productSizeId: ps.id,
+        bill: { saleDate: dateOnly, settled: false },
+      },
+      _sum: { quantityBottles: true },
+    })
+    const pendingBottles = pendingAgg._sum.quantityBottles ?? 0
+
+    const expectedClosing = openingBottles + receiptBottles + adjustmentBottles - soldBottles - pendingBottles
 
     // Get physical closing count
     const closingEntry = await prisma.stockEntry.findUnique({

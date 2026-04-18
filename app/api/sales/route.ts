@@ -4,82 +4,11 @@ import { Prisma, PrismaClient } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
+import { getAvailableStock } from '@/lib/stock-utils'
 
 export const dynamic = 'force-dynamic'
 
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
-
-async function getAvailableStock(tx: TxClient, productSizeId: number): Promise<number> {
-  const latestSession = await tx.inventorySession.findFirst({ orderBy: { periodStart: 'desc' } })
-
-  const opening = latestSession
-    ? await tx.stockEntry.findUnique({
-        where: {
-          sessionId_productSizeId_entryType: {
-            sessionId: latestSession.id,
-            productSizeId,
-            entryType: 'OPENING',
-          },
-        },
-      })
-    : null
-
-  if (opening) {
-    const [receiptAgg, salesAgg, adjAgg] = await Promise.all([
-      tx.receiptItem.aggregate({
-        where: {
-          productSizeId,
-          receipt: { receivedDate: { gte: latestSession!.periodStart } },
-        },
-        _sum: { totalBottles: true },
-      }),
-      tx.sale.aggregate({
-        where: {
-          productSizeId,
-          saleDate: { gte: latestSession!.periodStart },
-          quantityBottles: { gt: 0 },
-        },
-        _sum: { quantityBottles: true },
-      }),
-      tx.stockAdjustment.aggregate({
-        where: {
-          productSizeId,
-          approved: true,
-          adjustmentDate: { gte: latestSession!.periodStart },
-        },
-        _sum: { quantityBottles: true },
-      }),
-    ])
-
-    return (
-      (opening.totalBottles ?? 0) +
-      (receiptAgg._sum.totalBottles ?? 0) +
-      (adjAgg._sum.quantityBottles ?? 0) -
-      (salesAgg._sum.quantityBottles ?? 0)
-    )
-  }
-
-  const [receiptAgg, salesAgg, adjAgg] = await Promise.all([
-    tx.receiptItem.aggregate({
-      where: { productSizeId },
-      _sum: { totalBottles: true },
-    }),
-    tx.sale.aggregate({
-      where: { productSizeId, quantityBottles: { gt: 0 } },
-      _sum: { quantityBottles: true },
-    }),
-    tx.stockAdjustment.aggregate({
-      where: { productSizeId, approved: true },
-      _sum: { quantityBottles: true },
-    }),
-  ])
-
-  return (
-    (receiptAgg._sum.totalBottles ?? 0) +
-    (adjAgg._sum.quantityBottles ?? 0) -
-    (salesAgg._sum.quantityBottles ?? 0)
-  )
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
