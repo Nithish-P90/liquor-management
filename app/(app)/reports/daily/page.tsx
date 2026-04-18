@@ -7,12 +7,14 @@ type DaySummary = {
   date:    string
   isLive:  boolean
   financials: {
-    totalSales:       number
-    totalExpenses:    number
-    netCash:          number
-    totalBottlesSold: number
-    totalBills:       number
-    salesByMode:      Record<string, number>
+    totalSales:          number
+    totalExpenses:       number
+    netCash:             number
+    totalBottlesSold:    number
+    totalBills:          number
+    salesByMode:         Record<string, number>
+    pendingUnpaid?:      number
+    pendingUnpaidAmount?: number
   }
 }
 
@@ -242,6 +244,12 @@ export default function DailyLedgerPage() {
                     <span className="text-gray-400 text-xs">Bottles</span>
                     <div className="font-bold text-gray-700">{s.financials.totalBottlesSold} btls · {s.financials.totalBills} bills</div>
                   </div>
+                  {(s.financials.pendingUnpaid ?? 0) > 0 && (
+                    <div>
+                      <span className="text-orange-500 text-xs font-semibold">Unpaid Pending</span>
+                      <div className="font-bold text-orange-600">{s.financials.pendingUnpaid} bill(s) · {fmt(s.financials.pendingUnpaidAmount ?? 0)}</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Live badge + chevron */}
@@ -310,6 +318,7 @@ export default function DailyLedgerPage() {
                                   ['UPI / Digital', detail.financials.salesByMode.UPI,    'text-purple-700'],
                                   ['Card',          detail.financials.salesByMode.CARD,   'text-blue-700'],
                                   ['Credit',        detail.financials.salesByMode.CREDIT, 'text-orange-700'],
+                                  ['Pending (Unpaid)', detail.financials.pendingUnpaidAmount ?? 0, 'text-orange-600'],
                                 ].map(([label, val, cls]) => (
                                   <div key={String(label)} className="flex justify-between px-4 py-2.5">
                                     <span className="text-gray-500">{String(label)}</span>

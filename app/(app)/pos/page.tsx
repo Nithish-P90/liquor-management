@@ -14,7 +14,7 @@ type CartItem = {
 }
 type StaffMember = { id: number; name: string; active: boolean; role: string }
 type ClerkOption = { key: string; label: string; staffId: number; kind: 'COUNTER' | 'SUPPLIER' }
-type PayMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT'
+type PayMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT' | 'PENDING'
 type RecentBill = {
   id: string
   saleTime: string
@@ -32,6 +32,22 @@ type RecentBill = {
     totalAmount: number
   }[]
 }
+type PendingBill = {
+  id: number
+  billRef: string
+  createdAt: string
+  customerName: string | null
+  totalAmount: string
+  staff: { id: number; name: string }
+  items: Array<{
+    id: number
+    productSizeId: number
+    quantityBottles: number
+    sellingPrice: string
+    totalAmount: string
+    productSize: { sizeMl: number; product: { name: string } }
+  }>
+}
 type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: number }
 const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
 
@@ -44,17 +60,13 @@ function playBeep() {
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    
     osc.type = 'square';
     osc.frequency.setValueAtTime(2500, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + 0.05);
-
     gain.gain.setValueAtTime(0.04, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     osc.start();
     osc.stop(ctx.currentTime + 0.1);
   } catch (e) {
@@ -71,6 +83,8 @@ export default function POSPage() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
   const [recentBills, setRecentBills] = useState<RecentBill[]>([])
+  const [pendingBills, setPendingBills] = useState<PendingBill[]>([])
+  const [pendingCount, setPendingCount] = useState(0)
 
   const [category, setCategory] = useState('ALL')
   const [search, setSearch] = useState('')
@@ -91,6 +105,11 @@ export default function POSPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [showPayment, setShowPayment] = useState(false)
 
+  // Pending bill settlement modal
+  const [settleTarget, setSettleTarget] = useState<PendingBill | null>(null)
+  const [settleMode, setSettleMode] = useState<'CASH' | 'CARD' | 'UPI'>('CASH')
+  const [settling, setSettling] = useState(false)
+
   const scanRef = useRef<HTMLInputElement>(null)
   const barcodeBuffer = useRef('')
   const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -109,6 +128,17 @@ export default function POSPage() {
       if (res.ok) {
         const d = await res.json()
         setRecentBills(d.recentBills?.slice(0, 8) ?? [])
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  const loadPending = useCallback(async () => {
+    try {
+      const res = await fetch('/api/pending-bills')
+      if (res.ok) {
+        const data: PendingBill[] = await res.json()
+        setPendingBills(data)
+        setPendingCount(data.length)
       }
     } catch { /* ignore */ }
   }, [])
@@ -133,10 +163,10 @@ export default function POSPage() {
   useEffect(() => {
     loadProducts()
     loadRecent()
+    loadPending()
     fetch('/api/staff').then(r => r.json()).then((list: StaffMember[]) => {
       const active = list.filter(s => s.active)
       setStaff(active)
-
       const meId = parseInt(user?.id ?? '0')
       const me = active.find(s => s.id === meId)
       const anyCashier = active.find(s => s.role === 'CASHIER')
@@ -144,7 +174,7 @@ export default function POSPage() {
       setCounterStaffId(fallback?.id ?? null)
       setActiveClerkKey('COUNTER')
     })
-  }, [loadProducts, loadRecent, user?.id])
+  }, [loadProducts, loadRecent, loadPending, user?.id])
 
   useEffect(() => {
     scanRef.current?.focus()
@@ -155,63 +185,33 @@ export default function POSPage() {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement
 
-      // Hotkeys (Global)
-      if (e.key === 'F2') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('CASH')
-        return
-      }
-      if (e.key === 'F3') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('UPI')
-        return
-      }
-      if (e.key === 'F4') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('CARD')
-        return
-      }
-      if (e.key === 'F6') {
-        e.preventDefault()
-        setShowPayment(true); setPayMode('SPLIT')
-        return
-      }
-      if (e.key === 'F8') {
-        e.preventDefault()
-        setVoidMode(v => !v)
-        return
-      }
+      if (e.key === 'F2') { e.preventDefault(); setShowPayment(true); setPayMode('CASH'); return }
+      if (e.key === 'F3') { e.preventDefault(); setShowPayment(true); setPayMode('UPI'); return }
+      if (e.key === 'F4') { e.preventDefault(); setShowPayment(true); setPayMode('CARD'); return }
+      if (e.key === 'F6') { e.preventDefault(); setShowPayment(true); setPayMode('SPLIT'); return }
+      if (e.key === 'F8') { e.preventDefault(); setVoidMode(v => !v); return }
 
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
         if (e.key === 'Enter') {
-          // Trigger complete sale while entering payment details
           if (showPayment) { completeSale(); return }
         }
         return
       }
 
       if (e.key === 'Backspace' && cart.length > 0) {
-        e.preventDefault()
-        setCart(prev => prev.slice(0, -1))
-        return
+        e.preventDefault(); setCart(prev => prev.slice(0, -1)); return
       }
 
       if (e.key === 'Enter') {
-        if (showPayment) {
-          completeSale()
-          return
-        } else if (cart.length > 0) {
-           setShowPayment(true); setPayMode('CASH')
-           return
-        }
-
+        if (showPayment) { completeSale(); return }
+        else if (cart.length > 0) { setShowPayment(true); setPayMode('CASH'); return }
         const code = barcodeBuffer.current.trim()
         if (code.length >= 4) handleScan(code)
         barcodeBuffer.current = ''
         if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
         return
       }
-      
+
       if (e.key.length === 1) {
         barcodeBuffer.current += e.key
         if (barcodeTimer.current) clearTimeout(barcodeTimer.current)
@@ -227,12 +227,7 @@ export default function POSPage() {
     const found = products.find(p => p.barcode === code || p.product.itemCode === code)
     if (!found) { flash(`No product found: ${code}`, 'err'); return }
     playBeep()
-    if (voidMode) {
-      addToVoid(found)
-      flash(`Return queued: ${found.product.name} ${found.sizeMl}ml`, 'ok')
-      return
-    }
-
+    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name} ${found.sizeMl}ml`, 'ok'); return }
     if (found.currentStock <= 0) { flash(`${found.product.name} — OUT OF STOCK`, 'err'); return }
     addToCart(found)
     flash(`${found.product.name} ${found.sizeMl}ml added`, 'ok')
@@ -258,15 +253,8 @@ export default function POSPage() {
   function addToVoid(ps: ProductSize) {
     setVoidItems(prev => {
       const ex = prev.find(v => v.productSizeId === ps.id)
-      if (ex) {
-        return prev.map(v => v.productSizeId === ps.id ? { ...v, qty: v.qty + 1 } : v)
-      }
-      return [...prev, {
-        productSizeId: ps.id,
-        name: ps.product.name,
-        sizeMl: ps.sizeMl,
-        qty: 1,
-      }]
+      if (ex) return prev.map(v => v.productSizeId === ps.id ? { ...v, qty: v.qty + 1 } : v)
+      return [...prev, { productSizeId: ps.id, name: ps.product.name, sizeMl: ps.sizeMl, qty: 1 }]
     })
   }
 
@@ -294,61 +282,165 @@ export default function POSPage() {
   const splitCashNum = parseFloat(splitCash) || 0
   const splitRemainder = Math.max(0, cartTotal - splitCashNum)
   const tenderedNum = parseFloat(tendered) || 0
-  const change = payMode === 'CASH' && tenderedNum > cartTotal ? tenderedNum - cartTotal : 0
+  // For CASH: if tendered is empty, treat as exact (= cartTotal). Change only shows when tendered > total.
+  const effectiveTendered = payMode === 'CASH' && tendered === '' ? cartTotal : tenderedNum
+  const change = payMode === 'CASH' && effectiveTendered > cartTotal ? effectiveTendered - cartTotal : 0
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   async function completeSale() {
     if (!cart.length || !activeClerk) return
-    if (payMode === 'CASH' && tenderedNum < cartTotal) { flash('Enter amount received', 'err'); return }
+
+    // PENDING: no payment validation needed
+    if (payMode === 'PENDING') {
+      await completePendingSale()
+      return
+    }
+
+    // CASH: empty tendered = exact payment (fine), only block if explicitly less than total
+    if (payMode === 'CASH' && tendered !== '' && tenderedNum < cartTotal) {
+      flash('Amount received is less than total', 'err'); return
+    }
     if (payMode === 'SPLIT' && splitCashNum <= 0) { flash('Enter cash amount', 'err'); return }
     if (payMode === 'SPLIT' && splitCashNum >= cartTotal) { flash('Split cash must be less than total', 'err'); return }
 
     setProcessing(true)
+
+    // Optimistic reset — do it immediately so the UI feels instant.
+    // If the API fails, we'll restore the cart and show an error.
+    const savedCart = [...cart]
+    const savedClerkKey = activeClerkKey
+    const savedPayMode = payMode
+    const savedSplitCash = splitCash
+    const savedCustomerName = customerName
+    const total = cartTotal
+    resetSale()
+    flash(`Bill complete — ${fmt(total)}`, 'ok')
+
     try {
       const billTimeIso = new Date().toISOString()
-      
-      // ── HDFC BonusHub Terminal Integration ──
-      const needsTerminal = payMode === 'CARD' || payMode === 'UPI' || (payMode === 'SPLIT' && (splitMethod === 'CARD' || splitMethod === 'UPI'))
+
+      const needsTerminal = savedPayMode === 'CARD' || savedPayMode === 'UPI' || (savedPayMode === 'SPLIT' && (splitMethod === 'CARD' || splitMethod === 'UPI'))
       if (needsTerminal) {
-        const terminalAmt = payMode === 'SPLIT' ? splitRemainder : cartTotal
+        const terminalAmt = savedPayMode === 'SPLIT' ? splitRemainder : total
         const tr = await fetch('/api/card-terminal/push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: terminalAmt, type: payMode === 'SPLIT' ? splitMethod : payMode })
+          body: JSON.stringify({ amount: terminalAmt, type: savedPayMode === 'SPLIT' ? splitMethod : savedPayMode })
         })
         if (!tr.ok) {
-           flash('EDC Terminal transaction failed or rejected. Please manually retry.', 'err')
-           setProcessing(false)
-           return
+          // Restore cart on terminal failure
+          setCart(savedCart); setActiveClerkKey(savedClerkKey); setPayMode(savedPayMode as PayMode)
+          setSplitCash(savedSplitCash); setCustomerName(savedCustomerName); setShowPayment(true)
+          flash('EDC Terminal transaction failed or rejected. Please manually retry.', 'err')
+          setProcessing(false)
+          return
         }
       }
 
-      for (const item of cart) {
-        const prop = item.sellingPrice * item.qty / cartTotal
+      const splitCashSaved = parseFloat(savedSplitCash) || 0
+      const splitRemainderSaved = Math.max(0, total - splitCashSaved)
+
+      const results = await Promise.all(savedCart.map(async item => {
+        const prop = item.sellingPrice * item.qty / total
         const body: Record<string, unknown> = {
           productSizeId: item.productSizeId, quantityBottles: item.qty,
-          paymentMode: payMode, scanMethod: 'MANUAL', staffId: activeClerk.staffId,
-          customerName: customerName || null,
+          paymentMode: savedPayMode, scanMethod: 'MANUAL', staffId: activeClerk.staffId,
+          customerName: savedCustomerName || null,
           saleTime: billTimeIso,
         }
-        if (payMode === 'SPLIT') {
-          body.cashAmount = +(splitCashNum * prop).toFixed(2)
-          body[splitMethod === 'UPI' ? 'upiAmount' : 'cardAmount'] = +(splitRemainder * prop).toFixed(2)
+        if (savedPayMode === 'SPLIT') {
+          body.cashAmount = +(splitCashSaved * prop).toFixed(2)
+          body[splitMethod === 'UPI' ? 'upiAmount' : 'cardAmount'] = +(splitRemainderSaved * prop).toFixed(2)
         }
         const res = await fetch('/api/sales', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
         if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Sale failed') }
-      }
-      const total = cartTotal
-      resetSale()
-      flash(`Bill complete — ${fmt(total)}`, 'ok')
+        return res.json()
+      }))
+
+      if (results.some(r => r?.error)) throw new Error('One or more items failed')
+
+      // Background refresh (non-blocking)
       loadProducts()
       loadRecent()
-      scanRef.current?.focus()
     } catch (e: unknown) {
+      // Sale failed after optimistic reset — restore so cashier can retry
+      setCart(savedCart); setActiveClerkKey(savedClerkKey); setPayMode(savedPayMode as PayMode)
+      setSplitCash(savedSplitCash); setCustomerName(savedCustomerName); setShowPayment(true)
+      flash(e instanceof Error ? e.message : 'Sale failed — cart restored', 'err')
+    } finally {
+      setProcessing(false)
+      scanRef.current?.focus()
+    }
+  }
+
+  async function completePendingSale() {
+    if (!activeClerk) return
+    setProcessing(true)
+
+    const savedCart = [...cart]
+    const savedClerkKey = activeClerkKey
+    const savedCustomerName = customerName
+    const total = cartTotal
+    resetSale()
+    flash(`Pending bill created — ${fmt(total)}`, 'ok')
+
+    try {
+      const res = await fetch('/api/pending-bills', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: activeClerk.staffId,
+          customerName: savedCustomerName || null,
+          items: savedCart.map(item => ({
+            productSizeId: item.productSizeId,
+            quantityBottles: item.qty,
+            sellingPrice: item.sellingPrice,
+          })),
+        }),
+      })
+      if (!res.ok) {
+        const e = await res.json()
+        setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
+        setPayMode('PENDING'); setShowPayment(true)
+        flash(e.error || 'Failed to create pending bill', 'err')
+        return
+      }
+      loadPending()
+    } catch (e: unknown) {
+      setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
+      setPayMode('PENDING'); setShowPayment(true)
       flash(e instanceof Error ? e.message : 'Failed', 'err')
-    } finally { setProcessing(false) }
+    } finally {
+      setProcessing(false)
+      scanRef.current?.focus()
+    }
+  }
+
+  async function settlePendingBill(mode: 'CASH' | 'CARD' | 'UPI') {
+    if (!settleTarget) return
+    setSettling(true)
+    try {
+      const res = await fetch('/api/pending-bills', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: settleTarget.id,
+          paymentMode: mode,
+          settledById: activeClerk?.staffId ?? parseInt(user?.id ?? '0'),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Settlement failed')
+      flash(`${settleTarget.billRef} settled — ${fmt(Number(settleTarget.totalAmount))}`, 'ok')
+      setSettleTarget(null)
+      loadPending()
+      loadRecent()
+      loadProducts()
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : 'Settlement failed', 'err')
+    } finally {
+      setSettling(false)
+    }
   }
 
   function resetSale() {
@@ -363,75 +455,42 @@ export default function POSPage() {
   async function completeVoid() {
     if (!voidItems.length) return
     if (!confirm(`Void ${voidItems.reduce((s, i) => s + i.qty, 0)} returned bottle(s)? Stock will be added back.`)) return
-
     setVoidProcessing(true)
     try {
       const res = await fetch('/api/sales/void', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })),
-          reason: 'POS return by barcode/checkout void',
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })), reason: 'POS return by barcode/checkout void' }),
       })
-
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Void failed')
-
       const refund = data.refund as { total?: number; cash?: number; card?: number; upi?: number } | undefined
       const cashRefund = Number(refund?.cash ?? 0)
-      flash(
-        refund?.total != null
-          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(cashRefund)} deducted, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})`
-          : 'Void complete — stock returned',
-        'ok'
-      )
-      setVoidItems([])
-      setVoidMode(false)
-      loadRecent()
-      loadProducts()
-      scanRef.current?.focus()
+      flash(refund?.total != null ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(cashRefund)}, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})` : 'Void complete — stock returned', 'ok')
+      setVoidItems([]); setVoidMode(false)
+      loadRecent(); loadProducts(); scanRef.current?.focus()
     } catch (e: unknown) {
       flash(e instanceof Error ? e.message : 'Void failed', 'err')
-    } finally {
-      setVoidProcessing(false)
-    }
+    } finally { setVoidProcessing(false) }
   }
 
   async function voidCartItems() {
     if (!cart.length) return
     const totalBottles = cart.reduce((sum, item) => sum + item.qty, 0)
     if (!confirm(`Void ${totalBottles} bottle(s) from current cart? Inventory will be added back and cash totals reduced by refund.`)) return
-
     setVoidProcessing(true)
     try {
       const res = await fetch('/api/sales/void', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map(item => ({ productSizeId: item.productSizeId, quantityBottles: item.qty })),
-          reason: 'POS cart void/refund',
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cart.map(item => ({ productSizeId: item.productSizeId, quantityBottles: item.qty })), reason: 'POS cart void/refund' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Void failed')
-
-      const refund = data.refund as { total?: number; cash?: number; card?: number; upi?: number } | undefined
-      flash(
-        refund?.total != null
-          ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))} deducted)`
-          : 'Void complete — stock returned',
-        'ok'
-      )
-      resetSale()
-      loadRecent()
-      loadProducts()
-      scanRef.current?.focus()
+      const refund = data.refund as { total?: number; cash?: number } | undefined
+      flash(refund?.total != null ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))} deducted)` : 'Void complete — stock returned', 'ok')
+      resetSale(); loadRecent(); loadProducts(); scanRef.current?.focus()
     } catch (e: unknown) {
       flash(e instanceof Error ? e.message : 'Void failed', 'err')
-    } finally {
-      setVoidProcessing(false)
-    }
+    } finally { setVoidProcessing(false) }
   }
 
   // ── Filtered Products ──────────────────────────────────────────────────────
@@ -453,6 +512,55 @@ export default function POSPage() {
         }`}>{toast.msg}</div>
       )}
 
+      {/* ── Settle Pending Bill Modal ─────────── */}
+      {settleTarget && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-96 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg">Settle {settleTarget.billRef}</h3>
+                <p className="text-sm text-gray-500">{settleTarget.staff.name} · {settleTarget.customerName || 'No name'}</p>
+              </div>
+              <button onClick={() => setSettleTarget(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+            </div>
+
+            {/* Items */}
+            <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 max-h-40 overflow-y-auto">
+              {settleTarget.items.map(item => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}ml ×{item.quantityBottles}</span>
+                  <span className="font-semibold text-gray-900">{fmt(Number(item.totalAmount))}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center px-1">
+              <span className="text-sm text-gray-500">Total due</span>
+              <span className="text-2xl font-black text-gray-900">{fmt(Number(settleTarget.totalAmount))}</span>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Payment method</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(['CASH', 'CARD', 'UPI'] as const).map(m => (
+                  <button key={m} onClick={() => setSettleMode(m)} className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    settleMode === m ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>{m}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setSettleTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
+              <button onClick={() => settlePendingBill(settleMode)} disabled={settling}
+                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50">
+                {settling ? 'Settling...' : 'Confirm Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════
           LEFT PANEL — Products
          ═══════════════════════════════════════════════════ */}
@@ -471,18 +579,11 @@ export default function POSPage() {
                   const code = search.trim()
                   const found = products.find(p => p.barcode === code || p.product.itemCode === code)
                   if (found) {
-                    if (voidMode) {
-                      addToVoid(found)
-                      flash(`Return queued: ${found.product.name}`, 'ok')
-                    } else {
-                      addToCart(found)
-                      flash(`${found.product.name} added`, 'ok')
-                    }
+                    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name}`, 'ok') }
+                    else { addToCart(found); flash(`${found.product.name} added`, 'ok') }
                     setSearch('')
-                  }
-                  else if (filtered.length === 1) {
-                    if (voidMode) addToVoid(filtered[0])
-                    else addToCart(filtered[0])
+                  } else if (filtered.length === 1) {
+                    if (voidMode) addToVoid(filtered[0]); else addToCart(filtered[0])
                     setSearch('')
                   }
                 }
@@ -496,6 +597,13 @@ export default function POSPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Pending bills badge */}
+            {pendingCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-xs font-bold text-amber-700">{pendingCount} pending</span>
+              </div>
+            )}
             {voidMode && (
               <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
                 Void Mode
@@ -509,9 +617,7 @@ export default function POSPage() {
           {CATS.map(cat => (
             <button key={cat} onClick={() => setCategory(cat)}
               className={`px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap rounded-full transition-all ${
-                category === cat
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                category === cat ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
               }`}>{cat}</button>
           ))}
         </div>
@@ -538,8 +644,7 @@ export default function POSPage() {
                   ps.product.category === 'RUM' ? 'bg-orange-400' :
                   ps.product.category === 'VODKA' ? 'bg-sky-400' :
                   ps.product.category === 'BEER' ? 'bg-yellow-300' :
-                  ps.product.category === 'WINE' ? 'bg-rose-400' :
-                  'bg-slate-300'
+                  ps.product.category === 'WINE' ? 'bg-rose-400' : 'bg-slate-300'
                 return (
                   <button key={ps.id} onClick={() => (voidMode ? addToVoid(ps) : addToCart(ps))} disabled={disabled}
                     className={`relative text-left rounded-xl overflow-hidden transition-all duration-150 flex flex-col ${
@@ -548,31 +653,19 @@ export default function POSPage() {
                         : voidMode ? 'bg-white border border-red-200 hover:shadow-lg hover:border-red-400 cursor-pointer'
                         : 'bg-white hover:shadow-lg hover:shadow-slate-200/80 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer border border-slate-200/80'
                     }`}>
-                    {/* Colored top strip */}
                     <div className={`h-1 w-full ${catColor} flex-shrink-0`} />
                     <div className="p-3.5 flex flex-col flex-1">
-                      {/* Cart badge */}
                       {inCart && (
                         <span className="absolute top-2 right-2 min-w-[20px] h-5 bg-blue-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold px-1 shadow">
                           {inCart.qty}
                         </span>
                       )}
-                      {/* Category label */}
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">{ps.product.category}</span>
-                      {/* Name */}
-                      <div className="text-[12px] font-bold text-slate-800 leading-snug line-clamp-2 flex-1 mb-2">
-                        {ps.product.name}
-                      </div>
-                      {/* Size */}
+                      <div className="text-[12px] font-bold text-slate-800 leading-snug line-clamp-2 flex-1 mb-2">{ps.product.name}</div>
                       <div className="text-[10px] text-slate-400 font-medium mb-2">{ps.sizeMl}ml</div>
-                      {/* Price + Stock */}
                       <div className="flex items-center justify-between mt-auto">
                         <span className="text-sm font-black text-slate-900">{fmt(Number(ps.sellingPrice))}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                          oos ? 'bg-red-50 text-red-500' :
-                          ps.currentStock <= 6 ? 'bg-amber-50 text-amber-600' :
-                          'bg-emerald-50 text-emerald-600'
-                        }`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${oos ? 'bg-red-50 text-red-500' : ps.currentStock <= 6 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
                           {oos ? 'NIL' : `${ps.currentStock}`}
                         </span>
                       </div>
@@ -609,22 +702,15 @@ export default function POSPage() {
           <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-400">Bill To</div>
           <div className="grid grid-cols-5 gap-1.5">
             {topClerkOptions.map(c => (
-              <button
-                key={c.key}
-                onClick={() => setActiveClerkKey(c.key)}
+              <button key={c.key} onClick={() => setActiveClerkKey(c.key)}
                 className={`h-14 rounded-xl border px-1 text-center text-[11px] font-bold transition-all flex items-center justify-center leading-tight ${
-                  activeClerk?.key === c.key
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
-                }`}
-              >
+                  activeClerk?.key === c.key ? 'bg-blue-600 text-white border-blue-500 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                }`}>
                 <span className="line-clamp-2">{c.label}</span>
               </button>
             ))}
             {topClerkOptions.length === 0 && (
-              <div className="col-span-5 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-4 text-center text-xs font-semibold text-slate-400">
-                No active suppliers
-              </div>
+              <div className="col-span-5 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-4 text-center text-xs font-semibold text-slate-400">No active suppliers</div>
             )}
           </div>
         </div>
@@ -656,6 +742,29 @@ export default function POSPage() {
             </div>
           )}
 
+          {/* Pending bills list (when no cart) */}
+          {cart.length === 0 && pendingBills.length > 0 && (
+            <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/40">
+              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-[0.15em] mb-2">Pending Bills — Tap to Settle</p>
+              <div className="space-y-2">
+                {pendingBills.map(pb => (
+                  <button key={pb.id} onClick={() => { setSettleTarget(pb); setSettleMode('CASH') }}
+                    className="w-full text-left bg-white border border-amber-200 rounded-xl px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50 transition-all">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-black text-amber-700">{pb.billRef}</span>
+                        <span className="text-[10px] text-slate-400 ml-1.5">· {pb.staff.name}</span>
+                      </div>
+                      <span className="text-sm font-black text-slate-900">{fmt(Number(pb.totalAmount))}</span>
+                    </div>
+                    {pb.customerName && <p className="text-[10px] text-slate-500 mt-0.5">{pb.customerName}</p>}
+                    <p className="text-[10px] text-slate-400 mt-0.5">{pb.items.length} item(s) · {new Date(pb.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 px-8">
               <svg className="w-12 h-12 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -678,11 +787,9 @@ export default function POSPage() {
                   </div>
                   <div className="flex items-center justify-between mt-3 pl-6">
                     <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
-                      <button onClick={() => setQty(item.productSizeId, -1)}
-                        className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">−</button>
+                      <button onClick={() => setQty(item.productSizeId, -1)} className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">−</button>
                       <span className="w-8 text-center text-xs font-bold text-slate-800">{item.qty}</span>
-                      <button onClick={() => setQty(item.productSizeId, +1)}
-                        className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">+</button>
+                      <button onClick={() => setQty(item.productSizeId, +1)} className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">+</button>
                     </div>
                     <span className="text-sm font-black text-slate-900">{fmt(item.sellingPrice * item.qty)}</span>
                   </div>
@@ -693,7 +800,7 @@ export default function POSPage() {
         </div>
 
         {/* ── Last Sales Ticker ─────────────── */}
-        {cart.length === 0 && recentBills.length > 0 && (
+        {cart.length === 0 && recentBills.length > 0 && pendingBills.length === 0 && (
           <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-3">Recent Bills</p>
             <div className="space-y-2 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
@@ -708,11 +815,9 @@ export default function POSPage() {
                     </div>
                     <span className="text-slate-900 text-sm font-black whitespace-nowrap">{fmt(bill.totalAmount)}</span>
                   </div>
-
                   <p className="mt-1.5 text-[11px] text-slate-500 line-clamp-2">
                     {bill.items.map(i => `${i.productName} ${i.sizeMl}ml ×${i.quantityBottles}`).join(', ')}
                   </p>
-
                 </div>
               ))}
             </div>
@@ -739,11 +844,8 @@ export default function POSPage() {
             {!showPayment ? (
               <div className="px-5 pb-5">
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={voidCartItems}
-                    disabled={voidProcessing || processing}
-                    className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100"
-                  >
+                  <button onClick={voidCartItems} disabled={voidProcessing || processing}
+                    className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
                     {voidProcessing ? 'Voiding...' : 'Void / Return'}
                   </button>
                   <button onClick={() => setShowPayment(true)}
@@ -758,42 +860,48 @@ export default function POSPage() {
             ) : (
               <div className="px-5 pb-5 space-y-3">
                 {/* Payment mode buttons */}
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(['CASH', 'CARD', 'UPI', 'SPLIT'] as const).map(m => (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {(['CASH', 'CARD', 'UPI', 'SPLIT', 'PENDING'] as const).map(m => (
                     <button key={m} onClick={() => setPayMode(m)}
-                      className={`py-2.5 text-[11px] font-bold rounded-lg transition-all ${
+                      className={`py-2.5 text-[10px] font-bold rounded-lg transition-all ${
                         payMode === m
                           ? m === 'CASH' ? 'bg-emerald-600 text-white shadow-sm' :
                             m === 'SPLIT' ? 'bg-violet-600 text-white shadow-sm' :
+                            m === 'PENDING' ? 'bg-amber-500 text-white shadow-sm' :
                             'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       }`}>{m}</button>
                   ))}
                 </div>
 
-                {/* Cash — tendered */}
+                {/* Cash — tendered with autofill and change calc */}
                 {payMode === 'CASH' && (
                   <div className="bg-slate-50 rounded-xl p-3.5 space-y-2.5 border border-slate-200">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest w-16">Received</span>
-                      <input type="number" value={tendered} onChange={e => setTendered(e.target.value)}
-                        placeholder={cartTotal.toString()} autoFocus
-                        className="flex-1 w-full min-w-0 text-base px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 transition-all" />
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest w-16 shrink-0">Received</span>
+                      <input
+                        type="number"
+                        value={tendered}
+                        onChange={e => setTendered(e.target.value)}
+                        placeholder={cartTotal.toString()}
+                        autoFocus
+                        className="flex-1 w-full min-w-0 text-base px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                      />
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[{ add: 0, label: 'Exact' }, { add: 50, label: '+50' }, { add: 100, label: '+100' }, { add: 200, label: '+200' }].map((opt, i) => (
-                        <button key={i} onClick={() => setTendered(String(Math.ceil(cartTotal + opt.add)))}
-                          className="rounded-lg bg-white border border-slate-200 text-[10px] font-bold text-slate-600 py-1.5 hover:bg-slate-100">
-                          {opt.label}
-                        </button>
-                      ))}
+                    {/* Change display */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                        {tendered === '' ? 'Exact amount' : change > 0 ? 'Change Due' : tenderedNum < cartTotal ? 'Short by' : 'Exact'}
+                      </span>
+                      <span className={`text-lg font-black ${
+                        tendered === '' ? 'text-slate-400' :
+                        change > 0 ? 'text-emerald-600' :
+                        tenderedNum < cartTotal ? 'text-red-500' :
+                        'text-slate-400'
+                      }`}>
+                        {tendered === '' ? fmt(cartTotal) : change > 0 ? fmt(change) : tenderedNum < cartTotal ? fmt(cartTotal - tenderedNum) : '✓ Exact'}
+                      </span>
                     </div>
-                    {tenderedNum > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Change Due</span>
-                        <span className={`text-lg font-black ${change > 0 ? 'text-emerald-600' : 'text-slate-800'}`}>{fmt(change)}</span>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -819,28 +927,32 @@ export default function POSPage() {
                   </div>
                 )}
 
+                {/* Pending info */}
+                {payMode === 'PENDING' && (
+                  <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-sm text-amber-800">
+                    <p className="font-bold">Customer will pay later</p>
+                    <p className="text-xs text-amber-600 mt-1">A pending bill will be created. It will appear in the sidebar for settlement when payment is made.</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={voidCartItems}
-                    disabled={voidProcessing || processing}
-                    className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100"
-                  >
+                  <button onClick={voidCartItems} disabled={voidProcessing || processing}
+                    className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
                     {voidProcessing ? 'Voiding...' : 'Void / Return'}
                   </button>
                   <button onClick={completeSale} disabled={processing || voidProcessing}
                     className={`py-3.5 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
                       payMode === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/60' :
                       payMode === 'SPLIT' ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-200/60' :
+                      payMode === 'PENDING' ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200/60' :
                       'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/60'
                     }`}>
                     {processing ? (
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                        Finalizing...
+                        Saving...
                       </div>
-                    ) : (
-                      `Complete Transaction`
-                    )}
+                    ) : payMode === 'PENDING' ? 'Save as Pending' : 'Complete Transaction'}
                   </button>
                 </div>
 
@@ -855,7 +967,7 @@ export default function POSPage() {
         )}
 
         {/* Empty footer */}
-        {cart.length === 0 && recentBills.length === 0 && (
+        {cart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && (
           <div className="border-t border-[#252836] px-4 py-3 text-center">
             <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}</p>
           </div>

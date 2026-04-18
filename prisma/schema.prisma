@@ -58,6 +58,7 @@ enum PaymentMode {
   CREDIT
   SPLIT
   VOID
+  PENDING
 }
 
 enum ScanMethod {
@@ -101,13 +102,14 @@ model ProductSize {
   barcode        String?           @unique
   mrp            Decimal           @db.Decimal(10, 2)
   sellingPrice   Decimal           @db.Decimal(10, 2)
-  stockEntries   StockEntry[]
-  receiptItems   ReceiptItem[]
-  sales          Sale[]
-  adjustments    StockAdjustment[]
-  variances      VarianceRecord[]
-  indentItems    IndentItem[]
-  createdAt      DateTime          @default(now())
+  stockEntries      StockEntry[]
+  receiptItems      ReceiptItem[]
+  sales             Sale[]
+  adjustments       StockAdjustment[]
+  variances         VarianceRecord[]
+  indentItems       IndentItem[]
+  pendingBillItems  PendingBillItem[]
+  createdAt         DateTime          @default(now())
 
   @@unique([productId, sizeMl])
 }
@@ -135,6 +137,8 @@ model Staff {
   sessions           InventorySession[]
   receipts           Receipt[]
   attendanceLogs     AttendanceLog[]
+  pendingBills       PendingBill[]
+  settledBills       PendingBill[]      @relation("SettledBy")
   createdAt          DateTime           @default(now())
 }
 
@@ -289,6 +293,38 @@ model Sale {
   overrideReason   String?
   billId           String?     // groups items sold in the same transaction
   createdAt        DateTime    @default(now())
+}
+
+// ─── PENDING BILLS ───────────────────────────────────────────────────────────
+// Tracks bills where customer pays after drinking (tab / pending payment).
+// Items are stored in PendingBillItem. When settled, items become real Sale rows.
+
+model PendingBill {
+  id          Int               @id @default(autoincrement())
+  billRef     String            @unique // human-readable ref e.g. "PB-001"
+  createdAt   DateTime          @default(now())
+  saleDate    DateTime          @db.Date
+  staff       Staff             @relation(fields: [staffId], references: [id])
+  staffId     Int
+  customerName String?
+  totalAmount Decimal           @db.Decimal(10, 2)
+  settled     Boolean           @default(false)
+  settledAt   DateTime?
+  settledMode PaymentMode?      // CASH / CARD / UPI set when bill is paid
+  settledBy   Staff?            @relation("SettledBy", fields: [settledById], references: [id])
+  settledById Int?
+  items       PendingBillItem[]
+}
+
+model PendingBillItem {
+  id             Int         @id @default(autoincrement())
+  bill           PendingBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId         Int
+  productSize    ProductSize @relation(fields: [productSizeId], references: [id])
+  productSizeId  Int
+  quantityBottles Int
+  sellingPrice   Decimal     @db.Decimal(10, 2)
+  totalAmount    Decimal     @db.Decimal(10, 2)
 }
 
 // ─── STOCK ADJUSTMENTS ───────────────────────────────────────────────────────

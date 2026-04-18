@@ -107,6 +107,39 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = await req.json() as { id?: number }
+    const { id } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const staff = await prisma.staff.findUnique({ where: { id } })
+    if (!staff) return NextResponse.json({ error: 'Staff not found' }, { status: 404 })
+
+    // Block deletion if staff has sales, receipts, or adjustments tied to them
+    const [salesCount, receiptsCount] = await Promise.all([
+      prisma.sale.count({ where: { staffId: id } }),
+      prisma.receipt.count({ where: { staffId: id } }),
+    ])
+
+    if (salesCount > 0 || receiptsCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete staff with existing sales or receipt records. Deactivate them instead.' },
+        { status: 409 }
+      )
+    }
+
+    // Delete face profile + samples cascade, attendance logs, then staff
+    await prisma.attendanceLog.deleteMany({ where: { staffId: id } })
+    await prisma.staff.delete({ where: { id } })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Failed to delete staff', error)
+    return NextResponse.json({ error: 'Failed to delete staff' }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   const [, authErr] = await requireAdmin()
   if (authErr) return authErr

@@ -338,6 +338,13 @@ export async function GET(req: NextRequest) {
       totalBankDeposited: bankDeposits.reduce((s, b) => s + Number(b.amount), 0),
     }
 
+    // ── Pending bills (unsettled, created on this date) ────────────────────────
+    const [pendingUnpaid, pendingTotalAgg] = await Promise.all([
+      prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
+      prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
+    ])
+    const pendingUnpaidAmount = Number(pendingTotalAgg._sum.totalAmount ?? 0)
+
     return NextResponse.json({
       date: dateOnly,
       isToday,
@@ -346,6 +353,7 @@ export async function GET(req: NextRequest) {
         totalSales, totalExpenses,
         netCash: salesByMode.CASH - totalExpenses,
         salesByMode, totalBottlesSold, totalBills,
+        pendingUnpaid, pendingUnpaidAmount,
       },
       clerkBreakup,
       cashFlow,
