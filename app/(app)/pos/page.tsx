@@ -165,6 +165,11 @@ export default function POSPage() {
   const [settleMode, setSettleMode] = useState<'CASH' | 'CARD' | 'UPI'>('CASH')
   const [settling, setSettling] = useState(false)
 
+  // Tab picker (PENDING payment mode)
+  // null = new tab, number = id of existing tab to append to
+  const [selectedTabId, setSelectedTabId] = useState<number | null | 'NEW'>(null)
+  const [newTabName, setNewTabName] = useState('')
+
   // Crash-recovery journal
   const [orphanedTx, setOrphanedTx] = useState<TxJournal[]>([])
   const [retryingId, setRetryingId] = useState<string | null>(null)
@@ -642,41 +647,57 @@ export default function POSPage() {
 
   async function completePendingSale() {
     if (!activeClerk) return
-    setProcessing(true)
 
+    const isAppend = typeof selectedTabId === 'number'
+    const tabName = newTabName.trim()
+
+    // Validation
+    if (!isAppend && !tabName) {
+      flash('Enter a tab name or select an existing tab', 'err'); return
+    }
+
+    setProcessing(true)
     const savedCart = [...cart]
     const savedClerkKey = activeClerkKey
-    const savedCustomerName = customerName
     const total = cartTotal
     resetSale()
-    flash(`Tab opened — ${fmt(total)}`, 'ok')
+    flash(isAppend ? `Added to tab — ${fmt(total)}` : `Tab opened — ${fmt(total)}`, 'ok')
 
     try {
-      const res = await fetch('/api/pending-bills', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staffId: activeClerk.staffId,
-          customerName: savedCustomerName || null,
-          items: savedCart.map(item => ({
-            productSizeId: item.productSizeId,
-            quantityBottles: item.qty,
-            sellingPrice: item.sellingPrice,
-          })),
-        }),
-      })
+      const itemPayload = savedCart.map(item => ({
+        productSizeId: item.productSizeId,
+        quantityBottles: item.qty,
+        sellingPrice: item.sellingPrice,
+      }))
+
+      let res: Response
+      if (isAppend) {
+        res = await fetch('/api/pending-bills', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: selectedTabId, items: itemPayload }),
+        })
+      } else {
+        res = await fetch('/api/pending-bills', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffId: activeClerk.staffId, customerName: tabName, items: itemPayload }),
+        })
+      }
+
       if (!res.ok) {
         const e = await res.json()
-        setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
+        setCart(savedCart); setActiveClerkKey(savedClerkKey)
         setPayMode('PENDING'); setShowPayment(true)
-        flash(e.error || 'Failed to create pending bill', 'err')
+        flash(e.error || 'Failed to save tab', 'err')
         setLastTxErrorAt(Date.now())
         return
       }
       setLastTxSuccessAt(Date.now())
       setLastTxErrorAt(null)
+      setSelectedTabId(null)
+      setNewTabName('')
       loadPending()
     } catch (e: unknown) {
-      setCart(savedCart); setActiveClerkKey(savedClerkKey); setCustomerName(savedCustomerName)
+      setCart(savedCart); setActiveClerkKey(savedClerkKey)
       setPayMode('PENDING'); setShowPayment(true)
       flash(e instanceof Error ? e.message : 'Failed', 'err')
       setLastTxErrorAt(Date.now())
@@ -715,6 +736,7 @@ export default function POSPage() {
   function resetSale() {
     setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
     setCustomerName(''); setShowPayment(false); setActiveClerkKey('COUNTER')
+    setSelectedTabId(null); setNewTabName('')
   }
 
   function flash(msg: string, type: 'ok' | 'err') {
@@ -1241,7 +1263,7 @@ export default function POSPage() {
                 {/* Payment mode buttons */}
                 <div className="grid grid-cols-5 gap-1.5">
                   {(['CASH', 'CARD', 'UPI', 'SPLIT', 'PENDING'] as const).map(m => (
-                    <button key={m} onClick={() => setPayMode(m)}
+                    <button key={m} onClick={() => { setPayMode(m); if (m !== 'PENDING') { setSelectedTabId(null); setNewTabName('') } }}
                       className={`py-2.5 text-[10px] font-bold rounded-lg transition-all ${
                         payMode === m
                           ? m === 'CASH' ? 'bg-emerald-600 text-white shadow-sm' :
@@ -1306,18 +1328,63 @@ export default function POSPage() {
                   </div>
                 )}
 
-                {/* Tab name input */}
+                {/* Tab picker */}
                 {payMode === 'PENDING' && (
-                  <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 space-y-2.5">
-                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Tab Name</p>
-                    <input
-                      autoFocus
-                      value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                      placeholder="Customer name (e.g. Table 3, Ravi)"
-                      className="w-full px-3 py-2.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-300"
-                    />
-                    <p className="text-[10px] text-amber-600">Tab will appear in Open Tabs for settlement when they pay.</p>
+                  <div className="bg-amber-50 rounded-xl border border-amber-200 overflow-hidden">
+                    <div className="px-3.5 pt-3 pb-2">
+                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-2">Add to Tab</p>
+
+                      {/* Existing tabs */}
+                      {pendingBills.length > 0 && (
+                        <div className="space-y-1.5 mb-2">
+                          {pendingBills.map(pb => (
+                            <button
+                              key={pb.id}
+                              onClick={() => setSelectedTabId(selectedTabId === pb.id ? null : pb.id)}
+                              className={`w-full text-left rounded-lg px-3 py-2 border transition-all text-sm ${
+                                selectedTabId === pb.id
+                                  ? 'bg-amber-500 border-amber-500 text-white'
+                                  : 'bg-white border-amber-200 text-slate-700 hover:border-amber-400'
+                              }`}
+                            >
+                              <span className="font-bold">{pb.customerName || pb.billRef}</span>
+                              <span className={`ml-2 text-xs ${selectedTabId === pb.id ? 'text-amber-100' : 'text-slate-400'}`}>
+                                {fmt(Number(pb.totalAmount))} · {pb.items.length} item(s)
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* New tab row */}
+                      <button
+                        onClick={() => setSelectedTabId(selectedTabId === 'NEW' ? null : 'NEW')}
+                        className={`w-full text-left rounded-lg px-3 py-2 border transition-all text-sm font-bold ${
+                          selectedTabId === 'NEW'
+                            ? 'bg-amber-500 border-amber-500 text-white'
+                            : 'bg-white border-dashed border-amber-300 text-amber-600 hover:border-amber-500'
+                        }`}
+                      >
+                        + New Tab
+                      </button>
+
+                      {selectedTabId === 'NEW' && (
+                        <input
+                          autoFocus
+                          value={newTabName}
+                          onChange={e => setNewTabName(e.target.value)}
+                          placeholder="Customer name (e.g. Table 3, Ravi)"
+                          className="mt-2 w-full px-3 py-2.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-300"
+                        />
+                      )}
+                    </div>
+                    {selectedTabId !== null && (
+                      <div className="px-3.5 pb-2.5 text-[10px] text-amber-600">
+                        {typeof selectedTabId === 'number'
+                          ? `Items will be added to "${pendingBills.find(p => p.id === selectedTabId)?.customerName || 'this tab'}"`
+                          : 'A new tab will be opened'}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1338,7 +1405,9 @@ export default function POSPage() {
                         <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
                         Saving...
                       </div>
-                    ) : payMode === 'PENDING' ? 'Open Tab' : 'Complete Transaction'}
+                    ) : payMode === 'PENDING'
+                      ? (typeof selectedTabId === 'number' ? 'Add to Tab' : 'Open Tab')
+                      : 'Complete Transaction'}
                   </button>
                 </div>
 

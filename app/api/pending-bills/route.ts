@@ -116,6 +116,48 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(bill)
 }
 
+// PUT /api/pending-bills — append items to an existing unsettled tab
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json() as {
+    id: number
+    items: Array<{ productSizeId: number; quantityBottles: number; sellingPrice: number }>
+  }
+
+  const { id, items } = body
+  if (!id || !items?.length) return NextResponse.json({ error: 'id and items required' }, { status: 400 })
+
+  const bill = await prisma.pendingBill.findUnique({ where: { id }, include: { items: true } })
+  if (!bill) return NextResponse.json({ error: 'Tab not found' }, { status: 404 })
+  if (bill.settled) return NextResponse.json({ error: 'Tab already settled' }, { status: 409 })
+
+  const addedAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
+
+  const updated = await prisma.$transaction(async tx => {
+    await tx.pendingBillItem.createMany({
+      data: items.map(i => ({
+        billId: id,
+        productSizeId: i.productSizeId,
+        quantityBottles: i.quantityBottles,
+        sellingPrice: i.sellingPrice,
+        totalAmount: i.sellingPrice * i.quantityBottles,
+      })),
+    })
+    return tx.pendingBill.update({
+      where: { id },
+      data: { totalAmount: { increment: addedAmount } },
+      include: {
+        staff: { select: { id: true, name: true } },
+        items: { include: { productSize: { include: { product: true } } } },
+      },
+    })
+  })
+
+  return NextResponse.json(updated)
+}
+
 // PATCH /api/pending-bills — settle a pending bill
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
