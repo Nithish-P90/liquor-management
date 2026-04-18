@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
@@ -28,8 +29,70 @@ type SaleLike = {
   upiAmount: unknown
 }
 
+type PositiveSaleLine = {
+  id: number
+  saleDate: Date
+  saleTime: Date
+  productSizeId: number
+  quantityBottles: number
+  sellingPrice: unknown
+  paymentMode: SaleLike['paymentMode']
+  totalAmount: unknown
+  cashAmount: unknown
+  cardAmount: unknown
+  upiAmount: unknown
+  billId: string | null
+}
+
+type VoidTxResult = {
+  refund: RefundTotals
+  createdRows: number
+}
+
 function round2(n: number) {
   return Math.round(n * 100) / 100
+}
+
+function isRetryableWriteConflict(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034'
+}
+
+async function runWithRetry<T>(work: () => Promise<T>, maxAttempts = 4) {
+  let attempt = 0
+  let lastError: unknown = null
+  while (attempt < maxAttempts) {
+    try {
+      return await work()
+    } catch (error) {
+      lastError = error
+      attempt += 1
+      if (!isRetryableWriteConflict(error) || attempt >= maxAttempts) throw error
+      await new Promise(resolve => setTimeout(resolve, attempt * 75))
+    }
+  }
+  throw lastError
+}
+
+function buildVoidReason(sourceSaleId: number, reason: string | null) {
+  const tag = `void:sale#${sourceSaleId}`
+  return reason ? `${reason} | ${tag}` : tag
+}
+
+function buildRemainingByLifo(lines: PositiveSaleLine[], totalVoided: number) {
+  let remainingVoided = Math.max(0, totalVoided)
+  const resolved: Array<{ line: PositiveSaleLine; remainingQty: number }> = []
+
+  for (const line of lines) {
+    let remainingQty = line.quantityBottles
+    if (remainingVoided > 0) {
+      const consumed = Math.min(remainingVoided, remainingQty)
+      remainingQty -= consumed
+      remainingVoided -= consumed
+    }
+    if (remainingQty > 0) resolved.push({ line, remainingQty })
+  }
+
+  return resolved
 }
 
 function getRefundBreakup(sale: SaleLike, voidQty: number): RefundTotals {
@@ -68,12 +131,84 @@ function addRefundFromSale(refund: RefundTotals, sale: SaleLike, voidQty: number
   refund.total += amount.total
 }
 
-function parseVoidedSaleId(reason: string | null | undefined) {
-  if (!reason) return null
-  const match = reason.match(/void:sale#(\d+)/i)
-  if (!match) return null
-  const saleId = Number(match[1])
-  return Number.isInteger(saleId) && saleId > 0 ? saleId : null
+async function getNetVoidContext(tx: Prisma.TransactionClient, productSizeId: number) {
+  const [positiveLines, voidAgg] = await Promise.all([
+    tx.sale.findMany({
+      where: {
+        productSizeId,
+        quantityBottles: { gt: 0 },
+        paymentMode: { notIn: ['VOID', 'PENDING'] },
+      },
+      orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        saleDate: true,
+        saleTime: true,
+        productSizeId: true,
+        quantityBottles: true,
+        sellingPrice: true,
+        paymentMode: true,
+        totalAmount: true,
+        cashAmount: true,
+        cardAmount: true,
+        upiAmount: true,
+        billId: true,
+      },
+    }),
+    tx.sale.aggregate({
+      where: {
+        productSizeId,
+        paymentMode: 'VOID',
+        quantityBottles: { lt: 0 },
+      },
+      _sum: { quantityBottles: true },
+    }),
+  ])
+
+  const totalVoided = Math.abs(Number(voidAgg._sum.quantityBottles ?? 0))
+  const resolved = buildRemainingByLifo(positiveLines as PositiveSaleLine[], totalVoided)
+  const available = resolved.reduce((sum, r) => sum + r.remainingQty, 0)
+  return { resolved, available }
+}
+
+async function createVoidRow(tx: Prisma.TransactionClient, args: {
+  source: PositiveSaleLine
+  voidQty: number
+  reason: string | null
+  staffId: number
+  now: Date
+  today: Date
+}) {
+  const split = getRefundBreakup({
+    paymentMode: args.source.paymentMode,
+    quantityBottles: args.source.quantityBottles,
+    totalAmount: args.source.totalAmount,
+    cashAmount: args.source.cashAmount,
+    cardAmount: args.source.cardAmount,
+    upiAmount: args.source.upiAmount,
+  }, args.voidQty)
+
+  await tx.sale.create({
+    data: {
+      // Void is an event that happens now, so book it on today's saleDate.
+      saleDate: args.today,
+      saleTime: args.now,
+      staffId: args.staffId,
+      productSizeId: args.source.productSizeId,
+      quantityBottles: -args.voidQty,
+      sellingPrice: args.source.sellingPrice as number,
+      totalAmount: -round2(split.total),
+      paymentMode: 'VOID',
+      cashAmount: split.cash !== 0 ? -round2(split.cash) : null,
+      cardAmount: split.card !== 0 ? -round2(split.card) : null,
+      upiAmount: split.upi !== 0 ? -round2(split.upi) : null,
+      scanMethod: 'MANUAL',
+      billId: args.source.billId,
+      overrideReason: buildVoidReason(args.source.id, args.reason),
+    },
+  })
+
+  return split
 }
 
 function normalizeVoidItems(items: unknown): VoidItemInput[] {
@@ -100,7 +235,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
   const saleId = Number(body?.saleId ?? 0)
   const items = normalizeVoidItems(body?.items)
   const reason = typeof body?.reason === 'string' && body.reason.trim()
@@ -116,187 +251,128 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid session staff id' }, { status: 400 })
   }
 
-  const refund: RefundTotals = { cash: 0, card: 0, upi: 0, credit: 0, total: 0 }
-
   const now = new Date()
   const today = toUtcNoonDate(now)
 
-  // Backward-compatible single-sale void
-  if (saleId) {
-    const sale = await prisma.sale.findUnique({ where: { id: saleId } })
-    if (!sale) return NextResponse.json({ error: 'Sale not found' }, { status: 404 })
-
-    const priorVoids = await prisma.sale.aggregate({
-      where: {
-        paymentMode: 'VOID',
-        quantityBottles: { lt: 0 },
-        overrideReason: { contains: `void:sale#${sale.id}` },
-      },
-      _sum: { quantityBottles: true },
-    })
-    const alreadyVoided = Math.abs(Number(priorVoids._sum.quantityBottles ?? 0))
-    const remainingQty = Math.max(0, sale.quantityBottles - alreadyVoided)
-    if (remainingQty <= 0) {
-      return NextResponse.json({ error: 'Sale already fully voided' }, { status: 409 })
-    }
-
-    addRefundFromSale(refund, {
-      paymentMode: sale.paymentMode,
-      quantityBottles: sale.quantityBottles,
-      totalAmount: sale.totalAmount,
-      cashAmount: sale.cashAmount,
-      cardAmount: sale.cardAmount,
-      upiAmount: sale.upiAmount,
-    }, remainingQty)
-
-    const split = getRefundBreakup({
-      paymentMode: sale.paymentMode,
-      quantityBottles: sale.quantityBottles,
-      totalAmount: sale.totalAmount,
-      cashAmount: sale.cashAmount,
-      cardAmount: sale.cardAmount,
-      upiAmount: sale.upiAmount,
-    }, remainingQty)
-
-    // Insert a negative VOID row as audit trail instead of deleting the original
-    await prisma.sale.create({
-      data: {
-        saleDate:        sale.saleDate,
-        saleTime:        now,
-        staffId:         staffId,
-        productSizeId:   sale.productSizeId,
-        quantityBottles: -remainingQty,
-        sellingPrice:    sale.sellingPrice,
-        totalAmount:     -round2(split.total),
-        paymentMode:     'VOID',
-        cashAmount:      split.cash !== 0 ? -round2(split.cash) : null,
-        cardAmount:      split.card !== 0 ? -round2(split.card) : null,
-        upiAmount:       split.upi !== 0 ? -round2(split.upi) : null,
-        scanMethod:      'MANUAL',
-        billId:          sale.billId,
-        overrideReason:  reason ?? `void:sale#${sale.id}`,
-      },
-    })
-
-    return NextResponse.json({
-      success: true,
-      voidedLines: 1,
-      refund: {
-        cash: round2(refund.cash),
-        card: round2(refund.card),
-        upi: round2(refund.upi),
-        credit: round2(refund.credit),
-        total: round2(refund.total),
-      },
-    })
-  }
-
-  // Batch/product-based void for quick returns
+  let result: VoidTxResult
   try {
-    await prisma.$transaction(async tx => {
-      for (const item of items) {
-        const [lines, existingVoids] = await Promise.all([
-          tx.sale.findMany({
-            where: {
-              saleDate: today,
-              productSizeId: item.productSizeId,
-              quantityBottles: { gt: 0 },
-              paymentMode: { not: 'VOID' },
-            },
-            orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
-          }),
-          tx.sale.findMany({
-            where: {
-              saleDate: today,
-              productSizeId: item.productSizeId,
-              paymentMode: 'VOID',
-              quantityBottles: { lt: 0 },
-            },
-            select: { quantityBottles: true, overrideReason: true },
-          }),
-        ])
+    result = await runWithRetry(() =>
+      prisma.$transaction(async tx => {
+        const refund: RefundTotals = { cash: 0, card: 0, upi: 0, credit: 0, total: 0 }
+        let createdRows = 0
 
-        const voidedBySaleId = new Map<number, number>()
-        for (const v of existingVoids) {
-          const id = parseVoidedSaleId(v.overrideReason)
-          if (!id) continue
-          voidedBySaleId.set(id, (voidedBySaleId.get(id) ?? 0) + Math.abs(v.quantityBottles))
-        }
-
-        const candidates = lines.map(line => {
-          const alreadyVoided = voidedBySaleId.get(line.id) ?? 0
-          const remainingQty = Math.max(0, line.quantityBottles - alreadyVoided)
-          return { line, remainingQty }
-        }).filter(x => x.remainingQty > 0)
-
-        const available = candidates.reduce((sum, row) => sum + row.remainingQty, 0)
-        if (item.quantityBottles > available) {
-          throw new Error(`Only ${available} sold bottles available to void for product #${item.productSizeId}`)
-        }
-
-        let remaining = item.quantityBottles
-        for (const { line, remainingQty } of candidates) {
-          if (remaining <= 0) break
-          const voidQty = Math.min(remaining, remainingQty)
-          remaining -= voidQty
-
-          const split = getRefundBreakup({
-            paymentMode: line.paymentMode,
-            quantityBottles: line.quantityBottles,
-            totalAmount: line.totalAmount,
-            cashAmount: line.cashAmount,
-            cardAmount: line.cardAmount,
-            upiAmount: line.upiAmount,
-          }, voidQty)
-
-          addRefundFromSale(refund, {
-            paymentMode: line.paymentMode,
-            quantityBottles: line.quantityBottles,
-            totalAmount: line.totalAmount,
-            cashAmount: line.cashAmount,
-            cardAmount: line.cardAmount,
-            upiAmount: line.upiAmount,
-          }, voidQty)
-
-          // Insert a negative VOID row as audit trail
-          await tx.sale.create({
-            data: {
-              saleDate:        line.saleDate,
-              saleTime:        now,
-              staffId:         staffId,
-              productSizeId:   line.productSizeId,
-              quantityBottles: -voidQty,
-              sellingPrice:    line.sellingPrice,
-              totalAmount:     -round2(split.total),
-              paymentMode:     'VOID',
-              cashAmount:      split.cash !== 0 ? -round2(split.cash) : null,
-              cardAmount:      split.card !== 0 ? -round2(split.card) : null,
-              upiAmount:       split.upi !== 0 ? -round2(split.upi) : null,
-              scanMethod:      'MANUAL',
-              billId:          line.billId,
-              overrideReason:  reason ?? `void:sale#${line.id}`,
+        if (saleId) {
+          const sale = await tx.sale.findUnique({
+            where: { id: saleId },
+            select: {
+              id: true,
+              saleDate: true,
+              saleTime: true,
+              productSizeId: true,
+              quantityBottles: true,
+              sellingPrice: true,
+              paymentMode: true,
+              totalAmount: true,
+              cashAmount: true,
+              cardAmount: true,
+              upiAmount: true,
+              billId: true,
             },
           })
+
+          if (!sale || sale.quantityBottles <= 0 || sale.paymentMode === 'VOID' || sale.paymentMode === 'PENDING') {
+            throw new Error('Sale not found or not voidable')
+          }
+
+          const context = await getNetVoidContext(tx, sale.productSizeId)
+          const target = context.resolved.find(r => r.line.id === sale.id)
+          const remainingQty = target?.remainingQty ?? 0
+          if (remainingQty <= 0) throw new Error('Sale already fully voided')
+
+          addRefundFromSale(refund, {
+            paymentMode: sale.paymentMode,
+            quantityBottles: sale.quantityBottles,
+            totalAmount: sale.totalAmount,
+            cashAmount: sale.cashAmount,
+            cardAmount: sale.cardAmount,
+            upiAmount: sale.upiAmount,
+          }, remainingQty)
+
+          await createVoidRow(tx, {
+            source: sale as PositiveSaleLine,
+            voidQty: remainingQty,
+            reason,
+            staffId,
+            now,
+            today,
+          })
+          createdRows += 1
+
+          return { refund, createdRows }
         }
-      }
-    })
+
+        for (const item of items) {
+          const context = await getNetVoidContext(tx, item.productSizeId)
+          if (item.quantityBottles > context.available) {
+            throw new Error(`Only ${context.available} sold bottles available to void for product #${item.productSizeId}`)
+          }
+
+          let remaining = item.quantityBottles
+          for (const entry of context.resolved) {
+            if (remaining <= 0) break
+            const voidQty = Math.min(remaining, entry.remainingQty)
+            remaining -= voidQty
+
+            addRefundFromSale(refund, {
+              paymentMode: entry.line.paymentMode,
+              quantityBottles: entry.line.quantityBottles,
+              totalAmount: entry.line.totalAmount,
+              cashAmount: entry.line.cashAmount,
+              cardAmount: entry.line.cardAmount,
+              upiAmount: entry.line.upiAmount,
+            }, voidQty)
+
+            await createVoidRow(tx, {
+              source: entry.line,
+              voidQty,
+              reason,
+              staffId,
+              now,
+              today,
+            })
+            createdRows += 1
+          }
+        }
+
+        return { refund, createdRows }
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Void failed'
+    if (message === 'Sale not found or not voidable') {
+      return NextResponse.json({ error: message }, { status: 404 })
+    }
+    if (message === 'Sale already fully voided') {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
     if (message.startsWith('Only ')) {
       return NextResponse.json({ error: message }, { status: 409 })
+    }
+    if (isRetryableWriteConflict(error)) {
+      return NextResponse.json({ error: 'Temporary database contention while voiding. Please retry.' }, { status: 503 })
     }
     return NextResponse.json({ error: message }, { status: 500 })
   }
 
   return NextResponse.json({
     success: true,
-    voidedLines: items.length,
+    voidedLines: result.createdRows,
     refund: {
-      cash: round2(refund.cash),
-      card: round2(refund.card),
-      upi: round2(refund.upi),
-      credit: round2(refund.credit),
-      total: round2(refund.total),
+      cash: round2(result.refund.cash),
+      card: round2(result.refund.card),
+      upi: round2(result.refund.upi),
+      credit: round2(result.refund.credit),
+      total: round2(result.refund.total),
     },
   })
 }

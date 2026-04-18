@@ -830,7 +830,7 @@ export default function POS() {
               {todaySales.length === 0 && (
                 <p className="text-slate-500 text-sm text-center py-8">No sales recorded today.</p>
               )}
-              {[...todaySales].reverse().map(sale => (
+              {[...todaySales].reverse().filter(sale => sale.payment_mode !== 'VOID' && sale.quantity > 0).map(sale => (
                 <div key={sale.local_id} className="flex items-center gap-3 bg-slate-900/60 rounded-lg px-3 py-2.5">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-slate-200 truncate">

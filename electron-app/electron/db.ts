@@ -377,6 +377,29 @@ export function markSaleSynced(db: Database.Database, localId: string, serverId:
   db.prepare(`UPDATE pending_sales SET synced=1, server_id=? WHERE local_id=?`).run(serverId, localId)
 }
 
+function roundMoney(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+function refundBreakupForSale(sale: SaleRow): { total: number; cash: number; card: number; upi: number } {
+  const total = Math.abs(Number(sale.total_amount || 0))
+  if (sale.payment_mode === 'SPLIT') {
+    const cash = Math.abs(Number(sale.cash_amount || 0))
+    const card = Math.abs(Number(sale.card_amount || 0))
+    const upi = Math.abs(Number(sale.upi_amount || 0))
+    return {
+      total: roundMoney(cash + card + upi),
+      cash: roundMoney(cash),
+      card: roundMoney(card),
+      upi: roundMoney(upi),
+    }
+  }
+  if (sale.payment_mode === 'CASH') return { total: roundMoney(total), cash: roundMoney(total), card: 0, upi: 0 }
+  if (sale.payment_mode === 'CARD') return { total: roundMoney(total), cash: 0, card: roundMoney(total), upi: 0 }
+  if (sale.payment_mode === 'UPI') return { total: roundMoney(total), cash: 0, card: 0, upi: roundMoney(total) }
+  return { total: roundMoney(total), cash: 0, card: 0, upi: 0 }
+}
+
 /**
  * Void a sale by local_id.
  * - Restores local stock for liquor items (product_size_id != 0)
@@ -388,6 +411,9 @@ export function markSaleSynced(db: Database.Database, localId: string, serverId:
 export function voidSale(db: Database.Database, localId: string): { ok: boolean; error?: string } {
   const sale = db.prepare(`SELECT * FROM pending_sales WHERE local_id=?`).get(localId) as SaleRow | undefined
   if (!sale) return { ok: false, error: 'Sale not found' }
+  if (sale.payment_mode === 'VOID' || sale.quantity <= 0) {
+    return { ok: false, error: 'Sale already voided' }
+  }
 
   db.transaction(() => {
     // Restore local stock
@@ -395,7 +421,42 @@ export function voidSale(db: Database.Database, localId: string): { ok: boolean;
       db.prepare(`UPDATE products_cache SET stock = stock + ? WHERE size_id = ?`)
         .run(sale.quantity, sale.product_size_id)
     }
-    // Delete the pending row — if already synced, server will reconcile on next push
+
+    const alreadySynced = sale.server_id != null || sale.synced === 1
+    if (alreadySynced) {
+      const now = new Date()
+      const refund = refundBreakupForSale(sale)
+      db.prepare(`
+        INSERT INTO pending_sales
+          (local_id,sale_date,sale_time,staff_id,product_size_id,product_name,size_ml,
+           quantity,selling_price,total_amount,payment_mode,cash_amount,card_amount,
+           upi_amount,scan_method,customer_name,synced,created_at)
+        VALUES
+          (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `).run(
+        newId(),
+        now.toISOString().slice(0, 10),
+        now.toISOString(),
+        sale.staff_id,
+        sale.product_size_id,
+        sale.product_name,
+        sale.size_ml,
+        -Math.abs(sale.quantity),
+        sale.selling_price,
+        -refund.total,
+        'VOID',
+        refund.cash ? -refund.cash : null,
+        refund.card ? -refund.card : null,
+        refund.upi ? -refund.upi : null,
+        'MANUAL',
+        sale.customer_name ?? null,
+        0,
+        now.getTime(),
+      )
+    }
+
+    // Delete original row. If unsynced, this cancels the sale before cloud sync.
+    // If synced, the newly inserted VOID row will reconcile it on next push.
     db.prepare(`DELETE FROM pending_sales WHERE local_id=?`).run(localId)
   })()
 
@@ -711,9 +772,24 @@ export function getTodayTotals(db: Database.Database) {
       COUNT(CASE WHEN payment_mode != 'VOID' THEN 1 END) AS bill_count,
       SUM(CASE WHEN payment_mode != 'VOID' THEN quantity ELSE 0 END) AS total_bottles,
       SUM(total_amount)  AS gross_revenue,
-      SUM(CASE WHEN payment_mode IN ('CASH','SPLIT') THEN COALESCE(cash_amount, total_amount) ELSE 0 END) AS cash_total,
-      SUM(CASE WHEN payment_mode IN ('CARD','SPLIT') THEN COALESCE(card_amount, total_amount) ELSE 0 END) AS card_total,
-      SUM(CASE WHEN payment_mode IN ('UPI','SPLIT')  THEN COALESCE(upi_amount,  total_amount) ELSE 0 END) AS upi_total
+      SUM(CASE
+            WHEN payment_mode='CASH' THEN total_amount
+            WHEN payment_mode='SPLIT' THEN COALESCE(cash_amount, 0)
+            WHEN payment_mode='VOID' THEN COALESCE(cash_amount, 0)
+            ELSE 0
+          END) AS cash_total,
+      SUM(CASE
+            WHEN payment_mode='CARD' THEN total_amount
+            WHEN payment_mode='SPLIT' THEN COALESCE(card_amount, 0)
+            WHEN payment_mode='VOID' THEN COALESCE(card_amount, 0)
+            ELSE 0
+          END) AS card_total,
+      SUM(CASE
+            WHEN payment_mode='UPI' THEN total_amount
+            WHEN payment_mode='SPLIT' THEN COALESCE(upi_amount, 0)
+            WHEN payment_mode='VOID' THEN COALESCE(upi_amount, 0)
+            ELSE 0
+          END) AS upi_total
     FROM pending_sales
     WHERE sale_date=? AND synced != 99
   `).get(date) as {

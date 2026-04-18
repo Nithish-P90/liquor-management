@@ -374,7 +374,7 @@ export default function POSPage() {
       if (e.key === 'F3') { e.preventDefault(); setShowPayment(true); setPayMode('UPI'); return }
       if (e.key === 'F4') { e.preventDefault(); setShowPayment(true); setPayMode('CARD'); return }
       if (e.key === 'F6') { e.preventDefault(); setShowPayment(true); setPayMode('SPLIT'); return }
-      if (e.key === 'F8') { e.preventDefault(); setVoidMode(v => !v); return }
+      if (e.key === 'F8') { e.preventDefault(); toggleVoidMode(); return }
 
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
         if (e.key === 'Enter') {
@@ -840,14 +840,37 @@ export default function POSPage() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
   }
 
+  function toggleVoidMode(force?: 'on' | 'off') {
+    const next = force ? force === 'on' : !voidMode
+    if (next === voidMode) return
+
+    if (next) {
+      if (cart.length > 0) {
+        const ok = confirm('Return mode works on returned bottles only. Clear the current bill and continue?')
+        if (!ok) return
+        resetSale()
+      }
+      setShowPayment(false)
+      setVoidMode(true)
+      return
+    }
+
+    if (voidItems.length > 0) {
+      const ok = confirm('Exit return mode and clear queued return items?')
+      if (!ok) return
+    }
+    setVoidItems([])
+    setVoidMode(false)
+  }
+
   async function completeVoid() {
     if (!voidItems.length) return
-    if (!confirm(`Void ${voidItems.reduce((s, i) => s + i.qty, 0)} returned bottle(s)? Stock will be added back.`)) return
+    if (!confirm(`Process return for ${voidItems.reduce((s, i) => s + i.qty, 0)} bottle(s)? Refund and stock will be updated.`)) return
     setVoidProcessing(true)
     try {
       const res = await fetch('/api/sales/void', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })), reason: 'POS return by barcode/checkout void' }),
+        body: JSON.stringify({ items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })), reason: 'POS return queue' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Void failed')
@@ -856,26 +879,6 @@ export default function POSPage() {
       flash(refund?.total != null ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(cashRefund)}, Card ${fmt(Number(refund.card ?? 0))}, UPI ${fmt(Number(refund.upi ?? 0))})` : 'Void complete — stock returned', 'ok')
       setVoidItems([]); setVoidMode(false)
       loadRecent(); loadProducts(); scanRef.current?.focus()
-    } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : 'Void failed', 'err')
-    } finally { setVoidProcessing(false) }
-  }
-
-  async function voidCartItems() {
-    if (!cart.length) return
-    const totalBottles = cart.reduce((sum, item) => sum + item.qty, 0)
-    if (!confirm(`Void ${totalBottles} bottle(s) from current cart? Inventory will be added back and cash totals reduced by refund.`)) return
-    setVoidProcessing(true)
-    try {
-      const res = await fetch('/api/sales/void', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: cart.map(item => ({ productSizeId: item.productSizeId, quantityBottles: item.qty })), reason: 'POS cart void/refund' }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Void failed')
-      const refund = data.refund as { total?: number; cash?: number } | undefined
-      flash(refund?.total != null ? `Void complete — refund ${fmt(Number(refund.total))} (Cash ${fmt(Number(refund.cash ?? 0))} deducted)` : 'Void complete — stock returned', 'ok')
-      resetSale(); loadRecent(); loadProducts(); scanRef.current?.focus()
     } catch (e: unknown) {
       flash(e instanceof Error ? e.message : 'Void failed', 'err')
     } finally { setVoidProcessing(false) }
@@ -1096,11 +1099,17 @@ export default function POSPage() {
                 <span className="text-xs font-bold text-amber-700">{pendingCount} open {pendingCount === 1 ? 'tab' : 'tabs'}</span>
               </div>
             )}
-            {voidMode && (
-              <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
-                Void Mode
-              </span>
-            )}
+            <button
+              onClick={() => toggleVoidMode()}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                voidMode
+                  ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+              }`}
+              title="F8"
+            >
+              {voidMode ? `Return Mode (${voidItems.reduce((s, i) => s + i.qty, 0)})` : 'Return Mode'}
+            </button>
           </div>
         </div>
 
@@ -1290,7 +1299,7 @@ export default function POSPage() {
             <div className="px-4 py-3 border-b border-red-100 bg-red-50/60">
               <p className="text-[11px] font-bold text-red-700 uppercase tracking-wider">Return Queue</p>
               {voidItems.length === 0 ? (
-                <p className="text-xs text-red-500 mt-1">Scan returned bottles to queue them, then press Process Void.</p>
+                <p className="text-xs text-red-500 mt-1">Scan returned bottles to queue them, then press Process Return.</p>
               ) : (
                 <div className="mt-2 space-y-1.5">
                   {voidItems.map(item => (
@@ -1308,6 +1317,22 @@ export default function POSPage() {
                   ))}
                 </div>
               )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={completeVoid}
+                  disabled={voidProcessing || voidItems.length === 0 || processing}
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition-colors"
+                >
+                  {voidProcessing ? 'Processing...' : 'Process Return'}
+                </button>
+                <button
+                  onClick={() => toggleVoidMode('off')}
+                  disabled={voidProcessing || processing}
+                  className="px-3 py-2 border border-red-200 text-red-700 bg-white hover:bg-red-50 rounded-lg text-xs font-semibold disabled:opacity-50"
+                >
+                  Exit
+                </button>
+              </div>
             </div>
           )}
 
@@ -1390,9 +1415,17 @@ export default function POSPage() {
             {!showPayment ? (
               <div className="px-5 pb-5">
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={voidCartItems} disabled={voidProcessing || processing}
+                  <button
+                    onClick={() => {
+                      if (voidMode) {
+                        void completeVoid()
+                        return
+                      }
+                      if (confirm('Clear current bill?')) resetSale()
+                    }}
+                    disabled={voidProcessing || processing || (voidMode && voidItems.length === 0)}
                     className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
-                    {voidProcessing ? 'Voiding...' : 'Void / Return'}
+                    {voidMode ? (voidProcessing ? 'Processing...' : 'Process Return') : 'Clear Bill'}
                   </button>
                   <button onClick={() => setShowPayment(true)}
                     className="py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all active:scale-[0.98] shadow-md shadow-blue-100 flex items-center justify-center gap-2">
@@ -1536,9 +1569,17 @@ export default function POSPage() {
                 )}
 
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={voidCartItems} disabled={voidProcessing || processing}
+                  <button
+                    onClick={() => {
+                      if (voidMode) {
+                        void completeVoid()
+                        return
+                      }
+                      if (confirm('Clear current bill?')) resetSale()
+                    }}
+                    disabled={voidProcessing || processing || (voidMode && voidItems.length === 0)}
                     className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
-                    {voidProcessing ? 'Voiding...' : 'Void / Return'}
+                    {voidMode ? (voidProcessing ? 'Processing...' : 'Process Return') : 'Clear Bill'}
                   </button>
                   <button onClick={completeSale} disabled={processing || voidProcessing}
                     className={`py-3.5 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
