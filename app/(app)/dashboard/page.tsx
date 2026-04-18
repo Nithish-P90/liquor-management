@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [leaderTab, setLeaderTab] = useState<'today' | 'week' | 'month'>('week')
+  const [leaderGroupBy, setLeaderGroupBy] = useState<'product' | 'size'>('product')
 
   useEffect(() => {
     fetch('/api/reports/dashboard').then(r => r.json()).then(setData)
@@ -172,16 +173,29 @@ export default function DashboardPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-700">Top Sellers</h2>
-            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
-              {(['today', 'week', 'month'] as const).map(t => (
-                <button key={t} onClick={() => setLeaderTab(t)}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${leaderTab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                  {t === 'today' ? 'Today' : t === 'week' ? '7 Days' : '30 Days'}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+                {(['product', 'size'] as const).map(g => (
+                  <button key={g} onClick={() => setLeaderGroupBy(g)}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${leaderGroupBy === g ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    {g === 'product' ? 'By Product' : 'By Size'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+                {(['today', 'week', 'month'] as const).map(t => (
+                  <button key={t} onClick={() => setLeaderTab(t)}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${leaderTab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    {t === 'today' ? 'Today' : t === 'week' ? '7 Days' : '30 Days'}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <Leaderboard rows={leaderTab === 'today' ? data.topSellers : leaderTab === 'week' ? data.topSellersWeek : data.topSellersMonth} />
+          <Leaderboard
+            rows={leaderTab === 'today' ? data.topSellers : leaderTab === 'week' ? data.topSellersWeek : data.topSellersMonth}
+            groupBy={leaderGroupBy}
+          />
         </div>
       </div>
 
@@ -268,17 +282,81 @@ export default function DashboardPage() {
   )
 }
 
-function Leaderboard({ rows }: { rows: TopSellerRow[] | undefined }) {
+type SizeGroup = { sizeMl: number; bottles: number; amount: number; txCount: number; productCount: number }
+
+function groupBySize(rows: TopSellerRow[]): SizeGroup[] {
+  const map = new Map<number, SizeGroup>()
+  for (const r of rows) {
+    const existing = map.get(r.sizeMl)
+    if (existing) {
+      existing.bottles += r.bottles
+      existing.amount += r.amount
+      existing.txCount += r.txCount
+      existing.productCount += 1
+    } else {
+      map.set(r.sizeMl, { sizeMl: r.sizeMl, bottles: r.bottles, amount: r.amount, txCount: r.txCount, productCount: 1 })
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.bottles - a.bottles)
+}
+
+function sizeBadgeColor(sizeMl: number) {
+  if (sizeMl >= 750) return 'bg-indigo-100 text-indigo-700 border-indigo-200'
+  if (sizeMl >= 375) return 'bg-blue-100 text-blue-700 border-blue-200'
+  if (sizeMl >= 180) return 'bg-teal-100 text-teal-700 border-teal-200'
+  return 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
+function Leaderboard({ rows, groupBy }: { rows: TopSellerRow[] | undefined; groupBy: 'product' | 'size' }) {
   if (!rows || rows.length === 0) {
     return <div className="h-48 flex items-center justify-center text-slate-300 text-sm">No sales data</div>
   }
-  const maxBottles = Math.max(...rows.map(r => r.bottles), 1)
+
   const medals = ['🥇', '🥈', '🥉']
   const rankColors = [
     'text-amber-500 bg-amber-50 border-amber-200',
     'text-slate-500 bg-slate-100 border-slate-200',
     'text-orange-500 bg-orange-50 border-orange-200',
   ]
+
+  if (groupBy === 'size') {
+    const groups = groupBySize(rows)
+    const maxBottles = Math.max(...groups.map(g => g.bottles), 1)
+    return (
+      <div className="space-y-3">
+        {groups.map((g, i) => (
+          <div key={g.sizeMl}>
+            <div className="flex items-center gap-3 mb-1">
+              <div className={`w-7 h-7 flex-shrink-0 rounded-lg border flex items-center justify-center text-xs font-black ${
+                i < 3 ? rankColors[i] : 'text-slate-300 bg-white border-slate-100'
+              }`}>
+                {i < 3 ? medals[i] : i + 1}
+              </div>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black border ${sizeBadgeColor(g.sizeMl)}`}>
+                  {g.sizeMl}ml
+                </span>
+                <p className="text-[11px] text-slate-400">{g.productCount} {g.productCount === 1 ? 'product' : 'products'}</p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0 text-right">
+                <div>
+                  <p className="text-xs font-black text-slate-800">{g.bottles} <span className="font-normal text-slate-400">units</span></p>
+                  <p className="text-[10px] text-slate-400">{g.txCount} {g.txCount === 1 ? 'bill' : 'bills'}</p>
+                </div>
+                <p className="text-xs font-bold text-slate-700 w-14 text-right">{rupee(g.amount)}</p>
+              </div>
+            </div>
+            <div className="ml-10 h-1 bg-slate-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${i === 0 ? 'bg-amber-400' : i === 1 ? 'bg-slate-400' : i === 2 ? 'bg-orange-400' : 'bg-blue-300'}`}
+                style={{ width: `${(g.bottles / maxBottles) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const maxBottles = Math.max(...rows.map(r => r.bottles), 1)
   return (
     <div className="space-y-3">
       {rows.map((s, i) => (
@@ -290,8 +368,12 @@ function Leaderboard({ rows }: { rows: TopSellerRow[] | undefined }) {
               {i < 3 ? medals[i] : i + 1}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-800 truncate leading-tight">{s.name}</p>
-              <p className="text-[11px] text-slate-400">{s.sizeMl}ml</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-bold text-slate-800 truncate leading-tight">{s.name}</p>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border flex-shrink-0 ${sizeBadgeColor(s.sizeMl)}`}>
+                  {s.sizeMl}ml
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 text-right">
               <div>

@@ -133,6 +133,7 @@ export default function POSPage() {
   const [pendingCount, setPendingCount] = useState(0)
 
   const [category, setCategory] = useState('ALL')
+  const [sizeFilter, setSizeFilter] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [counterStaffId, setCounterStaffId] = useState<number | null>(null)
@@ -761,9 +762,17 @@ export default function POSPage() {
     } finally { setVoidProcessing(false) }
   }
 
+  // ── Derived: available sizes for current category ─────────────────────────
+  const availableSizes = useMemo(() => {
+    const catProducts = category === 'ALL' ? products : products.filter(p => p.product.category === category)
+    const sizes = Array.from(new Set(catProducts.map(p => p.sizeMl))).sort((a, b) => a - b)
+    return sizes
+  }, [products, category])
+
   // ── Filtered Products ──────────────────────────────────────────────────────
   const filtered = products.filter(p => {
     if (category !== 'ALL' && p.product.category !== category) return false
+    if (sizeFilter !== null && p.sizeMl !== sizeFilter) return false
     if (!search) return true
     const q = search.toLowerCase()
     return p.product.name.toLowerCase().includes(q) || p.product.itemCode.toLowerCase().includes(q)
@@ -940,12 +949,32 @@ export default function POSPage() {
         {/* ── Category Pills ───────────────── */}
         <div className="bg-white border-b border-slate-100 flex overflow-x-auto px-4 py-2.5 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
           {CATS.map(cat => (
-            <button key={cat} onClick={() => setCategory(cat)}
+            <button key={cat} onClick={() => { setCategory(cat); setSizeFilter(null) }}
               className={`px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap rounded-full transition-all ${
                 category === cat ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
               }`}>{cat}</button>
           ))}
         </div>
+
+        {/* ── Size Filter Pills ───────────────── */}
+        {availableSizes.length > 1 && (
+          <div className="bg-white border-b border-slate-100 flex overflow-x-auto px-4 py-2 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+            <button onClick={() => setSizeFilter(null)}
+              className={`px-3 py-1 text-[10px] font-bold whitespace-nowrap rounded-full transition-all ${
+                sizeFilter === null
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 border border-slate-200'
+              }`}>All Sizes</button>
+            {availableSizes.map(size => (
+              <button key={size} onClick={() => setSizeFilter(sizeFilter === size ? null : size)}
+                className={`px-3 py-1 text-[10px] font-bold whitespace-nowrap rounded-full transition-all ${
+                  sizeFilter === size
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 border border-slate-200'
+                }`}>{size}ml</button>
+            ))}
+          </div>
+        )}
 
         {/* ── Product Grid ─────────────────── */}
         <div className="flex-1 overflow-y-auto p-4" style={{ scrollbarWidth: 'none' }}>
@@ -987,7 +1016,14 @@ export default function POSPage() {
                       )}
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">{ps.product.category}</span>
                       <div className="text-[12px] font-bold text-slate-800 leading-snug line-clamp-2 flex-1 mb-2">{ps.product.name}</div>
-                      <div className="text-[10px] text-slate-400 font-medium mb-2">{ps.sizeMl}ml</div>
+                      <div className="mb-2">
+                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          ps.sizeMl >= 750 ? 'bg-indigo-50 text-indigo-600' :
+                          ps.sizeMl >= 375 ? 'bg-blue-50 text-blue-600' :
+                          ps.sizeMl >= 180 ? 'bg-teal-50 text-teal-600' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>{ps.sizeMl}ml</span>
+                      </div>
                       <div className="flex items-center justify-between mt-auto">
                         <span className="text-sm font-black text-slate-900">{fmt(Number(ps.sellingPrice))}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${oos ? 'bg-red-50 text-red-500' : ps.currentStock <= 6 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
