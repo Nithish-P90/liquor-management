@@ -284,9 +284,16 @@ export async function POST(req: NextRequest) {
             throw new Error('Sale not found or not voidable')
           }
 
-          const context = await getNetVoidContext(tx, sale.productSizeId)
-          const target = context.resolved.find(r => r.line.id === sale.id)
-          const remainingQty = target?.remainingQty ?? 0
+          const priorVoids = await tx.sale.aggregate({
+            where: {
+              paymentMode: 'VOID',
+              quantityBottles: { lt: 0 },
+              overrideReason: { contains: `void:sale#${sale.id}` },
+            },
+            _sum: { quantityBottles: true },
+          })
+          const alreadyVoided = Math.abs(Number(priorVoids._sum.quantityBottles ?? 0))
+          const remainingQty = Math.max(0, sale.quantityBottles - alreadyVoided)
           if (remainingQty <= 0) throw new Error('Sale already fully voided')
 
           addRefundFromSale(refund, {
