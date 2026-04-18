@@ -353,7 +353,7 @@ export default function POSPage() {
 
   function resetSale() {
     setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
-    setCustomerName(''); setShowPayment(false)
+    setCustomerName(''); setShowPayment(false); setActiveClerkKey('COUNTER')
   }
 
   function flash(msg: string, type: 'ok' | 'err') {
