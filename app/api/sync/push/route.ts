@@ -59,6 +59,9 @@ async function processSales(records: Record<string, unknown>[]): Promise<Ack[]> 
       // DO NOT create a stockAdjustment here — that would double-count the return.
       if (r.payment_mode === 'VOID') {
         const qty = Math.abs(r.quantity as number) // stored as negative locally
+        const rawTotal = Number(r.total_amount ?? 0)
+        const fallbackTotal = Number(r.selling_price ?? 0) * qty
+        const refundTotal = -Math.abs(rawTotal !== 0 ? rawTotal : fallbackTotal)
         const sale = await prisma.sale.create({
           data: {
             saleDate,
@@ -67,9 +70,9 @@ async function processSales(records: Record<string, unknown>[]): Promise<Ack[]> 
             productSizeId: r.product_size_id as number,
             quantityBottles: -(qty),
             sellingPrice: r.selling_price as number,
-            totalAmount: 0,
+            totalAmount: refundTotal,
             paymentMode: 'VOID',
-            cashAmount: null,
+            cashAmount: refundTotal,
             cardAmount: null,
             upiAmount: null,
             scanMethod: 'MANUAL',

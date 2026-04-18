@@ -39,16 +39,19 @@ function hasDiff(a: number, b: number) {
 }
 
 async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> {
-  const sales = await prisma.sale.findMany({
-    where: { saleDate: recordDate },
-    select: {
-      paymentMode: true,
-      totalAmount: true,
-      cashAmount: true,
-      cardAmount: true,
-      upiAmount: true,
-    },
-  })
+  const [sales, miscAgg] = await Promise.all([
+    prisma.sale.findMany({
+      where: { saleDate: recordDate },
+      select: {
+        paymentMode: true,
+        totalAmount: true,
+        cashAmount: true,
+        cardAmount: true,
+        upiAmount: true,
+      },
+    }),
+    prisma.miscSale.aggregate({ where: { saleDate: recordDate }, _sum: { totalAmount: true } }),
+  ])
 
   const totals: PaymentTotals = { cash: 0, card: 0, upi: 0, credit: 0 }
 
@@ -73,19 +76,16 @@ async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> 
         totals.upi += asMoney(sale.upiAmount)
         break
       case 'VOID': {
-        const cash = asMoney(sale.cashAmount)
-        const card = asMoney(sale.cardAmount)
-        const upi = asMoney(sale.upiAmount)
-        totals.cash += cash
-        totals.card += card
-        totals.upi += upi
-        totals.credit += totalAmount - cash - card - upi
+        // Refunds are paid in cash, so VOID always reduces cash tally.
+        totals.cash += totalAmount
         break
       }
       default:
         break
     }
   }
+
+  totals.cash += asMoney(miscAgg._sum.totalAmount)
 
   return {
     cash: round2(totals.cash),

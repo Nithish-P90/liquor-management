@@ -24,7 +24,13 @@ type DaySummary = {
       upi: number
       credit: number
       split: number
+      misc: number
     }
+  }
+  miscSales: {
+    totalAmount: number
+    items: number
+    entries: number
   }
   lastSale: {
     id: number
@@ -133,7 +139,9 @@ export default function CashPage() {
   const expectedClosing = form.openingRegister + form.cashSales - form.expenses - form.cashToLocker
   const maxTransfer = Math.max(0, form.openingRegister + form.cashSales - form.expenses)
   const registerVar = form.closingRegister - expectedClosing
-  const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0 }, [summary])
+  const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0, misc: 0 }, [summary])
+  const miscSalesTotal = summary?.miscSales.totalAmount ?? systemSales.misc
+  const liquorCashSales = Math.max(0, systemSales.cash - miscSalesTotal)
   const totalSales = form.cashSales + form.cardSales + form.upiSales
   const systemTotal = systemSales.cash + systemSales.card + systemSales.upi
   const verifyDiff = useMemo(
@@ -283,6 +291,8 @@ export default function CashPage() {
             <p className="text-2xl font-bold text-blue-700">{rupee(systemTotal)}</p>
             <div className="mt-2 text-xs text-blue-500 space-y-0.5">
               <div className="flex justify-between"><span>Cash</span><span className="font-semibold">{rupee(systemSales.cash)}</span></div>
+              <div className="flex justify-between"><span>Liquor Cash</span><span className="font-semibold">{rupee(liquorCashSales)}</span></div>
+              <div className="flex justify-between"><span>Misc Cash</span><span className="font-semibold">{rupee(miscSalesTotal)}</span></div>
               <div className="flex justify-between"><span>Card</span><span className="font-semibold">{rupee(systemSales.card)}</span></div>
               <div className="flex justify-between"><span>UPI</span><span className="font-semibold">{rupee(systemSales.upi)}</span></div>
             </div>
@@ -314,6 +324,7 @@ export default function CashPage() {
             <tbody className="divide-y divide-slate-50">
               {[
                 { label: 'Cash Sales', system: systemSales.cash, manual: form.cashSales, diff: verifyDiff.cash },
+                { label: 'Misc Sales (included in cash)', system: miscSalesTotal, manual: miscSalesTotal, diff: 0 },
                 { label: 'Card Sales', system: systemSales.card, manual: form.cardSales, diff: verifyDiff.card },
                 { label: 'UPI Sales', system: systemSales.upi, manual: form.upiSales, diff: verifyDiff.upi },
                 { label: 'Expenditure', system: summary?.expenses.total ?? 0, manual: form.expenses, diff: verifyDiff.expenses },
@@ -337,7 +348,11 @@ export default function CashPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Counter Cash (Galla)</h2>
           {renderField('Opening Balance', 'openingRegister', "Auto-carried from yesterday's closing galla", true)}
-          {renderField('Cash Sales Today', 'cashSales', 'Auto from billed cash', true)}
+          <div className="p-3 bg-cyan-50 rounded-lg text-sm flex justify-between border border-cyan-100">
+            <span className="text-cyan-700">Misc Sales (cash)</span>
+            <strong className="text-cyan-800">{rupee(miscSalesTotal)}</strong>
+          </div>
+          {renderField('Cash Sales Today', 'cashSales', 'Auto from billed cash + misc sales', true)}
           {renderField('Expenses from Counter', 'expenses', 'Auto from expenditure register', true)}
           {renderField('Transferred to Locker', 'cashToLocker', `Enter only actual transfer made. Max ${rupee(maxTransfer)}`)}
           <div className="p-3 bg-slate-50 rounded-lg text-sm flex justify-between">

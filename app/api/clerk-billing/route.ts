@@ -16,18 +16,25 @@ export async function GET(req: NextRequest) {
     ? toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
     : toUtcNoonDate(new Date())
 
-  const sales = await prisma.sale.findMany({
-    where: { saleDate: today, paymentMode: { not: 'VOID' } },
-    select: {
-      id: true,
-      saleTime: true,
-      staffId: true,
-      quantityBottles: true,
-      totalAmount: true,
-      staff: { select: { id: true, name: true, role: true } },
-    },
-    orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
-  })
+  const [sales, miscAgg] = await Promise.all([
+    prisma.sale.findMany({
+      where: { saleDate: today },
+      select: {
+        id: true,
+        saleTime: true,
+        staffId: true,
+        quantityBottles: true,
+        totalAmount: true,
+        staff: { select: { id: true, name: true, role: true } },
+      },
+      orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
+    }),
+    prisma.miscSale.aggregate({
+      where: { saleDate: today },
+      _sum: { totalAmount: true, quantity: true },
+      _count: { _all: true },
+    }),
+  ])
 
   const map = new Map<string, {
     staffId: number
@@ -41,21 +48,24 @@ export async function GET(req: NextRequest) {
     const isCounter = sale.staff.role === 'CASHIER'
     const key = isCounter ? 'COUNTER' : `STAFF:${sale.staffId}`
     const name = isCounter ? 'Counter' : sale.staff.name
+    const isRefund = sale.paymentMode === 'VOID' || sale.quantityBottles < 0
 
     const existing = map.get(key)
     if (!existing) {
       map.set(key, {
         staffId: isCounter ? 0 : sale.staffId,
         name,
-        billKeys: new Set([`${sale.staffId}:${sale.saleTime.toISOString()}`]),
-        bottles: sale.quantityBottles,
+        billKeys: new Set(isRefund ? [] : [`${sale.staffId}:${sale.saleTime.toISOString()}`]),
+        bottles: isRefund ? 0 : sale.quantityBottles,
         amount: Number(sale.totalAmount),
       })
       continue
     }
 
-    existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
-    existing.bottles += sale.quantityBottles
+    if (!isRefund) {
+      existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
+      existing.bottles += sale.quantityBottles
+    }
     existing.amount += Number(sale.totalAmount)
   }
 
@@ -69,5 +79,23 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b.amount - a.amount)
 
-  return NextResponse.json(rows)
+  const liquorRevenue = rows.reduce((sum, row) => sum + row.amount, 0)
+  const liquorBills = rows.reduce((sum, row) => sum + row.bills, 0)
+  const liquorBottles = rows.reduce((sum, row) => sum + row.bottles, 0)
+  const miscRevenue = Number(miscAgg._sum.totalAmount ?? 0)
+  const miscItems = Number(miscAgg._sum.quantity ?? 0)
+  const miscEntries = miscAgg._count._all
+
+  return NextResponse.json({
+    rows,
+    summary: {
+      liquorRevenue,
+      liquorBills,
+      liquorBottles,
+      miscRevenue,
+      miscItems,
+      miscEntries,
+      totalRevenue: liquorRevenue + miscRevenue,
+    },
+  })
 }

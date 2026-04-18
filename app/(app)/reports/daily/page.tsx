@@ -13,6 +13,9 @@ type DaySummary = {
     totalBottlesSold:    number
     totalBills:          number
     salesByMode:         Record<string, number>
+    miscSalesTotal?:     number
+    miscItemsSold?:      number
+    miscEntries?:        number
     pendingUnpaid?:      number
     pendingUnpaidAmount?: number
   }
@@ -33,6 +36,10 @@ type DayDetail = {
     id: number; time: string; productName: string; category: string
     sizeMl: number; qty: number; price: number; total: number
     paymentMode: string; staffName: string
+  }>
+  miscSales: Array<{
+    id: number; time: string; itemName: string; category: string
+    qty: number; unitPrice: number; total: number
   }>
   receipts: Array<{
     id: number; indentNumber: string; invoiceNumber: string
@@ -231,6 +238,9 @@ export default function DailyLedgerPage() {
                   <div>
                     <span className="text-gray-400 text-xs">Sales</span>
                     <div className="font-bold text-gray-900">{fmt(s.financials.totalSales)}</div>
+                    {(s.financials.miscSalesTotal ?? 0) > 0 && (
+                      <div className="text-[11px] text-cyan-600">incl misc {fmt(s.financials.miscSalesTotal ?? 0)}</div>
+                    )}
                   </div>
                   <div>
                     <span className="text-gray-400 text-xs">Expenses</span>
@@ -318,6 +328,7 @@ export default function DailyLedgerPage() {
                                   ['UPI / Digital', detail.financials.salesByMode.UPI,    'text-purple-700'],
                                   ['Card',          detail.financials.salesByMode.CARD,   'text-blue-700'],
                                   ['Credit',        detail.financials.salesByMode.CREDIT, 'text-orange-700'],
+                                  ['Misc Sales',    detail.financials.miscSalesTotal ?? 0, 'text-cyan-700'],
                                   ['Pending (Unpaid)', detail.financials.pendingUnpaidAmount ?? 0, 'text-orange-600'],
                                 ].map(([label, val, cls]) => (
                                   <div key={String(label)} className="flex justify-between px-4 py-2.5">
@@ -460,31 +471,58 @@ export default function DailyLedgerPage() {
 
                         {/* ── SALES ────────────────────────────────────────── */}
                         {activeTab === 'sales' && (
-                          <DataTable
-                            empty="No sales recorded."
-                            rows={detail.sales}
-                            cols={[
-                              { header: 'Time',    render: r => fmtT(r.time)                                                    },
-                              { header: 'Product', render: r => (
-                                <div>
-                                  <div className="font-semibold text-gray-900">{r.productName}</div>
-                                  <div className="text-xs text-gray-400">{r.category} · {r.sizeMl}ml</div>
-                                </div>
-                              )},
-                              { header: 'Qty',     render: r => r.qty + ' btl',  align: 'right'                                },
-                              { header: 'Amount',  render: r => fmt(r.total),     align: 'right'                                },
-                              { header: 'Mode',    render: r => <PayBadge mode={r.paymentMode} />                               },
-                              { header: 'Staff',   render: r => r.staffName                                                     },
-                            ]}
-                            footer={() => (
-                              <tr className="bg-gray-50 border-t border-gray-200 font-bold">
-                                <td className="px-4 py-2.5 text-gray-600" colSpan={2}>Total</td>
-                                <td className="px-4 py-2.5 text-right">{detail.financials.totalBottlesSold} btl</td>
-                                <td className="px-4 py-2.5 text-right">{fmt(detail.financials.totalSales)}</td>
-                                <td colSpan={2} />
-                              </tr>
-                            )}
-                          />
+                          <div className="space-y-4">
+                            <DataTable
+                              empty="No liquor sales recorded."
+                              rows={detail.sales}
+                              cols={[
+                                { header: 'Time',    render: r => fmtT(r.time)                                                    },
+                                { header: 'Product', render: r => (
+                                  <div>
+                                    <div className="font-semibold text-gray-900">{r.productName}</div>
+                                    <div className="text-xs text-gray-400">{r.category} · {r.sizeMl}ml</div>
+                                  </div>
+                                )},
+                                { header: 'Qty',     render: r => r.qty + ' btl',  align: 'right'                                },
+                                { header: 'Amount',  render: r => fmt(r.total),     align: 'right'                                },
+                                { header: 'Mode',    render: r => <PayBadge mode={r.paymentMode} />                               },
+                                { header: 'Staff',   render: r => r.staffName                                                     },
+                              ]}
+                              footer={() => (
+                                <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                                  <td className="px-4 py-2.5 text-gray-600" colSpan={2}>Liquor Total</td>
+                                  <td className="px-4 py-2.5 text-right">{detail.financials.totalBottlesSold} btl</td>
+                                  <td className="px-4 py-2.5 text-right">{fmt(detail.financials.totalSales - (detail.financials.miscSalesTotal ?? 0))}</td>
+                                  <td colSpan={2} />
+                                </tr>
+                              )}
+                            />
+
+                            <DataTable
+                              empty="No misc sales recorded."
+                              rows={detail.miscSales}
+                              cols={[
+                                { header: 'Time', render: r => fmtT(r.time) },
+                                { header: 'Item', render: r => (
+                                  <div>
+                                    <div className="font-semibold text-gray-900">{r.itemName}</div>
+                                    <div className="text-xs text-gray-400">{r.category}</div>
+                                  </div>
+                                ) },
+                                { header: 'Qty', render: r => r.qty, align: 'right' },
+                                { header: 'Unit Price', render: r => fmt(r.unitPrice), align: 'right' },
+                                { header: 'Amount', render: r => fmt(r.total), align: 'right' },
+                              ]}
+                              footer={() => (
+                                <tr className="bg-cyan-50 border-t border-cyan-100 font-bold text-cyan-800">
+                                  <td className="px-4 py-2.5" colSpan={2}>Misc Total</td>
+                                  <td className="px-4 py-2.5 text-right">{detail.financials.miscItemsSold ?? 0}</td>
+                                  <td className="px-4 py-2.5 text-right">Entries: {detail.financials.miscEntries ?? 0}</td>
+                                  <td className="px-4 py-2.5 text-right">{fmt(detail.financials.miscSalesTotal ?? 0)}</td>
+                                </tr>
+                              )}
+                            />
+                          </div>
                         )}
 
                         {/* ── EXPENSES ─────────────────────────────────────── */}
@@ -519,6 +557,7 @@ export default function DailyLedgerPage() {
                                 {[
                                   { label: 'Opening Register',  val: detail.cashFlow.openingRegister ?? 0,  cls: 'text-gray-700' },
                                   { label: '+ Cash Sales',      val: detail.cashFlow.cashSales ?? 0,        cls: 'text-green-700' },
+                                  { label: '  of which Misc',   val: detail.financials.miscSalesTotal ?? 0, cls: 'text-cyan-700' },
                                   { label: '− Expenses',        val: detail.cashFlow.expenses ?? 0,         cls: 'text-red-600'  },
                                   { label: '→ Moved to Locker', val: detail.cashFlow.cashToLocker ?? 0,     cls: 'text-amber-700' },
                                   { label: 'Closing Register',  val: detail.cashFlow.closingRegister ?? 0,  cls: 'text-gray-900 font-black' },

@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     // ── Fire all independent top-level queries in parallel ────────────────────
     const [
       salesRows,
+      miscRows,
       expRows,
       allStaff,
       attLogs,
@@ -52,6 +53,11 @@ export async function GET(req: NextRequest) {
           productSize: { include: { product: true } },
           staff:       { select: { id: true, name: true, role: true } },
         },
+        orderBy: { saleTime: 'asc' },
+      }),
+      prisma.miscSale.findMany({
+        where: { saleDate: dateOnly },
+        include: { item: true },
         orderBy: { saleTime: 'asc' },
       }),
       prisma.expenditure.findMany({ where: { expDate: dateOnly }, orderBy: { createdAt: 'asc' } }),
@@ -100,6 +106,16 @@ export async function GET(req: NextRequest) {
       paymentMode: s.paymentMode,
       staffId:     s.staffId,
       staffName:   s.staff.name,
+    }))
+
+    const miscSales = miscRows.map(s => ({
+      id: s.id,
+      time: s.saleTime,
+      itemName: s.item.name,
+      category: s.item.category,
+      qty: s.quantity,
+      unitPrice: Number(s.unitPrice),
+      total: Number(s.totalAmount),
     }))
 
     // ── 2. Clerk breakup ───────────────────────────────────────────────────────
@@ -262,6 +278,10 @@ export async function GET(req: NextRequest) {
       totalSales += amount; totalBottlesSold += s.quantityBottles; totalBills++
     }
 
+    const miscSalesTotal = miscSales.reduce((sum, row) => sum + row.total, 0)
+    const miscItemsSold = miscSales.reduce((sum, row) => sum + row.qty, 0)
+    const miscEntries = miscSales.length
+
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
     const closingTotal  = closingStock.reduce((s, r) => s + r.totalBottles, 0)
     const openingTotal  = openingStock.reduce((s, r) => s + r.totalBottles, 0)
@@ -282,14 +302,23 @@ export async function GET(req: NextRequest) {
       isToday,
       hasSession: !!session,
       financials: {
-        totalSales, totalExpenses,
-        netCash: salesByMode.CASH - totalExpenses,
+        totalSales: totalSales + miscSalesTotal,
+        totalExpenses,
+        netCash: salesByMode.CASH + miscSalesTotal - totalExpenses,
         salesByMode, totalBottlesSold, totalBills,
+        miscSalesTotal,
+        miscItemsSold,
+        miscEntries,
         pendingUnpaid, pendingUnpaidAmount,
       },
       clerkBreakup,
       cashFlow,
-      sales, receipts, expenses, attendance, adjustments,
+      sales,
+      miscSales,
+      receipts,
+      expenses,
+      attendance,
+      adjustments,
       openingStock, closingStock, closingTotal, openingTotal,
     })
   } catch (error: unknown) {

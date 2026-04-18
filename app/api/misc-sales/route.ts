@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import prisma from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
+import { toUtcNoonDate } from '@/lib/date-utils'
 
 function isAllowedRole(role?: string) {
-  return role === 'ADMIN' || role === 'CASHIER'
+  return role === 'ADMIN' || role === 'CASHIER' || role === 'STAFF'
 }
 
 export async function GET(req: NextRequest) {
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dateParam = req.nextUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10)
-  const saleDate = new Date(dateParam + 'T00:00:00Z')
+  const saleDate = toUtcNoonDate(new Date(dateParam + 'T12:00:00Z'))
   const sales = await prisma.miscSale.findMany({
     where: { saleDate },
     include: { item: true },
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'saleDate and items[] are required' }, { status: 400 })
   }
 
-  const saleDate = new Date(body.saleDate + 'T00:00:00Z')
+  const saleDate = toUtcNoonDate(new Date(body.saleDate + 'T12:00:00Z'))
   const now = new Date()
   const created = await prisma.$transaction(
     body.items.map((item: { itemId: number; quantity: number; unitPrice: number; totalAmount: number }) =>

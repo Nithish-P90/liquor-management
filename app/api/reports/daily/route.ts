@@ -15,12 +15,18 @@ export async function GET() {
       dates.push(d)
     }
 
-    // Find which dates actually have data (sales, expenses, or attendance)
-    const [salesDates, expDates, attDates] = await Promise.all([
+    // Find which dates actually have data (sales, misc sales, expenses, or attendance)
+    const [salesDates, miscDates, expDates, attDates] = await Promise.all([
       prisma.sale.groupBy({
         by: ['saleDate'],
         where: { saleDate: { gte: dates[dates.length - 1], lte: today }, quantityBottles: { gt: 0 } },
         _sum: { totalAmount: true, quantityBottles: true },
+        _count: { _all: true },
+      }),
+      prisma.miscSale.groupBy({
+        by: ['saleDate'],
+        where: { saleDate: { gte: dates[dates.length - 1], lte: today } },
+        _sum: { totalAmount: true, quantity: true },
         _count: { _all: true },
       }),
       prisma.expenditure.groupBy({
@@ -40,6 +46,7 @@ export async function GET() {
     // Always include today
     activeDates.add(today.toISOString())
     for (const s of salesDates) activeDates.add(new Date(s.saleDate).toISOString())
+    for (const m of miscDates)  activeDates.add(new Date(m.saleDate).toISOString())
     for (const e of expDates)   activeDates.add(new Date(e.expDate).toISOString())
     for (const a of attDates)   activeDates.add(new Date(a.date).toISOString())
 
@@ -61,6 +68,15 @@ export async function GET() {
 
     const expMap = new Map<string, number>()
     for (const e of expDates) expMap.set(new Date(e.expDate).toISOString(), Number(e._sum.amount ?? 0))
+
+    const miscMap = new Map<string, { amount: number; items: number; entries: number }>()
+    for (const m of miscDates) {
+      miscMap.set(new Date(m.saleDate).toISOString(), {
+        amount: Number(m._sum.totalAmount ?? 0),
+        items: Number(m._sum.quantity ?? 0),
+        entries: m._count._all,
+      })
+    }
 
     // For each active date get per-mode sales breakdown
     const activeDateArr = Array.from(activeDates)
@@ -97,6 +113,9 @@ export async function GET() {
       }
 
       const totalExpenses = expMap.get(key) ?? 0
+      const misc = miscMap.get(key) ?? { amount: 0, items: 0, entries: 0 }
+      const totalSalesWithMisc = totalSales + misc.amount
+      const netCash = salesByMode.CASH + misc.amount - totalExpenses
 
       // Count unsettled pending bills created on this date (parallel)
       const [pendingUnpaid, pendingTotal] = await Promise.all([
@@ -108,10 +127,13 @@ export async function GET() {
         date,
         isLive,
         financials: {
-          totalSales,
+          totalSales: totalSalesWithMisc,
           totalExpenses,
-          netCash: salesByMode.CASH - totalExpenses,
+          netCash,
           salesByMode,
+          miscSalesTotal: misc.amount,
+          miscItemsSold: misc.items,
+          miscEntries: misc.entries,
           totalBottlesSold: totalBottles,
           totalBills,
           pendingUnpaid,

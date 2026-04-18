@@ -52,7 +52,7 @@ export async function GET() {
     ...(isStaff && staffId ? { staffId } : {}),
   }
 
-  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, voidAgg, recentLines, openingEntries, closingEntries] = await Promise.all([
+  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, voidAgg, recentLines, openingEntries, closingEntries, miscAgg] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, paymentMode: 'CASH' },
       _sum: { totalAmount: true, quantityBottles: true },
@@ -104,13 +104,18 @@ export async function GET() {
           select: { totalBottles: true },
         })
       : Promise.resolve([]),
+    prisma.miscSale.aggregate({
+      where: { saleDate: today },
+      _sum: { totalAmount: true, quantity: true },
+      _count: { _all: true },
+    }),
   ])
 
   const paymentTotals = {
-    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0) + Number(voidAgg._sum.cashAmount ?? 0),
-    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0) + Number(voidAgg._sum.cardAmount ?? 0),
-    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0) + Number(voidAgg._sum.upiAmount ?? 0),
-    CREDIT: Number(creditAgg._sum.totalAmount ?? 0) + (Number(voidAgg._sum.totalAmount ?? 0) - Number(voidAgg._sum.cashAmount ?? 0) - Number(voidAgg._sum.cardAmount ?? 0) - Number(voidAgg._sum.upiAmount ?? 0)),
+    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0) + Number(voidAgg._sum.totalAmount ?? 0),
+    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0),
+    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0),
+    CREDIT: Number(creditAgg._sum.totalAmount ?? 0),
     SPLIT: 0,
   }
 
@@ -200,6 +205,11 @@ export async function GET() {
         Number(voidAgg._sum.quantityBottles ?? 0),
       amount: paymentTotals.CASH + paymentTotals.CARD + paymentTotals.UPI + paymentTotals.CREDIT,
       paymentTotals,
+    },
+    todayMiscSales: {
+      totalAmount: Number(miscAgg._sum.totalAmount ?? 0),
+      items: Number(miscAgg._sum.quantity ?? 0),
+      entries: miscAgg._count._all,
     },
     recentBills: recentBills.map(bill => ({
       id: bill.id,

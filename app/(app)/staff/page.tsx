@@ -17,6 +17,24 @@ const ROLE_COLORS: Record<string, string> = {
   OTHER: 'bg-slate-100 text-slate-500',
 }
 
+type BillingRow = {
+  staffId: number
+  name: string
+  bills: number
+  bottles: number
+  amount: number
+}
+
+type BillingSummary = {
+  liquorRevenue: number
+  liquorBills: number
+  liquorBottles: number
+  miscRevenue: number
+  miscItems: number
+  miscEntries: number
+  totalRevenue: number
+}
+
 export default function StaffPage() {
   const { data: session } = useSession()
   const user = session?.user as { id?: string; name?: string; role?: string } | undefined
@@ -50,7 +68,16 @@ export default function StaffPage() {
 
   // ── Clerk billing ──────────────────────────────────────────────────────────
   const [billingDate, setBillingDate] = useState(new Date().toISOString().slice(0, 10))
-  const [billingData, setBillingData] = useState<any[]>([])
+  const [billingData, setBillingData] = useState<BillingRow[]>([])
+  const [billingSummary, setBillingSummary] = useState<BillingSummary>({
+    liquorRevenue: 0,
+    liquorBills: 0,
+    liquorBottles: 0,
+    miscRevenue: 0,
+    miscItems: 0,
+    miscEntries: 0,
+    totalRevenue: 0,
+  })
   const [billingLoading, setBillingLoading] = useState(false)
 
   // ── Face enrollment ────────────────────────────────────────────────────────
@@ -86,9 +113,44 @@ export default function StaffPage() {
     try {
       const res = await fetch(`/api/clerk-billing?date=${billingDate}`)
       const data = await res.json()
-      setBillingData(Array.isArray(data) ? data : [])
+      if (Array.isArray(data)) {
+        const rows = data as BillingRow[]
+        const liquorRevenue = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+        setBillingData(rows)
+        setBillingSummary({
+          liquorRevenue,
+          liquorBills: rows.reduce((sum, row) => sum + Number(row.bills || 0), 0),
+          liquorBottles: rows.reduce((sum, row) => sum + Number(row.bottles || 0), 0),
+          miscRevenue: 0,
+          miscItems: 0,
+          miscEntries: 0,
+          totalRevenue: liquorRevenue,
+        })
+      } else {
+        const rows = Array.isArray(data?.rows) ? data.rows as BillingRow[] : []
+        const summary = data?.summary
+        setBillingData(rows)
+        setBillingSummary({
+          liquorRevenue: Number(summary?.liquorRevenue ?? rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
+          liquorBills: Number(summary?.liquorBills ?? rows.reduce((sum, row) => sum + Number(row.bills || 0), 0)),
+          liquorBottles: Number(summary?.liquorBottles ?? rows.reduce((sum, row) => sum + Number(row.bottles || 0), 0)),
+          miscRevenue: Number(summary?.miscRevenue ?? 0),
+          miscItems: Number(summary?.miscItems ?? 0),
+          miscEntries: Number(summary?.miscEntries ?? 0),
+          totalRevenue: Number(summary?.totalRevenue ?? rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
+        })
+      }
     } catch {
       setBillingData([])
+      setBillingSummary({
+        liquorRevenue: 0,
+        liquorBills: 0,
+        liquorBottles: 0,
+        miscRevenue: 0,
+        miscItems: 0,
+        miscEntries: 0,
+        totalRevenue: 0,
+      })
     } finally {
       setBillingLoading(false)
     }
@@ -480,69 +542,81 @@ export default function StaffPage() {
             <div className="py-16 text-center text-gray-400">Loading…</div>
           ) : (
             <div className="space-y-3">
-              {billingData.length === 0 ? (
+              {billingData.length === 0 && billingSummary.miscEntries === 0 ? (
                 <div className="py-16 text-center text-gray-400 bg-white rounded-xl border border-gray-200">No billing data for this date</div>
               ) : (
                 <>
                   {/* Summary bar */}
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="bg-white rounded-xl border border-gray-200 p-4">
                       <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Revenue</div>
-                      <div className="text-2xl font-bold text-gray-900 mt-1">₹{billingData.reduce((s, r) => s + r.amount, 0).toLocaleString('en-IN')}</div>
+                      <div className="text-2xl font-bold text-gray-900 mt-1">₹{billingSummary.totalRevenue.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="bg-white rounded-xl border border-gray-200 p-4">
-                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Bottles</div>
-                      <div className="text-2xl font-bold text-gray-900 mt-1">{billingData.reduce((s, r) => s + r.bottles, 0)}</div>
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Liquor Revenue</div>
+                      <div className="text-2xl font-bold text-gray-900 mt-1">₹{billingSummary.liquorRevenue.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="bg-white rounded-xl border border-gray-200 p-4">
-                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Bills</div>
-                      <div className="text-2xl font-bold text-gray-900 mt-1">{billingData.reduce((s, r) => s + r.bills, 0)}</div>
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Misc Revenue</div>
+                      <div className="text-2xl font-bold text-gray-900 mt-1">₹{billingSummary.miscRevenue.toLocaleString('en-IN')}</div>
+                      <div className="text-[11px] text-gray-500 mt-1">{billingSummary.miscItems} items · {billingSummary.miscEntries} entries</div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Liquor Bills</div>
+                      <div className="text-2xl font-bold text-gray-900 mt-1">{billingSummary.liquorBills}</div>
+                      <div className="text-[11px] text-gray-500 mt-1">{billingSummary.liquorBottles} bottles</div>
                     </div>
                   </div>
 
                   {/* Per-clerk table */}
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b">
-                        <tr>
-                          <th className="text-left px-4 py-3 font-semibold text-gray-600">Staff</th>
-                          <th className="text-center px-4 py-3 font-semibold text-gray-600">Bills</th>
-                          <th className="text-center px-4 py-3 font-semibold text-gray-600">Bottles</th>
-                          <th className="text-right px-4 py-3 font-semibold text-gray-600">Amount</th>
-                          <th className="text-right px-4 py-3 font-semibold text-gray-600">% of Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {billingData.map((row, i) => {
-                          const total = billingData.reduce((s, r) => s + r.amount, 0)
-                          const pct = total > 0 ? ((row.amount / total) * 100).toFixed(1) : '0.0'
-                          return (
-                            <tr key={i} className="hover:bg-gray-50/50">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <UserCheck size={14} className="text-blue-600" />
+                  {billingData.length === 0 ? (
+                    <div className="py-10 text-center text-gray-500 bg-white rounded-xl border border-gray-200">
+                      No liquor sales rows for this date. Misc totals are shown above.
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-600">Staff</th>
+                            <th className="text-center px-4 py-3 font-semibold text-gray-600">Bills</th>
+                            <th className="text-center px-4 py-3 font-semibold text-gray-600">Bottles</th>
+                            <th className="text-right px-4 py-3 font-semibold text-gray-600">Amount</th>
+                            <th className="text-right px-4 py-3 font-semibold text-gray-600">% of Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {billingData.map((row, i) => {
+                            const total = billingSummary.liquorRevenue
+                            const pct = total > 0 ? ((row.amount / total) * 100).toFixed(1) : '0.0'
+                            return (
+                              <tr key={i} className="hover:bg-gray-50/50">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <UserCheck size={14} className="text-blue-600" />
+                                    </div>
+                                    <span className="font-medium text-gray-900">{row.name}</span>
                                   </div>
-                                  <span className="font-medium text-gray-900">{row.name}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-center text-gray-700">{row.bills}</td>
-                              <td className="px-4 py-3 text-center text-gray-700">{row.bottles}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-gray-900">₹{Number(row.amount).toLocaleString('en-IN')}</td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <div className="w-20 bg-gray-100 rounded-full h-1.5">
-                                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                                </td>
+                                <td className="px-4 py-3 text-center text-gray-700">{row.bills}</td>
+                                <td className="px-4 py-3 text-center text-gray-700">{row.bottles}</td>
+                                <td className="px-4 py-3 text-right font-semibold text-gray-900">₹{Number(row.amount).toLocaleString('en-IN')}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-20 bg-gray-100 rounded-full h-1.5">
+                                      <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
                                   </div>
-                                  <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </>
               )}
             </div>

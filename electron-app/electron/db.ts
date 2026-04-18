@@ -383,21 +383,8 @@ function roundMoney(n: number): number {
 
 function refundBreakupForSale(sale: SaleRow): { total: number; cash: number; card: number; upi: number } {
   const total = Math.abs(Number(sale.total_amount || 0))
-  if (sale.payment_mode === 'SPLIT') {
-    const cash = Math.abs(Number(sale.cash_amount || 0))
-    const card = Math.abs(Number(sale.card_amount || 0))
-    const upi = Math.abs(Number(sale.upi_amount || 0))
-    return {
-      total: roundMoney(cash + card + upi),
-      cash: roundMoney(cash),
-      card: roundMoney(card),
-      upi: roundMoney(upi),
-    }
-  }
-  if (sale.payment_mode === 'CASH') return { total: roundMoney(total), cash: roundMoney(total), card: 0, upi: 0 }
-  if (sale.payment_mode === 'CARD') return { total: roundMoney(total), cash: 0, card: roundMoney(total), upi: 0 }
-  if (sale.payment_mode === 'UPI') return { total: roundMoney(total), cash: 0, card: 0, upi: roundMoney(total) }
-  return { total: roundMoney(total), cash: 0, card: 0, upi: 0 }
+  // Refunds are paid in cash, regardless of original payment mode.
+  return { total: roundMoney(total), cash: roundMoney(total), card: 0, upi: 0 }
 }
 
 /**
@@ -775,19 +762,17 @@ export function getTodayTotals(db: Database.Database) {
       SUM(CASE
             WHEN payment_mode='CASH' THEN total_amount
             WHEN payment_mode='SPLIT' THEN COALESCE(cash_amount, 0)
-            WHEN payment_mode='VOID' THEN COALESCE(cash_amount, 0)
+        WHEN payment_mode='VOID' THEN total_amount
             ELSE 0
           END) AS cash_total,
       SUM(CASE
             WHEN payment_mode='CARD' THEN total_amount
             WHEN payment_mode='SPLIT' THEN COALESCE(card_amount, 0)
-            WHEN payment_mode='VOID' THEN COALESCE(card_amount, 0)
             ELSE 0
           END) AS card_total,
       SUM(CASE
             WHEN payment_mode='UPI' THEN total_amount
             WHEN payment_mode='SPLIT' THEN COALESCE(upi_amount, 0)
-            WHEN payment_mode='VOID' THEN COALESCE(upi_amount, 0)
             ELSE 0
           END) AS upi_total
     FROM pending_sales

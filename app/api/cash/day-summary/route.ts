@@ -12,13 +12,18 @@ export async function GET(req: NextRequest) {
 
   const date = toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
 
-  const [sales, expenses, session] = await Promise.all([
+  const [sales, expenses, session, miscAgg] = await Promise.all([
     prisma.sale.findMany({ where: { saleDate: date } }),
     prisma.expenditure.findMany({ where: { expDate: date } }),
     prisma.inventorySession.findFirst({
       where: { periodStart: { lte: date }, periodEnd: { gte: date } },
       orderBy: { createdAt: 'desc' }
-    })
+    }),
+    prisma.miscSale.aggregate({
+      where: { saleDate: date },
+      _sum: { totalAmount: true, quantity: true },
+      _count: { _all: true },
+    }),
   ])
 
   const paymentTotals = {
@@ -27,6 +32,7 @@ export async function GET(req: NextRequest) {
     upi: 0,
     credit: 0,
     split: 0,
+    misc: 0,
   }
 
   sales.forEach(s => {
@@ -43,17 +49,17 @@ export async function GET(req: NextRequest) {
         paymentTotals.split += 0
         break
       case 'VOID': {
-        const cash = Number(s.cashAmount ?? 0)
-        const card = Number(s.cardAmount ?? 0)
-        const upi = Number(s.upiAmount ?? 0)
-        paymentTotals.cash += cash
-        paymentTotals.card += card
-        paymentTotals.upi += upi
-        paymentTotals.credit += amount - cash - card - upi
+        // Refunds are paid in cash, so VOID always reduces cash tally.
+        paymentTotals.cash += amount
         break
       }
     }
   })
+
+  const miscSalesTotal = Number(miscAgg._sum.totalAmount ?? 0)
+  const miscItems = Number(miscAgg._sum.quantity ?? 0)
+  paymentTotals.misc = miscSalesTotal
+  paymentTotals.cash += miscSalesTotal
 
   const closingStock = {
     taken: false,
@@ -86,8 +92,13 @@ export async function GET(req: NextRequest) {
     sales: {
       bills: sales.length,
       bottles: sales.reduce((sum, s) => sum + s.quantityBottles, 0),
-      totalAmount: sales.reduce((sum, s) => sum + Number(s.totalAmount), 0),
+      totalAmount: sales.reduce((sum, s) => sum + Number(s.totalAmount), 0) + miscSalesTotal,
       paymentTotals
+    },
+    miscSales: {
+      totalAmount: miscSalesTotal,
+      items: miscItems,
+      entries: miscAgg._count._all,
     },
     lastSale: lastSale ? {
       id: lastSale.id,

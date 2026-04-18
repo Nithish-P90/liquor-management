@@ -77,6 +77,11 @@ type RecentBill = {
     totalAmount: number
   }[]
 }
+type TodayMiscSales = {
+  totalAmount: number
+  items: number
+  entries: number
+}
 type PendingBill = {
   id: number
   billRef: string
@@ -163,6 +168,7 @@ export default function POSPage() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
   const [recentBills, setRecentBills] = useState<RecentBill[]>([])
+  const [todayMiscSales, setTodayMiscSales] = useState<TodayMiscSales>({ totalAmount: 0, items: 0, entries: 0 })
   const [pendingBills, setPendingBills] = useState<PendingBill[]>([])
   const [pendingCount, setPendingCount] = useState(0)
 
@@ -241,6 +247,15 @@ export default function POSPage() {
         ? (d as { recentBills?: unknown }).recentBills
         : undefined
       setRecentBills(Array.isArray(recent) ? recent.slice(0, 8) as RecentBill[] : [])
+
+      const misc = (d && typeof d === 'object' && 'todayMiscSales' in d)
+        ? (d as { todayMiscSales?: { totalAmount?: unknown; items?: unknown; entries?: unknown } }).todayMiscSales
+        : undefined
+      setTodayMiscSales({
+        totalAmount: Number(misc?.totalAmount ?? 0),
+        items: Number(misc?.items ?? 0),
+        entries: Number(misc?.entries ?? 0),
+      })
     } catch { /* ignore */ }
   }, [])
 
@@ -865,12 +880,20 @@ export default function POSPage() {
 
   async function completeVoid() {
     if (!voidItems.length) return
+    if (!activeClerk?.staffId) {
+      flash('Select a clerk before processing return', 'err')
+      return
+    }
     if (!confirm(`Process return for ${voidItems.reduce((s, i) => s + i.qty, 0)} bottle(s)? Refund and stock will be updated.`)) return
     setVoidProcessing(true)
     try {
       const res = await fetch('/api/sales/void', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })), reason: 'POS return queue' }),
+        body: JSON.stringify({
+          staffId: activeClerk.staffId,
+          items: voidItems.map(v => ({ productSizeId: v.productSizeId, quantityBottles: v.qty })),
+          reason: 'POS return queue',
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Void failed')
@@ -1373,6 +1396,15 @@ export default function POSPage() {
         {/* ── Last Sales Ticker ─────────────── */}
         {cart.length === 0 && recentBills.length > 0 && (
           <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
+            {todayMiscSales.totalAmount > 0 && (
+              <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700">Today Misc Sales</p>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-xs text-cyan-700">{todayMiscSales.items} items · {todayMiscSales.entries} entries</span>
+                  <span className="text-sm font-black text-cyan-900">{fmt(todayMiscSales.totalAmount)}</span>
+                </div>
+              </div>
+            )}
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-3">Recent Bills</p>
             <div className="space-y-2 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
               {recentBills.slice(0, 6).map(bill => (

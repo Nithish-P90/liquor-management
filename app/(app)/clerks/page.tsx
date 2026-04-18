@@ -9,12 +9,31 @@ type ClerkRow = {
   amount: number
 }
 
+type BillingSummary = {
+  liquorRevenue: number
+  liquorBills: number
+  liquorBottles: number
+  miscRevenue: number
+  miscItems: number
+  miscEntries: number
+  totalRevenue: number
+}
+
 function rupee(n: number) {
   return '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
 export default function ClerksPage() {
   const [data, setData] = useState<ClerkRow[]>([])
+  const [summary, setSummary] = useState<BillingSummary>({
+    liquorRevenue: 0,
+    liquorBills: 0,
+    liquorBottles: 0,
+    miscRevenue: 0,
+    miscItems: 0,
+    miscEntries: 0,
+    totalRevenue: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -23,7 +42,33 @@ export default function ClerksPage() {
     fetch(`/api/clerk-billing?date=${date}`)
       .then(r => r.json())
       .then(d => {
-        setData(d)
+        if (Array.isArray(d)) {
+          const rows = d as ClerkRow[]
+          const liquorRevenue = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+          setData(rows)
+          setSummary({
+            liquorRevenue,
+            liquorBills: rows.reduce((sum, row) => sum + Number(row.bills || 0), 0),
+            liquorBottles: rows.reduce((sum, row) => sum + Number(row.bottles || 0), 0),
+            miscRevenue: 0,
+            miscItems: 0,
+            miscEntries: 0,
+            totalRevenue: liquorRevenue,
+          })
+        } else {
+          const rows = Array.isArray(d?.rows) ? d.rows as ClerkRow[] : []
+          const nextSummary = d?.summary
+          setData(rows)
+          setSummary({
+            liquorRevenue: Number(nextSummary?.liquorRevenue ?? rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
+            liquorBills: Number(nextSummary?.liquorBills ?? rows.reduce((sum, row) => sum + Number(row.bills || 0), 0)),
+            liquorBottles: Number(nextSummary?.liquorBottles ?? rows.reduce((sum, row) => sum + Number(row.bottles || 0), 0)),
+            miscRevenue: Number(nextSummary?.miscRevenue ?? 0),
+            miscItems: Number(nextSummary?.miscItems ?? 0),
+            miscEntries: Number(nextSummary?.miscEntries ?? 0),
+            totalRevenue: Number(nextSummary?.totalRevenue ?? rows.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
+          })
+        }
         setLoading(false)
         setLastUpdated(new Date())
       })
@@ -37,9 +82,9 @@ export default function ClerksPage() {
     return () => clearInterval(interval)
   }, [load])
 
-  const totalAmount = data.reduce((s, r) => s + r.amount, 0)
-  const totalBills = data.reduce((s, r) => s + r.bills, 0)
-  const totalBottles = data.reduce((s, r) => s + r.bottles, 0)
+  const totalAmount = summary.liquorRevenue
+  const totalBills = summary.liquorBills
+  const totalBottles = summary.liquorBottles
 
   return (
     <div className="p-6 space-y-5 max-w-2xl">
@@ -70,18 +115,24 @@ export default function ClerksPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 border-l-4 border-l-blue-500 rounded-xl p-4">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Revenue</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">{rupee(summary.totalRevenue)}</p>
+        </div>
+        <div className="bg-white border border-slate-200 border-l-4 border-l-cyan-500 rounded-xl p-4">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Liquor Revenue</p>
           <p className="text-xl font-bold text-slate-900 mt-1">{rupee(totalAmount)}</p>
         </div>
         <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Bills</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">{totalBills}</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Misc Revenue</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">{rupee(summary.miscRevenue)}</p>
+          <p className="text-[11px] text-slate-500 mt-1">{summary.miscItems} items · {summary.miscEntries} entries</p>
         </div>
         <div className="bg-white border border-slate-200 border-l-4 border-l-violet-500 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Bottles</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">{totalBottles}</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Liquor Bills / Bottles</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">{totalBills}</p>
+          <p className="text-[11px] text-slate-500 mt-1">{totalBottles} bottles</p>
         </div>
       </div>
 
@@ -95,7 +146,11 @@ export default function ClerksPage() {
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : data.length === 0 ? (
-          <div className="p-10 text-center text-slate-400 text-sm">No sales recorded for this day</div>
+          <div className="p-10 text-center text-slate-400 text-sm">
+            {summary.miscEntries > 0
+              ? 'No liquor sales rows for this day. Misc totals are shown in the summary cards above.'
+              : 'No sales recorded for this day'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50/50 border-b border-slate-100">
@@ -129,7 +184,7 @@ export default function ClerksPage() {
       </div>
 
       <p className="text-xs text-slate-400">
-        Each sale is automatically attributed to the clerk who processed it. Returns and voids adjust the totals.
+        Liquor sales are attributed per clerk. Misc sales are tracked separately and included in the summary totals.
       </p>
     </div>
   )

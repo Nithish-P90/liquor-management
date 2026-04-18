@@ -78,6 +78,14 @@ function buildVoidReason(sourceSaleId: number, reason: string | null) {
   return reason ? `${reason} | ${tag}` : tag
 }
 
+function parseVoidedSaleId(reason: string | null | undefined) {
+  if (!reason) return null
+  const match = reason.match(/void:sale#(\d+)/i)
+  if (!match) return null
+  const saleId = Number(match[1])
+  return Number.isInteger(saleId) && saleId > 0 ? saleId : null
+}
+
 function buildRemainingByLifo(lines: PositiveSaleLine[], totalVoided: number) {
   let remainingVoided = Math.max(0, totalVoided)
   const resolved: Array<{ line: PositiveSaleLine; remainingQty: number }> = []
@@ -100,24 +108,15 @@ function getRefundBreakup(sale: SaleLike, voidQty: number): RefundTotals {
   const qty = Math.max(0, voidQty)
   if (!qty || sale.quantityBottles <= 0) return result
 
-  if (sale.paymentMode === 'SPLIT') {
-    const ratio = qty / sale.quantityBottles
-    const cash = Number(sale.cashAmount ?? 0) * ratio
-    const card = Number(sale.cardAmount ?? 0) * ratio
-    const upi = Number(sale.upiAmount ?? 0) * ratio
-    result.cash += cash
-    result.card += card
-    result.upi += upi
-    result.total += cash + card + upi
-    return result
+  let lineTotal = Number(sale.totalAmount ?? 0)
+  if (!Number.isFinite(lineTotal) || Math.abs(lineTotal) < 0.000001) {
+    lineTotal = Number(sale.cashAmount ?? 0) + Number(sale.cardAmount ?? 0) + Number(sale.upiAmount ?? 0)
   }
 
-  const unitAmount = Number(sale.totalAmount ?? 0) / sale.quantityBottles
+  const unitAmount = lineTotal / sale.quantityBottles
   const amount = unitAmount * qty
-  if (sale.paymentMode === 'CASH') result.cash += amount
-  else if (sale.paymentMode === 'CARD') result.card += amount
-  else if (sale.paymentMode === 'UPI') result.upi += amount
-  else if (sale.paymentMode === 'CREDIT') result.credit += amount
+  // Refunds are paid out in cash, regardless of original payment mode.
+  result.cash += amount
   result.total += amount
   return result
 }
@@ -131,10 +130,17 @@ function addRefundFromSale(refund: RefundTotals, sale: SaleLike, voidQty: number
   refund.total += amount.total
 }
 
-async function getNetVoidContext(tx: Prisma.TransactionClient, productSizeId: number) {
-  const [positiveLines, voidAgg] = await Promise.all([
+async function getNetVoidContext(
+  tx: Prisma.TransactionClient,
+  productSizeId: number,
+  sourceStaffId: number,
+  saleDate: Date,
+) {
+  const [positiveLines, voidLines] = await Promise.all([
     tx.sale.findMany({
       where: {
+        saleDate,
+        staffId: sourceStaffId,
         productSizeId,
         quantityBottles: { gt: 0 },
         paymentMode: { notIn: ['VOID', 'PENDING'] },
@@ -155,18 +161,28 @@ async function getNetVoidContext(tx: Prisma.TransactionClient, productSizeId: nu
         billId: true,
       },
     }),
-    tx.sale.aggregate({
+    tx.sale.findMany({
       where: {
+        saleDate,
         productSizeId,
         paymentMode: 'VOID',
         quantityBottles: { lt: 0 },
       },
-      _sum: { quantityBottles: true },
+      select: { quantityBottles: true, overrideReason: true },
     }),
   ])
 
-  const totalVoided = Math.abs(Number(voidAgg._sum.quantityBottles ?? 0))
-  const resolved = buildRemainingByLifo(positiveLines as PositiveSaleLine[], totalVoided)
+  const voidedBySaleId = new Map<number, number>()
+  for (const row of voidLines) {
+    const sourceSaleId = parseVoidedSaleId(row.overrideReason)
+    if (!sourceSaleId) continue
+    voidedBySaleId.set(sourceSaleId, (voidedBySaleId.get(sourceSaleId) ?? 0) + Math.abs(Number(row.quantityBottles ?? 0)))
+  }
+
+  const resolved = (positiveLines as PositiveSaleLine[])
+    .map(line => ({ line, remainingQty: Math.max(0, line.quantityBottles - (voidedBySaleId.get(line.id) ?? 0)) }))
+    .filter(x => x.remainingQty > 0)
+
   const available = resolved.reduce((sum, r) => sum + r.remainingQty, 0)
   return { resolved, available }
 }
@@ -237,6 +253,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const saleId = Number(body?.saleId ?? 0)
+  const selectedClerkStaffId = Number(body?.staffId ?? 0)
   const items = normalizeVoidItems(body?.items)
   const reason = typeof body?.reason === 'string' && body.reason.trim()
     ? body.reason.trim()
@@ -244,6 +261,10 @@ export async function POST(req: NextRequest) {
 
   if (!saleId && items.length === 0) {
     return NextResponse.json({ error: 'saleId or items[] is required' }, { status: 400 })
+  }
+
+  if (!saleId && (!Number.isInteger(selectedClerkStaffId) || selectedClerkStaffId <= 0)) {
+    return NextResponse.json({ error: 'staffId is required for item-based returns' }, { status: 400 })
   }
 
   const staffId = parseInt((session.user as { id?: string } | undefined)?.id ?? '0')
@@ -266,6 +287,7 @@ export async function POST(req: NextRequest) {
             where: { id: saleId },
             select: {
               id: true,
+              staffId: true,
               saleDate: true,
               saleTime: true,
               productSizeId: true,
@@ -282,6 +304,10 @@ export async function POST(req: NextRequest) {
 
           if (!sale || sale.quantityBottles <= 0 || sale.paymentMode === 'VOID' || sale.paymentMode === 'PENDING') {
             throw new Error('Sale not found or not voidable')
+          }
+
+          if (Number.isInteger(selectedClerkStaffId) && selectedClerkStaffId > 0 && sale.staffId !== selectedClerkStaffId) {
+            throw new Error('Selected clerk does not match the sale clerk')
           }
 
           const priorVoids = await tx.sale.aggregate({
@@ -319,7 +345,7 @@ export async function POST(req: NextRequest) {
         }
 
         for (const item of items) {
-          const context = await getNetVoidContext(tx, item.productSizeId)
+          const context = await getNetVoidContext(tx, item.productSizeId, selectedClerkStaffId, today)
           if (item.quantityBottles > context.available) {
             throw new Error(`Only ${context.available} sold bottles available to void for product #${item.productSizeId}`)
           }
@@ -360,6 +386,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 404 })
     }
     if (message === 'Sale already fully voided') {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
+    if (message === 'Selected clerk does not match the sale clerk') {
       return NextResponse.json({ error: message }, { status: 409 })
     }
     if (message.startsWith('Only ')) {
