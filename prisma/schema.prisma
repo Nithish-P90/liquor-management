@@ -137,6 +137,7 @@ model Staff {
   sessions           InventorySession[]
   receipts           Receipt[]
   attendanceLogs     AttendanceLog[]
+  miscSales          MiscSale[]
   pendingBills       PendingBill[]
   settledBills       PendingBill[]      @relation("SettledBy")
   createdAt          DateTime           @default(now())
@@ -447,6 +448,8 @@ model MiscItem {
 
 model MiscSale {
   id          Int          @id @default(autoincrement())
+  staff       Staff        @relation(fields: [staffId], references: [id])
+  staffId     Int
   item        MiscItem     @relation(fields: [itemId], references: [id])
   itemId      Int
   saleDate    DateTime     @db.Date

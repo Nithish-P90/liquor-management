@@ -34,9 +34,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  const user = session?.user as { role?: string } | undefined
+  const user = session?.user as { id?: string; role?: string } | undefined
   if (!session || !isAllowedRole(user?.role)) {
     return NextResponse.json({ error: 'Only admins and cashiers can record misc sales' }, { status: 403 })
+  }
+
+  const staffId = Number(user?.id ?? 0)
+  if (!Number.isInteger(staffId) || staffId <= 0) {
+    return NextResponse.json({ error: 'Unable to resolve staff for misc sale' }, { status: 400 })
   }
 
   const body = await req.json()
@@ -64,6 +69,7 @@ export async function POST(req: NextRequest) {
     items.map(item =>
       prisma.miscSale.create({
         data: {
+          staffId,
           itemId: Number(item.itemId),
           saleDate,
           saleTime: now,

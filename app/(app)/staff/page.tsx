@@ -22,6 +22,7 @@ type BillingRow = {
   name: string
   bills: number
   bottles: number
+  miscPieces: number
   amount: number
 }
 
@@ -581,6 +582,7 @@ export default function StaffPage() {
                             <th className="text-left px-4 py-3 font-semibold text-gray-600">Staff</th>
                             <th className="text-center px-4 py-3 font-semibold text-gray-600">Bills</th>
                             <th className="text-center px-4 py-3 font-semibold text-gray-600">Bottles</th>
+                            <th className="text-center px-4 py-3 font-semibold text-gray-600">Misc Pieces</th>
                             <th className="text-right px-4 py-3 font-semibold text-gray-600">Amount</th>
                             <th className="text-right px-4 py-3 font-semibold text-gray-600">% of Total</th>
                           </tr>
@@ -601,6 +603,7 @@ export default function StaffPage() {
                                 </td>
                                 <td className="px-4 py-3 text-center text-gray-700">{row.bills}</td>
                                 <td className="px-4 py-3 text-center text-gray-700">{row.bottles}</td>
+                                <td className="px-4 py-3 text-center text-gray-700">{row.miscPieces ?? 0}</td>
                                 <td className="px-4 py-3 text-right font-semibold text-gray-900">₹{Number(row.amount).toLocaleString('en-IN')}</td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-2">

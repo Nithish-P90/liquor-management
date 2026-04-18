@@ -18,25 +18,33 @@ export async function GET(req: NextRequest) {
   const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
   const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
 
-  const [sales, miscAgg] = await Promise.all([
+  const [sales, miscByStaff] = await Promise.all([
     prisma.sale.findMany({
       where: { saleDate: today },
       select: {
         id: true,
         saleTime: true,
         staffId: true,
+        paymentMode: true,
         quantityBottles: true,
         totalAmount: true,
         staff: { select: { id: true, name: true, role: true } },
       },
       orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
     }),
-    prisma.miscSale.aggregate({
+    prisma.miscSale.groupBy({
+      by: ['staffId'],
       where: { saleDate: { gte: dayStart, lt: nextDayStart } },
       _sum: { totalAmount: true, quantity: true },
       _count: { _all: true },
     }),
   ])
+
+  const miscStaffIds = miscByStaff.map(row => row.staffId)
+  const miscStaffRows = miscStaffIds.length > 0
+    ? await prisma.staff.findMany({ where: { id: { in: miscStaffIds } }, select: { id: true, name: true, role: true } })
+    : []
+  const miscStaffMap = new Map(miscStaffRows.map(s => [s.id, s]))
 
   const map = new Map<string, {
     staffId: number
@@ -44,7 +52,23 @@ export async function GET(req: NextRequest) {
     billKeys: Set<string>
     bottles: number
     amount: number
+    miscPieces: number
   }>()
+
+  function ensureRow(key: string, staffId: number, name: string) {
+    const existing = map.get(key)
+    if (existing) return existing
+    const created = {
+      staffId,
+      name,
+      billKeys: new Set<string>(),
+      bottles: 0,
+      amount: 0,
+      miscPieces: 0,
+    }
+    map.set(key, created)
+    return created
+  }
 
   for (const sale of sales) {
     const isCounter = sale.staff.role === 'CASHIER'
@@ -52,23 +76,23 @@ export async function GET(req: NextRequest) {
     const name = isCounter ? 'Counter' : sale.staff.name
     const isRefund = sale.paymentMode === 'VOID' || sale.quantityBottles < 0
 
-    const existing = map.get(key)
-    if (!existing) {
-      map.set(key, {
-        staffId: isCounter ? 0 : sale.staffId,
-        name,
-        billKeys: new Set(isRefund ? [] : [`${sale.staffId}:${sale.saleTime.toISOString()}`]),
-        bottles: isRefund ? 0 : sale.quantityBottles,
-        amount: Number(sale.totalAmount),
-      })
-      continue
-    }
+    const existing = ensureRow(key, isCounter ? 0 : sale.staffId, name)
 
     if (!isRefund) {
       existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
-      existing.bottles += sale.quantityBottles
     }
+    // Net bottles: returns/void rows carry negative quantityBottles and must reduce sold bottles.
+    existing.bottles += sale.quantityBottles
     existing.amount += Number(sale.totalAmount)
+  }
+
+  for (const row of miscByStaff) {
+    const staff = miscStaffMap.get(row.staffId)
+    const isCounter = staff?.role === 'CASHIER'
+    const key = isCounter ? 'COUNTER' : `STAFF:${row.staffId}`
+    const name = isCounter ? 'Counter' : (staff?.name ?? `Staff ${row.staffId}`)
+    const existing = ensureRow(key, isCounter ? 0 : row.staffId, name)
+    existing.miscPieces += Number(row._sum.quantity ?? 0)
   }
 
   const rows = Array.from(map.values())
@@ -78,15 +102,16 @@ export async function GET(req: NextRequest) {
       bills: row.billKeys.size,
       bottles: row.bottles,
       amount: row.amount,
+      miscPieces: row.miscPieces,
     }))
     .sort((a, b) => b.amount - a.amount)
 
   const liquorRevenue = rows.reduce((sum, row) => sum + row.amount, 0)
   const liquorBills = rows.reduce((sum, row) => sum + row.bills, 0)
   const liquorBottles = rows.reduce((sum, row) => sum + row.bottles, 0)
-  const miscRevenue = Number(miscAgg._sum.totalAmount ?? 0)
-  const miscItems = Number(miscAgg._sum.quantity ?? 0)
-  const miscEntries = miscAgg._count._all
+  const miscRevenue = miscByStaff.reduce((sum, row) => sum + Number(row._sum.totalAmount ?? 0), 0)
+  const miscItems = miscByStaff.reduce((sum, row) => sum + Number(row._sum.quantity ?? 0), 0)
+  const miscEntries = miscByStaff.reduce((sum, row) => sum + row._count._all, 0)
 
   return NextResponse.json({
     rows,

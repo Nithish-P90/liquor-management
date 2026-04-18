@@ -6,6 +6,7 @@ type ClerkRow = {
   name: string
   bills: number
   bottles: number
+  miscPieces: number
   amount: number
 }
 
@@ -158,6 +159,7 @@ export default function ClerksPage() {
                 <th className="text-left px-5 py-3 font-semibold text-slate-500">Clerk</th>
                 <th className="text-center px-4 py-3 font-semibold text-slate-500">Bills</th>
                 <th className="text-center px-4 py-3 font-semibold text-slate-500">Bottles</th>
+                <th className="text-center px-4 py-3 font-semibold text-slate-500">Misc Pieces</th>
                 <th className="text-right px-5 py-3 font-semibold text-slate-500">Amount</th>
               </tr>
             </thead>
@@ -167,6 +169,7 @@ export default function ClerksPage() {
                   <td className="px-5 py-3 font-semibold text-slate-800">{row.name}</td>
                   <td className="px-4 py-3 text-center text-slate-600">{row.bills}</td>
                   <td className="px-4 py-3 text-center text-slate-600">{row.bottles}</td>
+                  <td className="px-4 py-3 text-center text-slate-600">{row.miscPieces ?? 0}</td>
                   <td className="px-5 py-3 text-right font-bold text-slate-900">{rupee(row.amount)}</td>
                 </tr>
               ))}
@@ -176,6 +179,7 @@ export default function ClerksPage() {
                 <td className="px-5 py-3 font-bold text-sm">Total</td>
                 <td className="px-4 py-3 text-center font-black">{totalBills}</td>
                 <td className="px-4 py-3 text-center font-black">{totalBottles}</td>
+                <td className="px-4 py-3 text-center font-black">{summary.miscItems}</td>
                 <td className="px-5 py-3 text-right font-black">{rupee(totalAmount)}</td>
               </tr>
             </tfoot>
