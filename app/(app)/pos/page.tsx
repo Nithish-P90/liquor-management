@@ -442,10 +442,10 @@ export default function POSPage() {
     const found = products.find(p => p.barcode === code || p.product.itemCode === code)
     if (!found) { flash(`No product found: ${code}`, 'err'); return }
     playBeep()
-    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? '' : 'ml'}`, 'ok'); return }
+    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? 'pcs' : 'ml'}`, 'ok'); return }
     if (found.currentStock <= 0) { flash(`${found.product.name} — OUT OF STOCK`, 'err'); return }
     addToCart(found)
-    flash(`${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? '' : 'ml'} added`, 'ok')
+    flash(`${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? 'pcs' : 'ml'} added`, 'ok')
   }
 
   // ── Cart ────────────────────────────────────────────────────────────────────
@@ -1236,7 +1236,7 @@ export default function POSPage() {
                       <div className="mb-2">
                         {(() => {
                           const sc = SIZE_COLORS[ps.sizeMl] ?? DEFAULT_SIZE_COLOR
-                          return <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${sc.inactive}`}>{ps.sizeMl}{ps.product.category === 'MISCELLANEOUS' ? '' : 'ml'}</span>
+                          return <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${sc.inactive}`}>{ps.sizeMl}{ps.product.category === 'MISCELLANEOUS' ? 'pcs' : 'ml'}</span>
                         })()}
                       </div>
                       <div className="flex items-center justify-between mt-auto">
