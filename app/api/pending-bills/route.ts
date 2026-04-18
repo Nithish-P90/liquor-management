@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
@@ -65,58 +66,70 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'staffId and items required' }, { status: 400 })
   }
 
-  // Check stock availability for each item
-  for (const item of items) {
-    const productSize = await prisma.productSize.findUnique({
-      where: { id: item.productSizeId },
-      include: { product: { select: { category: true } } },
-    })
-    if (!productSize) {
-      return NextResponse.json({ error: `Product size ${item.productSizeId} not found` }, { status: 404 })
-    }
-    if (productSize.product.category !== 'MISCELLANEOUS') {
-      const available = await getAvailableStock(prisma, item.productSizeId)
-      if (item.quantityBottles > available) {
-        return NextResponse.json({ error: `Only ${available} bottles available for ${productSize.size}` }, { status: 409 })
-      }
-    }
-  }
-
   const today = toUtcNoonDate(new Date())
 
-  // Generate a sequential bill reference for today
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-  const count = await prisma.pendingBill.count({
-    where: { createdAt: { gte: todayStart } },
-  })
-  const billRef = `PB-${String(count + 1).padStart(3, '0')}`
+  try {
+    const bill = await prisma.$transaction(async tx => {
+      // Check stock availability inside the transaction
+      for (const item of items) {
+        const productSize = await tx.productSize.findUnique({
+          where: { id: item.productSizeId },
+          include: { product: { select: { category: true } } },
+        })
+        if (!productSize) {
+          throw new Error(`Product size ${item.productSizeId} not found`)
+        }
+        if (productSize.product.category !== 'MISCELLANEOUS') {
+          const available = await getAvailableStock(tx, item.productSizeId)
+          if (item.quantityBottles > available) {
+            throw new Error(`Only ${available} bottles available for ${productSize.sizeMl}ml`)
+          }
+        }
+      }
 
-  const totalAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
+      // Generate a sequential bill reference for today
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const count = await tx.pendingBill.count({
+        where: { createdAt: { gte: todayStart } },
+      })
+      const billRef = `PB-${String(count + 1).padStart(3, '0')}`
 
-  const bill = await prisma.pendingBill.create({
-    data: {
-      billRef,
-      saleDate: today,
-      staffId,
-      customerName: customerName || null,
-      totalAmount,
-      items: {
-        create: items.map(i => ({
-          productSizeId: i.productSizeId,
-          quantityBottles: i.quantityBottles,
-          sellingPrice: i.sellingPrice,
-          totalAmount: i.sellingPrice * i.quantityBottles,
-        })),
-      },
-    },
-    include: {
-      staff: { select: { id: true, name: true } },
-      items: { include: { productSize: { include: { product: true } } } },
-    },
-  })
+      const totalAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
 
-  return NextResponse.json(bill)
+      return tx.pendingBill.create({
+        data: {
+          billRef,
+          saleDate: today,
+          staffId,
+          customerName: customerName || null,
+          totalAmount,
+          items: {
+            create: items.map(i => ({
+              productSizeId: i.productSizeId,
+              quantityBottles: i.quantityBottles,
+              sellingPrice: i.sellingPrice,
+              totalAmount: i.sellingPrice * i.quantityBottles,
+            })),
+          },
+        },
+        include: {
+          staff: { select: { id: true, name: true } },
+          items: { include: { productSize: { include: { product: true } } } },
+        },
+      })
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
+
+    return NextResponse.json(bill)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create pending bill'
+    if (message.startsWith('Only ') || message.includes('not found')) {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
 
 // PUT /api/pending-bills — append items to an existing unsettled tab
@@ -191,13 +204,34 @@ export async function PATCH(req: NextRequest) {
   if (bill.settled) return NextResponse.json({ error: 'Bill already settled' }, { status: 409 })
 
   // Handle voiding items
+  // Note: stock is implicitly restored because getAvailableStock subtracts
+  // unsettled pending bill items — removing the items releases the reservation.
   if (voidItemIds && voidItemIds.length > 0) {
     const itemsToVoid = bill.items.filter(item => voidItemIds.includes(item.id))
     if (itemsToVoid.length === 0) return NextResponse.json({ error: 'No valid items to void' }, { status: 400 })
 
     const voidAmount = itemsToVoid.reduce((sum, item) => sum + Number(item.totalAmount), 0)
+    const voidedBottles = itemsToVoid.reduce((sum, item) => sum + item.quantityBottles, 0)
 
-    await prisma.$transaction(async tx => {
+    const result = await prisma.$transaction(async tx => {
+      // Create audit trail via stock adjustments before deleting
+      const userId = (session.user as { id?: string } | undefined)?.id
+      const createdById = userId ? parseInt(userId) : bill.staffId
+      for (const item of itemsToVoid) {
+        await tx.stockAdjustment.create({
+          data: {
+            adjustmentDate: toUtcNoonDate(new Date()),
+            productSizeId: item.productSizeId,
+            adjustmentType: 'RETURN',
+            quantityBottles: 0, // net zero — stock was reserved, now unreserved
+            reason: `Voided from pending bill ${bill.billRef}: ${item.quantityBottles} bottle(s)`,
+            createdById,
+            approved: true,
+            approvedById: createdById,
+          },
+        })
+      }
+
       await tx.pendingBillItem.deleteMany({
         where: { id: { in: voidItemIds }, billId: id },
       })
@@ -205,13 +239,19 @@ export async function PATCH(req: NextRequest) {
         where: { id },
         data: { totalAmount: { decrement: voidAmount } },
       })
+
+      // Check remaining items inside the transaction
+      const remainingItems = await tx.pendingBillItem.count({ where: { billId: id } })
+      if (remainingItems === 0) {
+        await tx.pendingBill.delete({ where: { id } })
+        return { deleted: true }
+      }
+
+      return { deleted: false }
     })
 
-    // If no items left, delete the bill
-    const remainingItems = await prisma.pendingBillItem.count({ where: { billId: id } })
-    if (remainingItems === 0) {
-      await prisma.pendingBill.delete({ where: { id } })
-      return NextResponse.json({ success: true, deleted: true })
+    if (result.deleted) {
+      return NextResponse.json({ success: true, deleted: true, voidedBottles })
     }
 
     const updatedBill = await prisma.pendingBill.findUnique({

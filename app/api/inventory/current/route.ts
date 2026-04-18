@@ -72,8 +72,10 @@ export async function GET() {
     prisma.pendingBillItem.groupBy({
       by: ['productSizeId'],
       where: {
-        bill: { settled: false },
-        ...(periodStart ? { bill: { saleDate: { gte: periodStart } } } : {}),
+        bill: {
+          settled: false,
+          ...(periodStart ? { saleDate: { gte: periodStart } } : {}),
+        },
       },
       _sum: { quantityBottles: true },
     }),

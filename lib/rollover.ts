@@ -82,7 +82,6 @@ export async function ensureDailyRollover(): Promise<EnsureDailyRolloverResult> 
     where: {
       sessionId: activePastSession.id,
       entryType: StockEntryType.CLOSING,
-      totalBottles: { gt: 0 },
     },
     select: {
       productSizeId: true,

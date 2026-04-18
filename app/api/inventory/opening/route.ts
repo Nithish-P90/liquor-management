@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { normalizeStockEntry } from '@/lib/stock-utils'
+import { requireAdmin } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  const [, authErr] = await requireAdmin()
+  if (authErr) return authErr
+
   const body = await req.json()
   const { entries } = body
 

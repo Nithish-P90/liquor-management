@@ -44,16 +44,31 @@ export async function POST(req: NextRequest) {
           receivedCases: { increment: item.casesReceived },
           receivedBottles: { increment: item.bottlesReceived },
         },
+        include: { product: true, productSize: true },
       })
 
       // Auto-update selling price = ceil(ratePerCase / bottlesPerCase * 1.25)
+      // If price went UP → update immediately
+      // If price went DOWN → keep old price, create notification (existing stock was bought at higher cost)
       if (updatedItem.ratePerCase && item.bottlesPerCase) {
         const costPerBottle = Number(updatedItem.ratePerCase) / item.bottlesPerCase
-        const sellingPrice = Math.ceil(costPerBottle * 1.25)
-        await tx.productSize.update({
-          where: { id: item.productSizeId },
-          data: { sellingPrice },
-        })
+        const newSellingPrice = Math.ceil(costPerBottle * 1.25)
+        const oldSellingPrice = Number(updatedItem.productSize.sellingPrice)
+
+        if (newSellingPrice > oldSellingPrice) {
+          await tx.productSize.update({
+            where: { id: item.productSizeId },
+            data: { sellingPrice: newSellingPrice },
+          })
+        } else if (newSellingPrice < oldSellingPrice) {
+          await tx.notification.create({
+            data: {
+              type: 'PRICE_DECREASE',
+              title: `KSBCL price dropped: ${updatedItem.product?.name ?? 'Unknown'} ${updatedItem.productSize.sizeMl}ml`,
+              body: `New purchase cost suggests selling price of ₹${newSellingPrice}, but current price is ₹${oldSellingPrice}. Update manually once existing stock is sold.`,
+            },
+          })
+        }
       }
     }
 

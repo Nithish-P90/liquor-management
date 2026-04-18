@@ -116,8 +116,8 @@ export async function POST(req: NextRequest) {
 
   const psIdArr = Array.from(psIds)
 
-  // Batch fetch receipts, sales, adjustments for all product sizes in last session
-  const [receiptItems, salesAgg, adjAgg] = await Promise.all([
+  // Batch fetch receipts, sales, adjustments, pending bills for all product sizes in last session
+  const [receiptItems, salesAgg, adjAgg, pendingAgg] = await Promise.all([
     prisma.receiptItem.findMany({
       where: {
         productSizeId: { in: psIdArr },
@@ -142,6 +142,17 @@ export async function POST(req: NextRequest) {
       },
       _sum: { quantityBottles: true },
     }),
+    prisma.pendingBillItem.groupBy({
+      by: ['productSizeId'],
+      where: {
+        productSizeId: { in: psIdArr },
+        bill: {
+          settled: false,
+          saleDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd },
+        },
+      },
+      _sum: { quantityBottles: true },
+    }),
   ])
 
   const openingMap = new Map(openingEntries.map(e => [e.productSizeId, e]))
@@ -151,6 +162,7 @@ export async function POST(req: NextRequest) {
   }
   const salesMap = new Map(salesAgg.map(s => [s.productSizeId, s._sum.quantityBottles ?? 0]))
   const adjMap = new Map(adjAgg.map(a => [a.productSizeId, a._sum.quantityBottles ?? 0]))
+  const pendingMap = new Map(pendingAgg.map(p => [p.productSizeId, p._sum.quantityBottles ?? 0]))
 
   // Fetch bottlesPerCase for each product size
   const productSizes = await prisma.productSize.findMany({
@@ -166,10 +178,8 @@ export async function POST(req: NextRequest) {
     const receipts = receiptMap.get(psId) ?? 0
     const sold = salesMap.get(psId) ?? 0
     const adj = adjMap.get(psId) ?? 0
-    const closingTotal = Math.max(0, opening + receipts + adj - sold)
-
-    if (closingTotal === 0) continue
-
+    const pending = pendingMap.get(psId) ?? 0
+    const closingTotal = Math.max(0, opening + receipts + adj - sold - pending)
     const bpc = bpcMap.get(psId) ?? 12
     computedClosing.push({
       productSizeId: psId,

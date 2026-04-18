@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { validateBearerToken } from '@/lib/api-auth'
+import { toUtcNoonDate } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,14 +15,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // IST midnight = today's date in IST
-  const now = new Date()
-  // periodStart/End = today at noon UTC (used as the date key)
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 30, 0)) // 6:30 UTC = 12:00 IST
+  // Normalize to noon UTC date key — consistent with toUtcNoonDate() used everywhere else
+  const today = toUtcNoonDate(new Date())
 
   // Don't create a duplicate session for today
   const existingToday = await prisma.inventorySession.findFirst({
-    where: { periodStart: { gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)) } },
+    where: { periodStart: { gte: today } },
   })
   if (existingToday) {
     return NextResponse.json({ message: 'Session already exists for today', sessionId: existingToday.id })
@@ -63,7 +62,7 @@ export async function GET(req: NextRequest) {
   }
 
   const psIdArr = Array.from(psIds)
-  const [receiptItems, salesAgg, adjAgg, productSizes] = await Promise.all([
+  const [receiptItems, salesAgg, adjAgg, pendingAgg, productSizes] = await Promise.all([
     prisma.receiptItem.findMany({
       where: { productSizeId: { in: psIdArr }, receipt: { receivedDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd } } },
       select: { productSizeId: true, totalBottles: true },
@@ -78,6 +77,14 @@ export async function GET(req: NextRequest) {
       where: { productSizeId: { in: psIdArr }, approved: true, adjustmentDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd } },
       _sum: { quantityBottles: true },
     }),
+    prisma.pendingBillItem.groupBy({
+      by: ['productSizeId'],
+      where: {
+        productSizeId: { in: psIdArr },
+        bill: { settled: false, saleDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd } },
+      },
+      _sum: { quantityBottles: true },
+    }),
     prisma.productSize.findMany({ where: { id: { in: psIdArr } }, select: { id: true, bottlesPerCase: true } }),
   ])
 
@@ -86,6 +93,7 @@ export async function GET(req: NextRequest) {
   for (const r of receiptItems) receiptMap.set(r.productSizeId, (receiptMap.get(r.productSizeId) ?? 0) + r.totalBottles)
   const salesMap = new Map(salesAgg.map(s => [s.productSizeId, s._sum.quantityBottles ?? 0]))
   const adjMap = new Map(adjAgg.map(a => [a.productSizeId, a._sum.quantityBottles ?? 0]))
+  const pendingMap = new Map(pendingAgg.map(p => [p.productSizeId, p._sum.quantityBottles ?? 0]))
   const bpcMap = new Map(productSizes.map(ps => [ps.id, ps.bottlesPerCase]))
 
   const computedClosing: { productSizeId: number; totalBottles: number; cases: number; bottles: number }[] = []
@@ -94,8 +102,8 @@ export async function GET(req: NextRequest) {
     const receipts = receiptMap.get(psId) ?? 0
     const sold = salesMap.get(psId) ?? 0
     const adj = adjMap.get(psId) ?? 0
-    const closingTotal = Math.max(0, opening + receipts + adj - sold)
-    if (closingTotal === 0) continue
+    const pending = pendingMap.get(psId) ?? 0
+    const closingTotal = Math.max(0, opening + receipts + adj - sold - pending)
     const bpc = bpcMap.get(psId) ?? 12
     computedClosing.push({ productSizeId: psId, totalBottles: closingTotal, cases: Math.floor(closingTotal / bpc), bottles: closingTotal % bpc })
   }

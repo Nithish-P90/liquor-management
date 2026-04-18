@@ -39,9 +39,9 @@ export async function runReconciliation(date: Date, sessionId: number) {
     })
     const receiptBottles = receiptItems.reduce((s: number, r: any) => s + r.totalBottles, 0)
 
-    // Get sales for this date
+    // Get sales for this date (exclude VOID rows which have negative qty)
     const salesAgg = await prisma.sale.aggregate({
-      where: { productSizeId: ps.id, saleDate: dateOnly },
+      where: { productSizeId: ps.id, saleDate: dateOnly, quantityBottles: { gt: 0 } },
       _sum: { quantityBottles: true },
     })
     const soldBottles = salesAgg._sum.quantityBottles ?? 0
@@ -150,47 +150,66 @@ export async function getCurrentStock(productSizeId: number, targetSessionId?: n
 
   if (opening) {
     const endBoundary = latestSession!.periodEnd < new Date() ? latestSession!.periodEnd : new Date('2099-01-01');
-    const receiptItems = await prisma.receiptItem.findMany({
-      where: {
-        productSizeId,
-        receipt: { receivedDate: { gte: latestSession!.periodStart, lte: endBoundary } },
-      },
-    })
+    const [receiptItems, salesAgg, adjAgg, pendingAgg] = await Promise.all([
+      prisma.receiptItem.findMany({
+        where: {
+          productSizeId,
+          receipt: { receivedDate: { gte: latestSession!.periodStart, lte: endBoundary } },
+        },
+      }),
+      prisma.sale.aggregate({
+        where: {
+          productSizeId,
+          saleDate: { gte: latestSession!.periodStart },
+          quantityBottles: { gt: 0 },
+        },
+        _sum: { quantityBottles: true },
+      }),
+      prisma.stockAdjustment.aggregate({
+        where: {
+          productSizeId,
+          approved: true,
+          adjustmentDate: { gte: latestSession!.periodStart },
+        },
+        _sum: { quantityBottles: true },
+      }),
+      prisma.pendingBillItem.aggregate({
+        where: {
+          productSizeId,
+          bill: {
+            settled: false,
+            saleDate: { gte: latestSession!.periodStart },
+          },
+        },
+        _sum: { quantityBottles: true },
+      }),
+    ])
     const receiptBottles = receiptItems.reduce((s: number, r: any) => s + r.totalBottles, 0)
-
-    const salesAgg = await prisma.sale.aggregate({
-      where: {
-        productSizeId,
-        saleDate: { gte: latestSession!.periodStart },
-      },
-      _sum: { quantityBottles: true },
-    })
     const soldBottles = salesAgg._sum.quantityBottles ?? 0
-
-    const adjAgg = await prisma.stockAdjustment.aggregate({
-      where: {
-        productSizeId,
-        approved: true,
-        adjustmentDate: { gte: latestSession!.periodStart },
-      },
-      _sum: { quantityBottles: true },
-    })
     const adjustmentBottles = adjAgg._sum.quantityBottles ?? 0
+    const pendingBottles = pendingAgg._sum.quantityBottles ?? 0
 
-    return (opening.totalBottles ?? 0) + receiptBottles + adjustmentBottles - soldBottles
+    return (opening.totalBottles ?? 0) + receiptBottles + adjustmentBottles - soldBottles - pendingBottles
   }
 
-  const [receiptAgg, salesAgg, adjAgg] = await Promise.all([
+  const [receiptAgg, salesAgg, adjAgg, pendingAgg] = await Promise.all([
     prisma.receiptItem.aggregate({
       where: { productSizeId },
       _sum: { totalBottles: true },
     }),
     prisma.sale.aggregate({
-      where: { productSizeId },
+      where: { productSizeId, quantityBottles: { gt: 0 } },
       _sum: { quantityBottles: true },
     }),
     prisma.stockAdjustment.aggregate({
       where: { productSizeId, approved: true },
+      _sum: { quantityBottles: true },
+    }),
+    prisma.pendingBillItem.aggregate({
+      where: {
+        productSizeId,
+        bill: { settled: false },
+      },
       _sum: { quantityBottles: true },
     }),
   ])
@@ -198,6 +217,7 @@ export async function getCurrentStock(productSizeId: number, targetSessionId?: n
   const receiptBottles = receiptAgg._sum.totalBottles ?? 0
   const soldBottles = salesAgg._sum.quantityBottles ?? 0
   const adjustmentBottles = adjAgg._sum.quantityBottles ?? 0
+  const pendingBottles = pendingAgg._sum.quantityBottles ?? 0
 
-  return receiptBottles + adjustmentBottles - soldBottles
+  return receiptBottles + adjustmentBottles - soldBottles - pendingBottles
 }
