@@ -291,6 +291,20 @@ export default function POSPage() {
   )
   const topClerkOptions = useMemo(() => clerkOptions.slice(0, 5), [clerkOptions])
 
+  const syncClerkFromTab = useCallback((tab: PendingBill | null | undefined) => {
+    if (!tab?.staff?.id) return
+    const matched = clerkOptions.find(option => option.staffId === tab.staff.id)
+    if (matched && matched.key !== activeClerkKey) {
+      setActiveClerkKey(matched.key)
+    }
+  }, [clerkOptions, activeClerkKey])
+
+  useEffect(() => {
+    if (typeof selectedTabId !== 'number') return
+    const tab = pendingBills.find(pb => pb.id === selectedTabId)
+    syncClerkFromTab(tab)
+  }, [selectedTabId, pendingBills, syncClerkFromTab])
+
   // Check for orphaned journal entries on mount (crash recovery)
   useEffect(() => {
     const orphans = journalRead().filter(t => t.status === 'pending')
@@ -1293,7 +1307,7 @@ export default function POSPage() {
             {!tabsCollapsed && (
               <div className="px-3 pb-3 space-y-1.5 max-h-56 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 {pendingBills.map(pb => (
-                  <button key={pb.id} onClick={() => { setSettleTarget(pb); setSettleMode('CASH') }}
+                  <button key={pb.id} onClick={() => { syncClerkFromTab(pb); setSettleTarget(pb); setSettleMode('CASH') }}
                     className="w-full text-left bg-white border border-amber-200 rounded-xl px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50/60 transition-all active:scale-[0.98]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -1552,7 +1566,14 @@ export default function POSPage() {
                           {pendingBills.map(pb => (
                             <button
                               key={pb.id}
-                              onClick={() => setSelectedTabId(selectedTabId === pb.id ? null : pb.id)}
+                              onClick={() => {
+                                if (selectedTabId === pb.id) {
+                                  setSelectedTabId(null)
+                                  return
+                                }
+                                setSelectedTabId(pb.id)
+                                syncClerkFromTab(pb)
+                              }}
                               className={`w-full text-left rounded-lg px-3 py-2 border transition-all text-sm ${
                                 selectedTabId === pb.id
                                   ? 'bg-amber-500 border-amber-500 text-white'
