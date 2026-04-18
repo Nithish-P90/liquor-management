@@ -236,10 +236,10 @@ export default function DailyLedgerPage() {
                 {/* Stats */}
                 <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-0.5 text-sm">
                   <div>
-                    <span className="text-gray-400 text-xs">Sales</span>
+                    <span className="text-gray-400 text-xs">Liquor Sales</span>
                     <div className="font-bold text-gray-900">{fmt(s.financials.totalSales)}</div>
                     {(s.financials.miscSalesTotal ?? 0) > 0 && (
-                      <div className="text-[11px] text-cyan-600">incl misc {fmt(s.financials.miscSalesTotal ?? 0)}</div>
+                      <div className="text-[11px] text-cyan-600">misc separate {fmt(s.financials.miscSalesTotal ?? 0)}</div>
                     )}
                   </div>
                   <div>
@@ -328,7 +328,7 @@ export default function DailyLedgerPage() {
                                   ['UPI / Digital', detail.financials.salesByMode.UPI,    'text-purple-700'],
                                   ['Card',          detail.financials.salesByMode.CARD,   'text-blue-700'],
                                   ['Credit',        detail.financials.salesByMode.CREDIT, 'text-orange-700'],
-                                  ['Misc Sales',    detail.financials.miscSalesTotal ?? 0, 'text-cyan-700'],
+                                  ['Misc Sales (Separate)', detail.financials.miscSalesTotal ?? 0, 'text-cyan-700'],
                                   ['Pending (Unpaid)', detail.financials.pendingUnpaidAmount ?? 0, 'text-orange-600'],
                                 ].map(([label, val, cls]) => (
                                   <div key={String(label)} className="flex justify-between px-4 py-2.5">
@@ -337,7 +337,7 @@ export default function DailyLedgerPage() {
                                   </div>
                                 ))}
                                 <div className="flex justify-between px-4 py-2.5 font-bold bg-gray-50">
-                                  <span className="text-gray-700">Total Sales</span>
+                                  <span className="text-gray-700">Total Liquor Sales</span>
                                   <span className="text-gray-900">{fmt(detail.financials.totalSales)}</span>
                                 </div>
                                 <div className="flex justify-between px-4 py-2.5 bg-red-50">

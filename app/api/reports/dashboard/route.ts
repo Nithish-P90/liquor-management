@@ -163,8 +163,6 @@ export async function GET() {
   ])
 
   const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
-  todaySales.total += miscSaleTotal
-  todaySales.cash += miscSaleTotal
 
   // Resolve all three top-seller sets with a single shared productSize lookup
   const allIds = [...new Set([

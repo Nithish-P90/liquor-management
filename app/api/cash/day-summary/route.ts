@@ -61,7 +61,6 @@ export async function GET(req: NextRequest) {
   const miscSalesTotal = Number(miscAgg._sum.totalAmount ?? 0)
   const miscItems = Number(miscAgg._sum.quantity ?? 0)
   paymentTotals.misc = miscSalesTotal
-  paymentTotals.cash += miscSalesTotal
 
   const closingStock = {
     taken: false,
@@ -94,7 +93,7 @@ export async function GET(req: NextRequest) {
     sales: {
       bills: sales.length,
       bottles: sales.reduce((sum, s) => sum + s.quantityBottles, 0),
-      totalAmount: sales.reduce((sum, s) => sum + Number(s.totalAmount), 0) + miscSalesTotal,
+      totalAmount: sales.reduce((sum, s) => sum + Number(s.totalAmount), 0),
       paymentTotals
     },
     miscSales: {

@@ -302,9 +302,9 @@ export async function GET(req: NextRequest) {
       isToday,
       hasSession: !!session,
       financials: {
-        totalSales: totalSales + miscSalesTotal,
+        totalSales,
         totalExpenses,
-        netCash: salesByMode.CASH + miscSalesTotal - totalExpenses,
+        netCash: salesByMode.CASH - totalExpenses,
         salesByMode, totalBottlesSold, totalBills,
         miscSalesTotal,
         miscItemsSold,

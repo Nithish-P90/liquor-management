@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       miscRevenue,
       miscItems,
       miscEntries,
-      totalRevenue: liquorRevenue + miscRevenue,
+      totalRevenue: liquorRevenue,
     },
   })
 }

@@ -97,11 +97,11 @@ export default function DashboardPage() {
 
       {/* Today's stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Today's Revenue" value={rupee(today.total)} sub={`${today.bottles} bottles sold`} accent="blue" />
+        <StatCard label="Today's Liquor Revenue" value={rupee(today.total)} sub={`${today.bottles} bottles sold`} accent="blue" />
         <StatCard label="Cash" value={rupee(Number(today.cash))} sub="Counter collections" accent="emerald" />
         <StatCard label="Card" value={rupee(Number(today.card))} sub="Card payments" accent="violet" />
         <StatCard label="UPI" value={rupee(Number(today.upi))} sub="Digital payments" accent="orange" />
-        <StatCard label="Misc Sale" value={rupee(data.miscSaleTotal)} sub="Cigarettes / snacks" accent="sky" />
+        <StatCard label="Misc Sale (Separate)" value={rupee(data.miscSaleTotal)} sub="Not part of liquor revenue" accent="sky" />
       </div>
 
       {/* Notifications (price drops, system alerts) */}

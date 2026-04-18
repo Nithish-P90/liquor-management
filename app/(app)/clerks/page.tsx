@@ -117,7 +117,7 @@ export default function ClerksPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 border-l-4 border-l-blue-500 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Revenue</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Liquor Revenue (Total)</p>
           <p className="text-xl font-bold text-slate-900 mt-1">{rupee(summary.totalRevenue)}</p>
         </div>
         <div className="bg-white border border-slate-200 border-l-4 border-l-cyan-500 rounded-xl p-4">
@@ -184,7 +184,7 @@ export default function ClerksPage() {
       </div>
 
       <p className="text-xs text-slate-400">
-        Liquor sales are attributed per clerk. Misc sales are tracked separately and included in the summary totals.
+        Liquor sales are attributed per clerk. Misc sales are tracked separately and excluded from liquor revenue totals.
       </p>
     </div>
   )

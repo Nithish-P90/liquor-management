@@ -141,7 +141,7 @@ export default function CashPage() {
   const registerVar = form.closingRegister - expectedClosing
   const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0, misc: 0 }, [summary])
   const miscSalesTotal = summary?.miscSales.totalAmount ?? systemSales.misc
-  const liquorCashSales = Math.max(0, systemSales.cash - miscSalesTotal)
+  const liquorCashSales = systemSales.cash
   const totalSales = form.cashSales + form.cardSales + form.upiSales
   const systemTotal = systemSales.cash + systemSales.card + systemSales.upi
   const verifyDiff = useMemo(
@@ -316,7 +316,7 @@ export default function CashPage() {
             <thead>
               <tr className="border-b border-slate-100 text-left">
                 <th className="pb-2 text-xs font-semibold text-slate-400">Head</th>
-                <th className="pb-2 text-xs font-semibold text-slate-400 text-right">System</th>
+                <th className="pb-2 text-xs font-semibold text-slate-400 text-right">System (Liquor)</th>
                 <th className="pb-2 text-xs font-semibold text-slate-400 text-right">Manual</th>
                 <th className="pb-2 text-xs font-semibold text-slate-400 text-right">Difference</th>
               </tr>
