@@ -346,10 +346,10 @@ export default function POSPage() {
     const found = products.find(p => p.barcode === code || p.product.itemCode === code)
     if (!found) { flash(`No product found: ${code}`, 'err'); return }
     playBeep()
-    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name} ${found.sizeMl}ml`, 'ok'); return }
+    if (voidMode) { addToVoid(found); flash(`Return queued: ${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? '' : 'ml'}`, 'ok'); return }
     if (found.currentStock <= 0) { flash(`${found.product.name} — OUT OF STOCK`, 'err'); return }
     addToCart(found)
-    flash(`${found.product.name} ${found.sizeMl}ml added`, 'ok')
+    flash(`${found.product.name} ${found.sizeMl}${found.product.category === 'MISCELLANEOUS' ? '' : 'ml'} added`, 'ok')
   }
 
   // ── Cart ────────────────────────────────────────────────────────────────────
@@ -828,7 +828,7 @@ export default function POSPage() {
                     {tx.retries > 0 && ` · ${tx.retries} attempt(s)`}
                   </p>
                   <p className="text-[11px] text-red-300 mt-1 truncate">
-                    {tx.items.map(i => `${i.name} ${i.sizeMl}ml ×${i.qty}`).join(', ')}
+                    {tx.items.map(i => `${i.name} ${i.sizeMl}${i.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×${i.qty}`).join(', ')}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
@@ -873,7 +873,7 @@ export default function POSPage() {
             <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 max-h-40 overflow-y-auto">
               {settleTarget.items.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}ml ×{item.quantityBottles}</span>
+                  <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}{item.productSize.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×{item.quantityBottles}</span>
                   <span className="font-semibold text-gray-900">{fmt(Number(item.totalAmount))}</span>
                 </div>
               ))}
@@ -1044,7 +1044,7 @@ export default function POSPage() {
                           ps.sizeMl >= 375 ? 'bg-blue-50 text-blue-600' :
                           ps.sizeMl >= 180 ? 'bg-teal-50 text-teal-600' :
                           'bg-slate-100 text-slate-500'
-                        }`}>{ps.sizeMl}ml</span>
+                        }`}>{ps.sizeMl}{ps.product.category === 'MISCELLANEOUS' ? '' : 'ml'}</span>
                       </div>
                       <div className="flex items-center justify-between mt-auto">
                         <span className="text-sm font-black text-slate-900">{fmt(Number(ps.sellingPrice))}</span>
