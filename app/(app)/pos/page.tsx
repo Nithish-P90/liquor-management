@@ -317,7 +317,8 @@ export default function POSPage() {
     journalUpdate(tx.id, { retries: tx.retries + 1 })
     try {
       const billTimeIso = new Date().toISOString()
-      const results = await Promise.all(tx.items.map(async item => {
+      const results: unknown[] = []
+      for (const item of tx.items) {
         const prop = item.sellingPrice * item.qty / tx.total
         const body: Record<string, unknown> = {
           productSizeId: item.productSizeId, quantityBottles: item.qty,
@@ -335,8 +336,8 @@ export default function POSPage() {
           body: JSON.stringify(body),
         })
         if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Sale failed') }
-        return res.json()
-      }))
+        results.push(await res.json())
+      }
       if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('Partial failure')
       // Success — remove from journal and orphan list
       journalClear(tx.id)
@@ -697,7 +698,8 @@ export default function POSPage() {
         }
       }
 
-      const results = await Promise.all(savedCart.map(async item => {
+      const results: unknown[] = []
+      for (const item of savedCart) {
         const prop = item.sellingPrice * item.qty / total
         const body: Record<string, unknown> = {
           productSizeId: item.productSizeId, quantityBottles: item.qty,
@@ -714,8 +716,8 @@ export default function POSPage() {
           body: JSON.stringify(body),
         })
         if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Sale failed') }
-        return res.json()
-      }))
+        results.push(await res.json())
+      }
 
       if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('One or more items failed')
 
