@@ -886,10 +886,8 @@ export default function POSPage() {
       return
     }
 
-    if (voidItems.length > 0) {
-      const ok = confirm('Exit return mode and clear queued return items?')
-      if (!ok) return
-    }
+    // Exit return mode immediately without modal interruption.
+    // This prevents barcode scanners from getting blocked by confirm dialogs.
     setVoidItems([])
     setVoidMode(false)
   }
