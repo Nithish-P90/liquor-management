@@ -53,6 +53,7 @@ const staffNav = [
       { href: '/pos', label: 'Point of Sale' },
       { href: '/misc-sale', label: 'Misc Sale' },
       { href: '/clerks', label: 'Clerk Billing' },
+      { href: '/sales', label: 'Bill History' },
       { href: '/attendance', label: 'Face Attendance' },
       { href: '/cash', label: 'Cash Register' },
       { href: '/expenses', label: 'Expenditure' },
@@ -68,7 +69,7 @@ const staffNav = [
 ]
 
 // Staff can access POS, cash register, expenses, and inventory
-const STAFF_ALLOWED = ['/pos', '/misc-sale', '/clerks', '/cash', '/expenses', '/inventory', '/indents', '/attendance']
+const STAFF_ALLOWED = ['/pos', '/misc-sale', '/clerks', '/sales', '/cash', '/expenses', '/inventory', '/indents', '/attendance']
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
