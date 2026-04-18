@@ -1,25 +1,47 @@
--- Add clerk attribution for miscellaneous sales
-ALTER TABLE "MiscSale"
-ADD COLUMN "staffId" INTEGER;
+-- Add clerk attribution for miscellaneous sales.
+-- This migration is written to be safe for fresh deploys and partial reruns.
 
--- Backfill existing rows to a valid staff record (prefer cashier, fallback first staff)
-WITH preferred_staff AS (
-  SELECT id
-  FROM "Staff"
+ALTER TABLE "MiscSale"
+ADD COLUMN IF NOT EXISTS "staffId" INTEGER;
+
+DO $$
+DECLARE
+  v_staff_id INTEGER;
+BEGIN
+  -- Prefer an active cashier/admin for attribution fallback.
+  SELECT s.id
+  INTO v_staff_id
+  FROM "Staff" s
+  WHERE s.active = true
   ORDER BY
-    CASE WHEN role = 'CASHIER' THEN 0 ELSE 1 END,
-    id
-  LIMIT 1
-)
-UPDATE "MiscSale"
-SET "staffId" = (SELECT id FROM preferred_staff)
-WHERE "staffId" IS NULL;
+    CASE WHEN s.role = 'CASHIER' THEN 0 WHEN s.role = 'ADMIN' THEN 1 ELSE 2 END,
+    s.id
+  LIMIT 1;
 
-ALTER TABLE "MiscSale"
-ALTER COLUMN "staffId" SET NOT NULL;
+  IF v_staff_id IS NOT NULL THEN
+    UPDATE "MiscSale"
+    SET "staffId" = v_staff_id
+    WHERE "staffId" IS NULL;
+  END IF;
 
-ALTER TABLE "MiscSale"
-ADD CONSTRAINT "MiscSale_staffId_fkey"
-FOREIGN KEY ("staffId") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  -- Enforce NOT NULL only when no nulls remain.
+  IF NOT EXISTS (SELECT 1 FROM "MiscSale" WHERE "staffId" IS NULL) THEN
+    ALTER TABLE "MiscSale"
+    ALTER COLUMN "staffId" SET NOT NULL;
+  END IF;
+END $$;
 
-CREATE INDEX "MiscSale_staffId_saleDate_idx" ON "MiscSale"("staffId", "saleDate");
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'MiscSale_staffId_fkey'
+  ) THEN
+    ALTER TABLE "MiscSale"
+    ADD CONSTRAINT "MiscSale_staffId_fkey"
+    FOREIGN KEY ("staffId") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS "MiscSale_staffId_saleDate_idx" ON "MiscSale"("staffId", "saleDate");
