@@ -53,6 +53,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
   }
 
+  const [transactions, lockerTotal] = await Promise.all([
+    prisma.bankTransaction.findMany({
+      select: { txType: true, amount: true },
+    }),
+    prisma.cashRecord.aggregate({ _sum: { cashToLocker: true } }),
+  ])
+
+  const totalToLocker = Number(lockerTotal._sum.cashToLocker ?? 0)
+  const totalDeposited = transactions
+    .filter(t => t.txType === 'DEPOSIT')
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+  const totalKsbcl = transactions
+    .filter(t => t.txType === 'KSBCL_PAYMENT')
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+
+  const lockerBalance = totalToLocker - totalDeposited - totalKsbcl
+  const bankBalance = totalDeposited - totalKsbcl
+
+  if (txType === 'DEPOSIT' && parsedAmount - lockerBalance > 0.009) {
+    return NextResponse.json(
+      { error: `Deposit exceeds locker balance (${lockerBalance.toFixed(2)})` },
+      { status: 409 }
+    )
+  }
+
+  if (txType === 'KSBCL_PAYMENT' && parsedAmount - bankBalance > 0.009) {
+    return NextResponse.json(
+      { error: `KSBCL payment exceeds bank balance (${bankBalance.toFixed(2)})` },
+      { status: 409 }
+    )
+  }
+
   const tx = await prisma.bankTransaction.create({
     data: {
       txDate: toUtcNoonDate(new Date(txDate + 'T12:00:00')),

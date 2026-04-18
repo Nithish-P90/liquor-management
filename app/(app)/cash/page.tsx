@@ -81,6 +81,7 @@ export default function CashPage() {
   const [bankData, setBankData] = useState<BankData | null>(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   // Bank transaction modal
   const [showBankModal, setShowBankModal] = useState(false)
@@ -91,18 +92,9 @@ export default function CashPage() {
     fetch('/api/bank').then(r => r.json()).then(setBankData)
   }
 
-  function applyAutofill(daySummary: DaySummary) {
-    setForm(current => ({
-      ...current,
-      cashSales: daySummary.sales.paymentTotals.cash,
-      cardSales: daySummary.sales.paymentTotals.card,
-      upiSales: daySummary.sales.paymentTotals.upi,
-      expenses: daySummary.expenses.total,
-    }))
-  }
-
   useEffect(() => {
     setSaved(false)
+    setErrorMsg('')
     setSummaryLoading(true)
 
     Promise.all([
@@ -139,6 +131,7 @@ export default function CashPage() {
 
   // Computed values
   const expectedClosing = form.openingRegister + form.cashSales - form.expenses - form.cashToLocker
+  const maxTransfer = Math.max(0, form.openingRegister + form.cashSales - form.expenses)
   const registerVar = form.closingRegister - expectedClosing
   const systemSales = useMemo(() => summary?.sales.paymentTotals ?? { cash: 0, card: 0, upi: 0, credit: 0, split: 0 }, [summary])
   const totalSales = form.cashSales + form.cardSales + form.upiSales
@@ -154,13 +147,23 @@ export default function CashPage() {
   )
 
   async function save() {
+    setErrorMsg('')
     setLoading(true)
     const res = await fetch('/api/cash', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recordDate: date, ...form }),
+      body: JSON.stringify({
+        recordDate: date,
+        cashToLocker: form.cashToLocker,
+        notes: form.notes,
+      }),
     })
     const saved = await res.json()
+    if (!res.ok) {
+      setLoading(false)
+      setErrorMsg(saved?.error ?? 'Failed to save cash record')
+      return
+    }
     setForm({
       openingRegister: +saved.openingRegister || 0,
       cashSales: +saved.cashSales || 0,
@@ -173,30 +176,22 @@ export default function CashPage() {
     })
     setLoading(false)
     setSaved(true)
-
-    if (summary) {
-      setSummary({
-        ...summary,
-        sales: {
-          ...summary.sales,
-          paymentTotals: {
-            ...summary.sales.paymentTotals,
-            cash: form.cashSales,
-            card: form.cardSales,
-            upi: form.upiSales,
-          },
-        },
-      })
-    }
   }
 
   async function saveBankTx() {
     setBankSaving(true)
-    await fetch('/api/bank', {
+    setErrorMsg('')
+    const res = await fetch('/api/bank', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bankForm),
     })
+    const data = await res.json()
+    if (!res.ok) {
+      setBankSaving(false)
+      setErrorMsg(data?.error ?? 'Failed to save bank transaction')
+      return
+    }
     setBankSaving(false)
     setShowBankModal(false)
     setBankForm({ txType: 'DEPOSIT', amount: '', notes: '', txDate: new Date().toISOString().slice(0, 10) })
@@ -204,7 +199,7 @@ export default function CashPage() {
   }
 
   // Moved out to prevent focus loss
-  const renderField = (label: string, k: keyof CashForm, hint?: string) => (
+  const renderField = (label: string, k: keyof CashForm, hint?: string, readOnly = false) => (
     <div key={k}>
       <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{label}</label>
       {hint && <p className="text-xs text-slate-400 mb-1">{hint}</p>}
@@ -212,8 +207,12 @@ export default function CashPage() {
         <span className="px-3 py-2 bg-slate-50 text-slate-400 text-sm border-r border-slate-200 font-medium">₹</span>
         <input type="number" min="0" step="1"
           value={(form[k] as number) || ''}
-          onChange={e => setForm({ ...form, [k]: parseFloat(e.target.value) || 0 })}
-          className="flex-1 px-3 py-2 text-sm outline-none text-slate-800 font-semibold"
+          onChange={e => {
+            if (readOnly) return
+            setForm({ ...form, [k]: Math.max(0, parseFloat(e.target.value) || 0) })
+          }}
+          readOnly={readOnly}
+          className={`flex-1 px-3 py-2 text-sm outline-none font-semibold ${readOnly ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'text-slate-800'}`}
         />
       </div>
     </div>
@@ -243,6 +242,12 @@ export default function CashPage() {
         </div>
       )}
 
+      {errorMsg && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 font-semibold text-sm text-center">
+          {errorMsg}
+        </div>
+      )}
+
       {/* Locker + Bank summary bar */}
       {bankData && (
         <div className="grid grid-cols-2 gap-4">
@@ -269,15 +274,8 @@ export default function CashPage() {
         <h2 className="text-sm font-bold text-slate-700 mb-3">
           Sales — {new Date(date + 'T12:00:00').toLocaleDateString('en-GB')}
         </h2>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">Auto-filled from POS and expenditure entries. Manually verify with physical counts and payment statements before save.</p>
-          <button
-            type="button"
-            onClick={() => summary && applyAutofill(summary)}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-          >
-            Re-apply autofill
-          </button>
+        <div className="mb-3">
+          <p className="text-xs text-slate-500">Auto-tallied from POS sales and expenditure entries. Counter cash stays in galla unless transferred to locker.</p>
         </div>
         <div className="grid grid-cols-2 gap-4 mb-3">
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
@@ -338,15 +336,15 @@ export default function CashPage() {
         {/* Counter (Galla) */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Counter Cash (Galla)</h2>
-          {renderField('Opening Balance', 'openingRegister', "Carried from yesterday's closing")}
-          {renderField('Cash Sales Today', 'cashSales')}
-          {renderField('Expenses from Counter', 'expenses')}
-          {renderField('Transferred to Locker', 'cashToLocker')}
+          {renderField('Opening Balance', 'openingRegister', "Auto-carried from yesterday's closing galla", true)}
+          {renderField('Cash Sales Today', 'cashSales', 'Auto from billed cash', true)}
+          {renderField('Expenses from Counter', 'expenses', 'Auto from expenditure register', true)}
+          {renderField('Transferred to Locker', 'cashToLocker', `Enter only actual transfer made. Max ${rupee(maxTransfer)}`)}
           <div className="p-3 bg-slate-50 rounded-lg text-sm flex justify-between">
             <span className="text-slate-500">Expected Closing</span>
             <strong className="text-blue-700">{rupee(expectedClosing)}</strong>
           </div>
-          {renderField('Actual Closing (Physical Count)', 'closingRegister')}
+          {renderField('Closing Register (Auto)', 'closingRegister', 'Auto = opening + billed cash - expenses - locker transfer', true)}
           {registerVar !== 0 && (
             <div className={`p-2.5 rounded-lg text-sm font-semibold flex justify-between ${Math.abs(registerVar) > 200 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
               <span>Variance</span>
@@ -358,8 +356,8 @@ export default function CashPage() {
         {/* Digital Payments */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">Digital Payments</h2>
-          {renderField('Card Sales', 'cardSales')}
-          {renderField('UPI / PhonePe / Paytm', 'upiSales')}
+          {renderField('Card Sales', 'cardSales', 'Auto from billed card sales', true)}
+          {renderField('UPI / PhonePe / Paytm', 'upiSales', 'Auto from billed UPI sales', true)}
           <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-400">
             System: Card {rupee(summary?.sales.paymentTotals.card || 0)} · UPI {rupee(summary?.sales.paymentTotals.upi || 0)}
           </div>
