@@ -6,7 +6,6 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
@@ -69,34 +68,32 @@ export async function POST(req: NextRequest) {
   const today = toUtcNoonDate(new Date())
 
   try {
-    const bill = await prisma.$transaction(async tx => {
-      // Check stock availability inside the transaction
-      for (const item of items) {
-        const productSize = await tx.productSize.findUnique({
-          where: { id: item.productSizeId },
-          include: { product: { select: { category: true } } },
-        })
-        if (!productSize) {
-          throw new Error(`Product size ${item.productSizeId} not found`)
-        }
-        if (productSize.product.category !== 'MISCELLANEOUS') {
-          const available = await getAvailableStock(tx, item.productSizeId)
-          if (item.quantityBottles > available) {
-            throw new Error(`Only ${available} bottles available for ${productSize.sizeMl}ml`)
-          }
+    // ── Stock checks BEFORE transaction (avoids timeout on slow Neon connections) ──
+    for (const item of items) {
+      const productSize = await prisma.productSize.findUnique({
+        where: { id: item.productSizeId },
+        include: { product: { select: { category: true } } },
+      })
+      if (!productSize) {
+        return NextResponse.json({ error: `Product size ${item.productSizeId} not found` }, { status: 404 })
+      }
+      if (productSize.product.category !== 'MISCELLANEOUS') {
+        const available = await getAvailableStock(prisma, item.productSizeId)
+        if (item.quantityBottles > available) {
+          return NextResponse.json({ error: `Only ${available} bottles available for ${productSize.sizeMl}ml` }, { status: 409 })
         }
       }
+    }
 
-      // Generate a sequential bill reference for today
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
-      const count = await tx.pendingBill.count({
-        where: { createdAt: { gte: todayStart } },
-      })
-      const billRef = `PB-${String(count + 1).padStart(3, '0')}`
+    // Generate bill ref before transaction
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const count = await prisma.pendingBill.count({ where: { createdAt: { gte: todayStart } } })
+    const billRef = `PB-${String(count + 1).padStart(3, '0')}`
+    const totalAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
 
-      const totalAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
-
+    // ── Minimal transaction: only writes ──────────────────────────────────────
+    const bill = await prisma.$transaction(async tx => {
       return tx.pendingBill.create({
         data: {
           billRef,
@@ -113,21 +110,22 @@ export async function POST(req: NextRequest) {
             })),
           },
         },
-        include: {
-          staff: { select: { id: true, name: true } },
-          items: { include: { productSize: { include: { product: true } } } },
-        },
+        select: { id: true },
       })
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     })
 
-    return NextResponse.json(bill)
+    // Fetch full record outside transaction (no timeout risk)
+    const fullBill = await prisma.pendingBill.findUnique({
+      where: { id: bill.id },
+      include: {
+        staff: { select: { id: true, name: true } },
+        items: { include: { productSize: { include: { product: true } } } },
+      },
+    })
+
+    return NextResponse.json(fullBill)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create pending bill'
-    if (message.startsWith('Only ') || message.includes('not found')) {
-      return NextResponse.json({ error: message }, { status: 409 })
-    }
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -153,7 +151,8 @@ export async function PUT(req: NextRequest) {
 
   const addedAmount = items.reduce((s, i) => s + i.sellingPrice * i.quantityBottles, 0)
 
-  const updated = await prisma.$transaction(async tx => {
+  // Keep transaction minimal — only writes, no deep reads
+  await prisma.$transaction(async tx => {
     await tx.pendingBillItem.createMany({
       data: items.map(i => ({
         billId: id,
@@ -163,14 +162,19 @@ export async function PUT(req: NextRequest) {
         totalAmount: i.sellingPrice * i.quantityBottles,
       })),
     })
-    return tx.pendingBill.update({
+    await tx.pendingBill.update({
       where: { id },
       data: { totalAmount: { increment: addedAmount } },
-      include: {
-        staff: { select: { id: true, name: true } },
-        items: { include: { productSize: { include: { product: true } } } },
-      },
     })
+  })
+
+  // Fetch full result outside transaction
+  const updated = await prisma.pendingBill.findUnique({
+    where: { id },
+    include: {
+      staff: { select: { id: true, name: true } },
+      items: { include: { productSize: { include: { product: true } } } },
+    },
   })
 
   return NextResponse.json(updated)
@@ -275,14 +279,15 @@ export async function PATCH(req: NextRequest) {
   const userId = (session.user as { id?: string } | undefined)?.id
   const effectiveSettledById = settledById ?? (userId ? parseInt(userId) : bill.staffId)
 
-  await prisma.$transaction(async tx => {
-    // Create sale rows
-    for (const item of bill.items) {
-      const prop = Number(item.totalAmount) / Number(bill.totalAmount)
-      await tx.sale.create({
-        data: {
+  const saleTime = new Date(billTimeIso)
+  await prisma.$transaction([
+    // Bulk-create all sale rows in one statement
+    prisma.sale.createMany({
+      data: bill.items.map(item => {
+        const prop = Number(item.totalAmount) / Number(bill.totalAmount)
+        return {
           saleDate,
-          saleTime: new Date(billTimeIso),
+          saleTime,
           staffId: bill.staffId,
           productSizeId: item.productSizeId,
           quantityBottles: item.quantityBottles,
@@ -292,25 +297,18 @@ export async function PATCH(req: NextRequest) {
           cashAmount: paymentMode === 'SPLIT' && cashAmount != null ? cashAmount * prop : null,
           cardAmount: paymentMode === 'SPLIT' && cardAmount != null ? cardAmount * prop : null,
           upiAmount: paymentMode === 'SPLIT' && upiAmount != null ? upiAmount * prop : null,
-          scanMethod: 'MANUAL',
+          scanMethod: 'MANUAL' as never,
           customerName: bill.customerName,
           overrideReason: `pending:${bill.billRef}`,
           billId: `pending-${bill.id}`,
-        },
-      })
-    }
-
-    // Mark bill as settled
-    await tx.pendingBill.update({
+        }
+      }),
+    }),
+    prisma.pendingBill.update({
       where: { id },
-      data: {
-        settled: true,
-        settledAt: now,
-        settledMode: paymentMode as never,
-        settledById: effectiveSettledById,
-      },
-    })
-  })
+      data: { settled: true, settledAt: now, settledMode: paymentMode as never, settledById: effectiveSettledById },
+    }),
+  ])
 
   return NextResponse.json({ success: true, billRef: bill.billRef })
 }

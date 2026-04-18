@@ -316,6 +316,53 @@ export default function MiscSalePage() {
         )}
       </div>
 
+      {/* Manage Items panel */}
+      {showManage && canManageItems && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-700">Item Catalogue</h2>
+            <span className="text-xs text-slate-400">{allItems.length} item(s)</span>
+          </div>
+          {allItems.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-slate-400">No items yet. Add one above.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-400">Name</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400">Category</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 font-mono">Barcode</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400">Price</th>
+                  <th className="px-5 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {allItems.map(item => (
+                  <tr key={item.id} className="hover:bg-slate-50 group">
+                    <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-slate-500">{CAT_LABEL[item.category]}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{item.barcode}</td>
+                    <td className="px-4 py-3 text-right font-bold text-slate-800">{rupee(Number(item.price))}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                        >Edit</button>
+                        <button
+                          onClick={() => setDeleteConfirmId(item.id)}
+                          className="px-2.5 py-1 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                        >Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Cart */}
       {cart.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -406,57 +453,6 @@ export default function MiscSalePage() {
           </table>
         </div>
       ) : null}
-
-      {/* Manage items */}
-      {showManage && canManageItems && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-700">Manage Misc Items</h2>
-            <span className="text-xs text-slate-400">{allItems.length} items</span>
-          </div>
-          {allItems.length === 0 ? (
-            <div className="px-5 py-4 text-sm text-slate-400">No items found.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400">Barcode</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400">Category</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400">Price</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {allItems.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-500">{item.barcode}</td>
-                    <td className="px-4 py-3 text-center text-xs font-semibold text-slate-500">{CAT_LABEL[item.category]}</td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-900">{rupee(Number(item.price))}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-md text-slate-600 hover:bg-slate-100"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(item.id)}
-                          className="px-3 py-1.5 text-xs font-semibold border border-red-200 rounded-md text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
 
       {/* Register item modal */}
       {registerModal && (
