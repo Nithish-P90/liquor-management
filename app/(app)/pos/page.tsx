@@ -820,9 +820,17 @@ export default function POSPage() {
   // ── Derived: available sizes for current category ─────────────────────────
   const availableSizes = useMemo(() => {
     const catProducts = category === 'ALL' ? products : products.filter(p => p.product.category === category)
-    const sizes = Array.from(new Set(catProducts.map(p => p.sizeMl))).sort((a, b) => a - b)
+    const sizes = Array.from(new Set(catProducts.map(p => p.sizeMl)))
+      .filter(size => size !== 1)
+      .sort((a, b) => a - b)
     return sizes
   }, [products, category])
+
+  useEffect(() => {
+    if (sizeFilter !== null && !availableSizes.includes(sizeFilter)) {
+      setSizeFilter(null)
+    }
+  }, [sizeFilter, availableSizes])
 
   // ── Filtered Products ──────────────────────────────────────────────────────
   const filtered = products.filter(p => {
