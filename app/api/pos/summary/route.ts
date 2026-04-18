@@ -41,6 +41,8 @@ export async function GET() {
   const staffId = user.id ? parseInt(user.id) : 0
   const isStaff = user.role === 'STAFF'
   const today = toUtcNoonDate(new Date())
+  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
 
   const latestSession = await prisma.inventorySession.findFirst({
     include: { createdBy: { select: { name: true } } },
@@ -105,7 +107,7 @@ export async function GET() {
         })
       : Promise.resolve([]),
     prisma.miscSale.aggregate({
-      where: { saleDate: today },
+      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
       _sum: { totalAmount: true, quantity: true },
       _count: { _all: true },
     }),

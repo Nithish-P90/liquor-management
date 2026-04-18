@@ -14,6 +14,8 @@ export async function GET() {
   }
 
   const today = toUtcNoonDate(new Date())
+  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
 
   const todayRows = await prisma.sale.findMany({
     where: { saleDate: today },
@@ -157,7 +159,7 @@ export async function GET() {
       orderBy: [{ severity: 'desc' }, { recordDate: 'desc' }],
       take: 5,
     }),
-    prisma.miscSale.aggregate({ where: { saleDate: today }, _sum: { totalAmount: true } }),
+    prisma.miscSale.aggregate({ where: { saleDate: { gte: dayStart, lt: nextDayStart } }, _sum: { totalAmount: true } }),
   ])
 
   const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)

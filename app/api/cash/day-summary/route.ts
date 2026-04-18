@@ -11,16 +11,18 @@ export async function GET(req: NextRequest) {
   if (!dateStr) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
 
   const date = toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
+  const dayStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1, 0, 0, 0, 0))
 
   const [sales, expenses, session, miscAgg] = await Promise.all([
-    prisma.sale.findMany({ where: { saleDate: date } }),
+    prisma.sale.findMany({ where: { saleDate: { gte: dayStart, lt: nextDayStart } } }),
     prisma.expenditure.findMany({ where: { expDate: date } }),
     prisma.inventorySession.findFirst({
       where: { periodStart: { lte: date }, periodEnd: { gte: date } },
       orderBy: { createdAt: 'desc' }
     }),
     prisma.miscSale.aggregate({
-      where: { saleDate: date },
+      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
       _sum: { totalAmount: true, quantity: true },
       _count: { _all: true },
     }),
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
   }
 
   const lastSale = sales.length > 0 ? await prisma.sale.findFirst({
-    where: { saleDate: date },
+    where: { saleDate: { gte: dayStart, lt: nextDayStart } },
     orderBy: { saleTime: 'desc' },
     include: { productSize: { include: { product: true } } }
   }) : null

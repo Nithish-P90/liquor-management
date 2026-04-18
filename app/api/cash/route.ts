@@ -39,9 +39,11 @@ function hasDiff(a: number, b: number) {
 }
 
 async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> {
+  const dayStart = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate() + 1, 0, 0, 0, 0))
   const [sales, miscAgg] = await Promise.all([
     prisma.sale.findMany({
-      where: { saleDate: recordDate },
+      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
       select: {
         paymentMode: true,
         totalAmount: true,
@@ -50,7 +52,7 @@ async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> 
         upiAmount: true,
       },
     }),
-    prisma.miscSale.aggregate({ where: { saleDate: recordDate }, _sum: { totalAmount: true } }),
+    prisma.miscSale.aggregate({ where: { saleDate: { gte: dayStart, lt: nextDayStart } }, _sum: { totalAmount: true } }),
   ])
 
   const totals: PaymentTotals = { cash: 0, card: 0, upi: 0, credit: 0 }

@@ -43,7 +43,7 @@ function rupee(n: number) {
 }
 
 export default function MiscSalePage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const user = session?.user as { role?: string } | undefined
   const canManageItems = user?.role === 'ADMIN' || user?.role === 'CASHIER'
 
@@ -70,7 +70,10 @@ export default function MiscSalePage() {
 
   const barcodeRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadSales() }, [date])
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    loadSales()
+  }, [date, status])
   useEffect(() => { if (canManageItems) loadAllItems() }, [canManageItems])
 
   function loadAllItems() {
@@ -86,7 +89,7 @@ export default function MiscSalePage() {
 
   function loadSales() {
     setLoading(true)
-    fetch(`/api/misc-sales?date=${date}`)
+    fetch(`/api/misc-sales?date=${date}`, { cache: 'no-store' })
       .then(async r => {
         const data: unknown = await r.json().catch(() => [])
         if (!r.ok) {

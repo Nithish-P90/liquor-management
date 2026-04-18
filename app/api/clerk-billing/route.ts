@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
   const today = dateStr
     ? toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
     : toUtcNoonDate(new Date())
+  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
 
   const [sales, miscAgg] = await Promise.all([
     prisma.sale.findMany({
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
     }),
     prisma.miscSale.aggregate({
-      where: { saleDate: today },
+      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
       _sum: { totalAmount: true, quantity: true },
       _count: { _all: true },
     }),
