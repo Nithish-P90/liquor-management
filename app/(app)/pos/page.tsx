@@ -150,6 +150,7 @@ export default function POSPage() {
   const [voidProcessing, setVoidProcessing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [showPayment, setShowPayment] = useState(false)
+  const [tabsCollapsed, setTabsCollapsed] = useState(false)
   const [lastTxSuccessAt, setLastTxSuccessAt] = useState<number | null>(null)
   const [lastTxErrorAt, setLastTxErrorAt] = useState<number | null>(null)
   const [heartbeatOkAt, setHeartbeatOkAt] = useState<number | null>(null)
@@ -647,7 +648,7 @@ export default function POSPage() {
     const savedCustomerName = customerName
     const total = cartTotal
     resetSale()
-    flash(`Pending bill created — ${fmt(total)}`, 'ok')
+    flash(`Tab opened — ${fmt(total)}`, 'ok')
 
     try {
       const res = await fetch('/api/pending-bills', {
@@ -826,8 +827,13 @@ export default function POSPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-96 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-gray-900 text-lg">Settle {settleTarget.billRef}</h3>
-                <p className="text-sm text-gray-500">{settleTarget.staff.name} · {settleTarget.customerName || 'No name'}</p>
+                <h3 className="font-bold text-gray-900 text-lg">
+                  {settleTarget.customerName || settleTarget.billRef}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {settleTarget.customerName && <span className="font-mono text-xs text-gray-400 mr-1">{settleTarget.billRef} ·</span>}
+                  {settleTarget.staff.name} · {new Date(settleTarget.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </p>
               </div>
               <button onClick={() => setSettleTarget(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
             </div>
@@ -913,7 +919,7 @@ export default function POSPage() {
             {pendingCount > 0 && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span className="text-xs font-bold text-amber-700">{pendingCount} pending</span>
+                <span className="text-xs font-bold text-amber-700">{pendingCount} open {pendingCount === 1 ? 'tab' : 'tabs'}</span>
               </div>
             )}
             {voidMode && (
@@ -1034,6 +1040,47 @@ export default function POSPage() {
           </div>
         </div>
 
+        {/* ── Open Tabs (always visible, collapsible) ── */}
+        {pendingBills.length > 0 && (
+          <div className="border-b border-amber-100 flex-shrink-0">
+            <button
+              onClick={() => setTabsCollapsed(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-amber-50/60 hover:bg-amber-50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-[0.15em]">Open Tabs</span>
+                <span className="px-1.5 py-0.5 bg-amber-200 text-amber-800 text-[9px] font-black rounded-full">{pendingBills.length}</span>
+              </div>
+              <svg className={`w-3.5 h-3.5 text-amber-500 transition-transform duration-200 ${tabsCollapsed ? '-rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {!tabsCollapsed && (
+              <div className="px-3 pb-3 space-y-1.5 max-h-56 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {pendingBills.map(pb => (
+                  <button key={pb.id} onClick={() => { setSettleTarget(pb); setSettleMode('CASH') }}
+                    className="w-full text-left bg-white border border-amber-200 rounded-xl px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50/60 transition-all active:scale-[0.98]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800 leading-none truncate">
+                          {pb.customerName || pb.billRef}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {pb.billRef} · {pb.staff.name} · {pb.items.length} item(s)
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {new Date(pb.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </p>
+                      </div>
+                      <span className="text-sm font-black text-slate-900 shrink-0">{fmt(Number(pb.totalAmount))}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Bill Items */}
         <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
           {voidMode && (
@@ -1058,29 +1105,6 @@ export default function POSPage() {
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Pending bills list (when no cart) */}
-          {cart.length === 0 && pendingBills.length > 0 && (
-            <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/40">
-              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-[0.15em] mb-2">Pending Bills — Tap to Settle</p>
-              <div className="space-y-2">
-                {pendingBills.map(pb => (
-                  <button key={pb.id} onClick={() => { setSettleTarget(pb); setSettleMode('CASH') }}
-                    className="w-full text-left bg-white border border-amber-200 rounded-xl px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50 transition-all">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-black text-amber-700">{pb.billRef}</span>
-                        <span className="text-[10px] text-slate-400 ml-1.5">· {pb.staff.name}</span>
-                      </div>
-                      <span className="text-sm font-black text-slate-900">{fmt(Number(pb.totalAmount))}</span>
-                    </div>
-                    {pb.customerName && <p className="text-[10px] text-slate-500 mt-0.5">{pb.customerName}</p>}
-                    <p className="text-[10px] text-slate-400 mt-0.5">{pb.items.length} item(s) · {new Date(pb.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -1119,7 +1143,7 @@ export default function POSPage() {
         </div>
 
         {/* ── Last Sales Ticker ─────────────── */}
-        {cart.length === 0 && recentBills.length > 0 && pendingBills.length === 0 && (
+        {cart.length === 0 && recentBills.length > 0 && (
           <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-3">Recent Bills</p>
             <div className="space-y-2 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
@@ -1246,11 +1270,18 @@ export default function POSPage() {
                   </div>
                 )}
 
-                {/* Pending info */}
+                {/* Tab name input */}
                 {payMode === 'PENDING' && (
-                  <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-sm text-amber-800">
-                    <p className="font-bold">Customer will pay later</p>
-                    <p className="text-xs text-amber-600 mt-1">A pending bill will be created. It will appear in the sidebar for settlement when payment is made.</p>
+                  <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 space-y-2.5">
+                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Tab Name</p>
+                    <input
+                      autoFocus
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      placeholder="Customer name (e.g. Table 3, Ravi)"
+                      className="w-full px-3 py-2.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-300"
+                    />
+                    <p className="text-[10px] text-amber-600">Tab will appear in Open Tabs for settlement when they pay.</p>
                   </div>
                 )}
 
@@ -1271,7 +1302,7 @@ export default function POSPage() {
                         <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
                         Saving...
                       </div>
-                    ) : payMode === 'PENDING' ? 'Save as Pending' : 'Complete Transaction'}
+                    ) : payMode === 'PENDING' ? 'Open Tab' : 'Complete Transaction'}
                   </button>
                 </div>
 
@@ -1286,7 +1317,7 @@ export default function POSPage() {
         )}
 
         {/* Empty footer */}
-        {cart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && (
+        {cart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && ( // keep for true-empty state
           <div className="border-t border-[#252836] px-4 py-3 text-center">
             <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}{lastTxErrorAt ? ' · recent transaction issue detected' : ''}</p>
           </div>
