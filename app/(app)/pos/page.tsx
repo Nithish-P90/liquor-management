@@ -164,6 +164,8 @@ export default function POSPage() {
   const [settleTarget, setSettleTarget] = useState<PendingBill | null>(null)
   const [settleMode, setSettleMode] = useState<'CASH' | 'CARD' | 'UPI'>('CASH')
   const [settling, setSettling] = useState(false)
+  const [pendingVoidMode, setPendingVoidMode] = useState(false)
+  const [pendingVoidItems, setPendingVoidItems] = useState<Set<number>>(new Set())
 
   // Tab picker (PENDING payment mode)
   // null = new tab, number = id of existing tab to append to
@@ -733,6 +735,37 @@ export default function POSPage() {
     }
   }
 
+  async function voidPendingItems() {
+    if (!settleTarget || pendingVoidItems.size === 0) return
+    setSettling(true)
+    try {
+      const res = await fetch('/api/pending-bills', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: settleTarget.id,
+          voidItemIds: Array.from(pendingVoidItems),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Void failed')
+      if (data.deleted) {
+        flash(`${settleTarget.billRef} deleted (no items left)`, 'ok')
+        setSettleTarget(null)
+      } else {
+        flash(`Voided ${pendingVoidItems.size} item(s) from ${settleTarget.billRef}`, 'ok')
+        setSettleTarget(data)
+      }
+      setPendingVoidMode(false)
+      setPendingVoidItems(new Set())
+      loadPending()
+      loadProducts()
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : 'Void failed', 'err')
+    } finally {
+      setSettling(false)
+    }
+  }
+
   function resetSale() {
     setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
     setCustomerName(''); setShowPayment(false); setActiveClerkKey('COUNTER')
@@ -866,14 +899,26 @@ export default function POSPage() {
                   {settleTarget.staff.name} · {new Date(settleTarget.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                 </p>
               </div>
-              <button onClick={() => setSettleTarget(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+              <button onClick={() => { setSettleTarget(null); setPendingVoidMode(false); setPendingVoidItems(new Set()) }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
             </div>
 
             {/* Items */}
             <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 max-h-40 overflow-y-auto">
               {settleTarget.items.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}{item.productSize.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×{item.quantityBottles}</span>
+                <div key={item.id} className={`flex justify-between text-sm ${pendingVoidMode ? 'cursor-pointer hover:bg-gray-100 rounded p-1 -m-1' : ''}`}
+                     onClick={() => pendingVoidMode && setPendingVoidItems(prev => {
+                       const next = new Set(prev)
+                       if (next.has(item.id)) next.delete(item.id)
+                       else next.add(item.id)
+                       return next
+                     })}>
+                  <div className="flex items-center gap-2">
+                    {pendingVoidMode && (
+                      <input type="checkbox" checked={pendingVoidItems.has(item.id)} readOnly
+                             className="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500" />
+                    )}
+                    <span className="text-gray-700">{item.productSize.product.name} {item.productSize.sizeMl}{item.productSize.product.category === 'MISCELLANEOUS' ? '' : 'ml'} ×{item.quantityBottles}</span>
+                  </div>
                   <span className="font-semibold text-gray-900">{fmt(Number(item.totalAmount))}</span>
                 </div>
               ))}
@@ -884,23 +929,43 @@ export default function POSPage() {
               <span className="text-2xl font-black text-gray-900">{fmt(Number(settleTarget.totalAmount))}</span>
             </div>
 
-            <div>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Payment method</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(['CASH', 'CARD', 'UPI'] as const).map(m => (
-                  <button key={m} onClick={() => setSettleMode(m)} className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
-                    settleMode === m ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}>{m}</button>
-                ))}
+            {pendingVoidMode ? (
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-red-600 uppercase tracking-widest">Void selected items</p>
+                <p className="text-sm text-gray-600">Selected {pendingVoidItems.size} item{pendingVoidItems.size !== 1 ? 's' : ''} to void</p>
               </div>
-            </div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Payment method</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['CASH', 'CARD', 'UPI'] as const).map(m => (
+                    <button key={m} onClick={() => setSettleMode(m)} className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                      settleMode === m ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}>{m}</button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3">
-              <button onClick={() => setSettleTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={() => settlePendingBill(settleMode)} disabled={settling}
-                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50">
-                {settling ? 'Settling...' : 'Confirm Payment'}
-              </button>
+              <button onClick={() => { setSettleTarget(null); setPendingVoidMode(false); setPendingVoidItems(new Set()) }} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
+              {pendingVoidMode ? (
+                <>
+                  <button onClick={() => { setPendingVoidMode(false); setPendingVoidItems(new Set()) }} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Back</button>
+                  <button onClick={() => voidPendingItems()} disabled={pendingVoidItems.size === 0}
+                    className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 disabled:opacity-50">
+                    Void Items
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setPendingVoidMode(true)} className="flex-1 py-2.5 border border-red-200 rounded-xl text-red-600 font-medium hover:bg-red-50">Void Items</button>
+                  <button onClick={() => settlePendingBill(settleMode)} disabled={settling}
+                    className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50">
+                    {settling ? 'Settling...' : 'Confirm Payment'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

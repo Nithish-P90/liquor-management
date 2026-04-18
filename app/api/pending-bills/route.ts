@@ -158,22 +158,23 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json(updated)
 }
 
-// PATCH /api/pending-bills — settle a pending bill
+// PATCH /api/pending-bills — settle a pending bill or void items
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json() as {
     id: number
-    paymentMode: 'CASH' | 'CARD' | 'UPI' | 'SPLIT'
+    paymentMode?: 'CASH' | 'CARD' | 'UPI' | 'SPLIT'
     cashAmount?: number
     cardAmount?: number
     upiAmount?: number
-    settledById: number
+    settledById?: number
+    voidItemIds?: number[]
   }
 
-  const { id, paymentMode, cashAmount, cardAmount, upiAmount, settledById } = body
-  if (!id || !paymentMode) return NextResponse.json({ error: 'id and paymentMode required' }, { status: 400 })
+  const { id, paymentMode, cashAmount, cardAmount, upiAmount, settledById, voidItemIds } = body
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const bill = await prisma.pendingBill.findUnique({
     where: { id },
@@ -181,6 +182,43 @@ export async function PATCH(req: NextRequest) {
   })
   if (!bill) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
   if (bill.settled) return NextResponse.json({ error: 'Bill already settled' }, { status: 409 })
+
+  // Handle voiding items
+  if (voidItemIds && voidItemIds.length > 0) {
+    const itemsToVoid = bill.items.filter(item => voidItemIds.includes(item.id))
+    if (itemsToVoid.length === 0) return NextResponse.json({ error: 'No valid items to void' }, { status: 400 })
+
+    const voidAmount = itemsToVoid.reduce((sum, item) => sum + Number(item.totalAmount), 0)
+
+    await prisma.$transaction(async tx => {
+      await tx.pendingBillItem.deleteMany({
+        where: { id: { in: voidItemIds }, billId: id },
+      })
+      await tx.pendingBill.update({
+        where: { id },
+        data: { totalAmount: { decrement: voidAmount } },
+      })
+    })
+
+    // If no items left, delete the bill
+    const remainingItems = await prisma.pendingBillItem.count({ where: { billId: id } })
+    if (remainingItems === 0) {
+      await prisma.pendingBill.delete({ where: { id } })
+      return NextResponse.json({ success: true, deleted: true })
+    }
+
+    const updatedBill = await prisma.pendingBill.findUnique({
+      where: { id },
+      include: {
+        staff: { select: { id: true, name: true } },
+        items: { include: { productSize: { include: { product: true } } } },
+      },
+    })
+    return NextResponse.json(updatedBill)
+  }
+
+  // Handle settlement
+  if (!paymentMode) return NextResponse.json({ error: 'paymentMode required for settlement' }, { status: 400 })
 
   const now = new Date()
   const saleDate = toUtcNoonDate(now)
