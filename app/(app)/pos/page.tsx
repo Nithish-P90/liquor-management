@@ -2,6 +2,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 
+// ── Transaction journal (localStorage crash recovery) ─────────────────────────
+// Written BEFORE any API call. Cleared AFTER confirmed success.
+// Survives browser crashes, tab closes, and partial network failures.
+const JOURNAL_KEY = 'pos_tx_journal'
+
+type TxJournal = {
+  id: string           // nanoid-style unique key
+  at: string           // ISO timestamp the cashier pressed Complete
+  staffId: number
+  clerkLabel: string
+  payMode: string
+  customerName: string | null
+  total: number
+  items: Array<{
+    productSizeId: number
+    name: string
+    sizeMl: number
+    qty: number
+    sellingPrice: number
+  }>
+  splitCash?: number
+  splitMethod?: string
+  retries: number      // how many times we've attempted to resubmit
+  status: 'pending' | 'dismissed'
+}
+
+function journalRead(): TxJournal[] {
+  try { return JSON.parse(localStorage.getItem(JOURNAL_KEY) ?? '[]') } catch { return [] }
+}
+function journalWrite(tx: TxJournal) {
+  const all = journalRead().filter(t => t.id !== tx.id)
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify([...all, tx]))
+}
+function journalClear(id: string) {
+  const all = journalRead().filter(t => t.id !== id)
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify(all))
+}
+function journalUpdate(id: string, patch: Partial<TxJournal>) {
+  const all = journalRead().map(t => t.id === id ? { ...t, ...patch } : t)
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify(all))
+}
+function makeId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProductSize = {
   id: number; sizeMl: number; bottlesPerCase: number; mrp: number
@@ -110,6 +155,10 @@ export default function POSPage() {
   const [settleMode, setSettleMode] = useState<'CASH' | 'CARD' | 'UPI'>('CASH')
   const [settling, setSettling] = useState(false)
 
+  // Crash-recovery journal
+  const [orphanedTx, setOrphanedTx] = useState<TxJournal[]>([])
+  const [retryingId, setRetryingId] = useState<string | null>(null)
+
   const scanRef = useRef<HTMLInputElement>(null)
   const barcodeBuffer = useRef('')
   const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -159,6 +208,58 @@ export default function POSPage() {
     [clerkOptions, activeClerkKey]
   )
   const topClerkOptions = useMemo(() => clerkOptions.slice(0, 5), [clerkOptions])
+
+  // Check for orphaned journal entries on mount (crash recovery)
+  useEffect(() => {
+    const orphans = journalRead().filter(t => t.status === 'pending')
+    if (orphans.length) setOrphanedTx(orphans)
+  }, [])
+
+  // Retry a journaled transaction
+  async function retryJournaled(tx: TxJournal) {
+    setRetryingId(tx.id)
+    journalUpdate(tx.id, { retries: tx.retries + 1 })
+    try {
+      const billTimeIso = new Date().toISOString()
+      const results = await Promise.all(tx.items.map(async item => {
+        const prop = item.sellingPrice * item.qty / tx.total
+        const body: Record<string, unknown> = {
+          productSizeId: item.productSizeId, quantityBottles: item.qty,
+          paymentMode: tx.payMode, scanMethod: 'MANUAL', staffId: tx.staffId,
+          customerName: tx.customerName || null,
+          saleTime: billTimeIso,
+        }
+        if (tx.payMode === 'SPLIT' && tx.splitCash != null) {
+          const splitRem = Math.max(0, tx.total - tx.splitCash)
+          body.cashAmount = +(tx.splitCash * prop).toFixed(2)
+          body[tx.splitMethod === 'CARD' ? 'cardAmount' : 'upiAmount'] = +(splitRem * prop).toFixed(2)
+        }
+        const res = await fetch('/api/sales', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Sale failed') }
+        return res.json()
+      }))
+      if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('Partial failure')
+      // Success — remove from journal and orphan list
+      journalClear(tx.id)
+      setOrphanedTx(prev => prev.filter(t => t.id !== tx.id))
+      flash(`Recovered: ${fmt(tx.total)} posted successfully`, 'ok')
+      loadProducts(); loadRecent()
+    } catch (e: unknown) {
+      flash(`Retry failed: ${e instanceof Error ? e.message : 'Unknown error'} — transaction still saved`, 'err')
+      // Update retry count but keep in journal
+      setOrphanedTx(journalRead().filter(t => t.status === 'pending'))
+    } finally {
+      setRetryingId(null)
+    }
+  }
+
+  function dismissJournaled(id: string) {
+    journalUpdate(id, { status: 'dismissed' })
+    setOrphanedTx(prev => prev.filter(t => t.id !== id))
+  }
 
   useEffect(() => {
     loadProducts()
@@ -305,29 +406,56 @@ export default function POSPage() {
 
     setProcessing(true)
 
-    // Optimistic reset — do it immediately so the UI feels instant.
-    // If the API fails, we'll restore the cart and show an error.
     const savedCart = [...cart]
     const savedClerkKey = activeClerkKey
     const savedPayMode = payMode
     const savedSplitCash = splitCash
     const savedCustomerName = customerName
     const total = cartTotal
+    const splitCashSaved = parseFloat(savedSplitCash) || 0
+    const splitRemainderSaved = Math.max(0, total - splitCashSaved)
+
+    // ── Write to crash-recovery journal BEFORE touching anything ──────────────
+    const txId = makeId()
+    const journalEntry: TxJournal = {
+      id: txId,
+      at: new Date().toISOString(),
+      staffId: activeClerk.staffId,
+      clerkLabel: activeClerk.label,
+      payMode: savedPayMode,
+      customerName: savedCustomerName || null,
+      total,
+      items: savedCart.map(item => ({
+        productSizeId: item.productSizeId,
+        name: item.name,
+        sizeMl: item.sizeMl,
+        qty: item.qty,
+        sellingPrice: item.sellingPrice,
+      })),
+      splitCash: splitCashSaved > 0 ? splitCashSaved : undefined,
+      splitMethod: savedPayMode === 'SPLIT' ? splitMethod : undefined,
+      retries: 0,
+      status: 'pending',
+    }
+    journalWrite(journalEntry)
+
+    // Optimistic reset — cart clears immediately so cashier can start next bill
     resetSale()
     flash(`Bill complete — ${fmt(total)}`, 'ok')
 
     try {
-      const billTimeIso = new Date().toISOString()
+      const billTimeIso = journalEntry.at  // use journal timestamp for consistency
 
       const needsTerminal = savedPayMode === 'CARD' || savedPayMode === 'UPI' || (savedPayMode === 'SPLIT' && (splitMethod === 'CARD' || splitMethod === 'UPI'))
       if (needsTerminal) {
-        const terminalAmt = savedPayMode === 'SPLIT' ? splitRemainder : total
+        const terminalAmt = savedPayMode === 'SPLIT' ? splitRemainderSaved : total
         const tr = await fetch('/api/card-terminal/push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ amount: terminalAmt, type: savedPayMode === 'SPLIT' ? splitMethod : savedPayMode })
         })
         if (!tr.ok) {
-          // Restore cart on terminal failure
+          // Restore cart — terminal was rejected, nothing was posted yet
+          journalClear(txId)
           setCart(savedCart); setActiveClerkKey(savedClerkKey); setPayMode(savedPayMode as PayMode)
           setSplitCash(savedSplitCash); setCustomerName(savedCustomerName); setShowPayment(true)
           flash('EDC Terminal transaction failed or rejected. Please manually retry.', 'err')
@@ -335,9 +463,6 @@ export default function POSPage() {
           return
         }
       }
-
-      const splitCashSaved = parseFloat(savedSplitCash) || 0
-      const splitRemainderSaved = Math.max(0, total - splitCashSaved)
 
       const results = await Promise.all(savedCart.map(async item => {
         const prop = item.sellingPrice * item.qty / total
@@ -359,16 +484,20 @@ export default function POSPage() {
         return res.json()
       }))
 
-      if (results.some(r => r?.error)) throw new Error('One or more items failed')
+      if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('One or more items failed')
+
+      // ── All good — clear from journal ─────────────────────────────────────
+      journalClear(txId)
 
       // Background refresh (non-blocking)
       loadProducts()
       loadRecent()
     } catch (e: unknown) {
-      // Sale failed after optimistic reset — restore so cashier can retry
-      setCart(savedCart); setActiveClerkKey(savedClerkKey); setPayMode(savedPayMode as PayMode)
-      setSplitCash(savedSplitCash); setCustomerName(savedCustomerName); setShowPayment(true)
-      flash(e instanceof Error ? e.message : 'Sale failed — cart restored', 'err')
+      // API failed after optimistic reset. Journal entry stays — show recovery UI.
+      const msg = e instanceof Error ? e.message : 'Sale failed'
+      flash(`${msg} — saved for recovery`, 'err')
+      // Surface in the orphan list immediately so cashier sees it
+      setOrphanedTx(prev => [...prev.filter(t => t.id !== txId), { ...journalEntry, retries: 1 }])
     } finally {
       setProcessing(false)
       scanRef.current?.focus()
@@ -510,6 +639,47 @@ export default function POSPage() {
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-lg text-sm font-semibold shadow-2xl pointer-events-none transition-all ${
           toast.type === 'ok' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
         }`}>{toast.msg}</div>
+      )}
+
+      {/* ── Crash-recovery banner ─────────────── */}
+      {orphanedTx.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[520px] max-w-[95vw] space-y-2">
+          {orphanedTx.map(tx => (
+            <div key={tx.id} className="bg-red-900 text-white rounded-2xl shadow-2xl border border-red-700 overflow-hidden">
+              <div className="px-4 py-3 flex items-start gap-3">
+                <div className="text-red-300 mt-0.5 text-lg leading-none shrink-0">⚠</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm">Unconfirmed transaction</p>
+                  <p className="text-xs text-red-300 mt-0.5">
+                    {tx.clerkLabel} · {tx.payMode} · {fmt(tx.total)} · {tx.items.length} item(s)
+                  </p>
+                  <p className="text-xs text-red-400 mt-0.5">
+                    {new Date(tx.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                    {tx.retries > 0 && ` · ${tx.retries} attempt(s)`}
+                  </p>
+                  <p className="text-[11px] text-red-300 mt-1 truncate">
+                    {tx.items.map(i => `${i.name} ${i.sizeMl}ml ×${i.qty}`).join(', ')}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => retryJournaled(tx)}
+                    disabled={retryingId === tx.id}
+                    className="px-3 py-1.5 bg-white text-red-800 text-xs font-bold rounded-lg hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {retryingId === tx.id ? 'Retrying...' : 'Retry now'}
+                  </button>
+                  <button
+                    onClick={() => dismissJournaled(tx.id)}
+                    className="px-3 py-1.5 bg-red-800 text-red-200 text-xs font-semibold rounded-lg hover:bg-red-700"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── Settle Pending Bill Modal ─────────── */}
