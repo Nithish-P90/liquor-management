@@ -78,7 +78,24 @@ export async function DELETE(req: NextRequest) {
   const existing = await prisma.miscItem.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
-  await prisma.miscItem.delete({ where: { id } })
+  await prisma.$transaction(async tx => {
+    await tx.miscItem.delete({ where: { id } })
+
+    const linkedSize = await tx.productSize.findUnique({
+      where: { barcode: existing.barcode },
+      include: { product: true },
+    })
+
+    if (!linkedSize) return
+
+    await tx.productSize.delete({ where: { id: linkedSize.id } })
+
+    const remainingSizes = await tx.productSize.count({ where: { productId: linkedSize.productId } })
+    if (remainingSizes === 0) {
+      await tx.product.delete({ where: { id: linkedSize.productId } })
+    }
+  })
+
   return NextResponse.json({ success: true })
 }
 

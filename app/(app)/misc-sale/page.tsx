@@ -388,6 +388,57 @@ export default function MiscSalePage() {
         </div>
       ) : null}
 
+      {/* Manage items */}
+      {showManage && canManageItems && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-700">Manage Misc Items</h2>
+            <span className="text-xs text-slate-400">{allItems.length} items</span>
+          </div>
+          {allItems.length === 0 ? (
+            <div className="px-5 py-4 text-sm text-slate-400">No items found.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400">Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400">Barcode</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400">Category</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400">Price</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {allItems.map(item => (
+                  <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-slate-500">{item.barcode}</td>
+                    <td className="px-4 py-3 text-center text-xs font-semibold text-slate-500">{CAT_LABEL[item.category]}</td>
+                    <td className="px-4 py-3 text-right font-bold text-slate-900">{rupee(Number(item.price))}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-md text-slate-600 hover:bg-slate-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(item.id)}
+                          className="px-3 py-1.5 text-xs font-semibold border border-red-200 rounded-md text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Register item modal */}
       {registerModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -435,6 +486,84 @@ export default function MiscSalePage() {
                 onClick={registerItem}
                 className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
               >{registerModal.addToCartOnSave ? 'Register & Add' : 'Register'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit item modal */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl">
+            <h2 className="text-base font-bold text-slate-800 mb-1">Edit Item</h2>
+            <p className="text-xs text-slate-400 mb-4">Update item name, category and price.</p>
+            <div className="space-y-3">
+              <div className="px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-mono text-slate-500 bg-slate-50">
+                {editItem.barcode}
+              </div>
+              <input
+                autoFocus
+                value={editForm.name}
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Product name"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={editForm.category}
+                onChange={e => setEditForm(f => ({ ...f, category: e.target.value as MiscCategory }))}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="CIGARETTES">Cigarettes</option>
+                <option value="SNACKS">Snacks</option>
+                <option value="CUPS">Cups</option>
+              </select>
+              <input
+                type="number"
+                value={editForm.price}
+                onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                placeholder="Price per unit (₹)"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditItem(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-500 rounded-lg text-sm font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteConfirmId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl">
+            <h2 className="text-base font-bold text-slate-800 mb-2">Delete Item?</h2>
+            <p className="text-sm text-slate-500 mb-4">This will remove the item from misc sales list.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-500 rounded-lg text-sm font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmDelete(deleteConfirmId)}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
