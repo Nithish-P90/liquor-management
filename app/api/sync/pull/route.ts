@@ -12,15 +12,10 @@ import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-function validateToken(req: NextRequest): boolean {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  const expected = process.env.SYNC_TOKEN
-  if (!expected) return false
-  return token === expected
-}
+import { validateBearerToken } from '@/lib/api-auth'
 
 export async function GET(req: NextRequest) {
-  if (!validateToken(req)) {
+  if (!validateBearerToken(req.headers.get('authorization'), 'SYNC_TOKEN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -142,7 +137,9 @@ export async function GET(req: NextRequest) {
       id: s.id,
       name: s.name,
       role: s.role,
-      pin: s.pin,
+      // PINs are authentication credentials — never expose over the wire.
+      // The desktop app uses face recognition for attendance, not PINs.
+      hasPin: !!s.pin,
       active: s.active ? 1 : 0,
       face_profile_json: s.faceProfile ? JSON.stringify({
         threshold: s.faceProfile.threshold,

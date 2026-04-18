@@ -326,16 +326,3 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   )
 }
 
-function SummaryCard({ label, value, color, onClick }: { label: string; value: number; color: string; onClick: () => void }) {
-  const colors: Record<string, string> = {
-    red: 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100',
-    amber: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100',
-  }
-  return (
-    <button onClick={onClick} className={`border rounded-xl p-4 text-left transition-colors ${colors[color]}`}>
-      <div className="text-3xl font-bold">{value}</div>
-      <div className="text-sm font-medium mt-1">{label}</div>
-    </button>
-  )
-}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { validateBearerToken } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +10,7 @@ export const dynamic = 'force-dynamic'
  * Rolls over the current session's closing stock into the next day's opening stock.
  */
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!validateBearerToken(req.headers.get('authorization'), 'CRON_SECRET')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

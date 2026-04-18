@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
+import { requireSession, requireAdmin } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const [, err] = await requireSession()
+  if (err) return err
+
   const [transactions, lockerTotal] = await Promise.all([
     prisma.bankTransaction.findMany({
       orderBy: { txDate: 'desc' },
@@ -35,8 +39,19 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const [, authErr] = await requireAdmin()
+  if (authErr) return authErr
+
   const body = await req.json()
   const { txDate, txType, amount, notes } = body
+
+  if (!txDate || !txType || !['DEPOSIT', 'KSBCL_PAYMENT'].includes(txType)) {
+    return NextResponse.json({ error: 'Valid txDate and txType (DEPOSIT or KSBCL_PAYMENT) required' }, { status: 400 })
+  }
+  const parsedAmount = Number(amount)
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
+  }
 
   const tx = await prisma.bankTransaction.create({
     data: {

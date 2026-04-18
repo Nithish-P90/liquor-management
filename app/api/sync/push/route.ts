@@ -12,17 +12,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { Prisma, PrismaClient } from '@prisma/client'
 import { toUtcNoonDate } from '@/lib/date-utils'
+import { validateBearerToken } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
-
-function validateToken(req: NextRequest): boolean {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  const expected = process.env.SYNC_TOKEN
-  if (!expected) return false
-  return token === expected
-}
 
 type Ack = { local_id: string; server_id?: number; error?: string }
 
@@ -266,7 +260,7 @@ async function processCashRecords(records: Record<string, unknown>[]): Promise<A
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  if (!validateToken(req)) {
+  if (!validateBearerToken(req.headers.get('authorization'), 'SYNC_TOKEN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -148,7 +148,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       {item.label}
-                      {item.href === '/alerts' && <AlertBadge />}
                     </Link>
                   )
                 })}
@@ -180,10 +179,3 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ── Alert badge (shows count of unresolved HIGH variances) ────────────────────
-
-function AlertBadge() {
-  // Keep simple — just a static indicator for now
-  // Could fetch count via SWR in a real implementation
-  return null
-}

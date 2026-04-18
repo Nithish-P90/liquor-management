@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { requireSession, requireAdmin } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const [session, err] = await requireSession()
+  if (err) return err
+
+  const isAdmin = session.user.role === 'ADMIN'
+
   const staff = await prisma.staff.findMany({
     select: {
       id: true,
@@ -11,7 +17,8 @@ export async function GET() {
       email: true,
       role: true,
       active: true,
-      pin: true,
+      // Only expose PIN existence to admins, never the actual value
+      pin: isAdmin,
       createdAt: true,
       payrollType: true,
       monthlySalary: true,
@@ -40,10 +47,19 @@ export async function GET() {
     },
     orderBy: { name: 'asc' },
   })
-  return NextResponse.json(staff)
+
+  // For admin: mask PINs to indicate presence only (e.g. "****")
+  const mapped = isAdmin
+    ? staff.map(s => ({ ...s, hasPin: !!s.pin, pin: s.pin ? '****' : null }))
+    : staff
+
+  return NextResponse.json(mapped)
 }
 
 export async function POST(req: NextRequest) {
+  const [, authErr] = await requireAdmin()
+  if (authErr) return authErr
+
   try {
     const body = await req.json() as Partial<{
       name: string; email?: string | null; pin?: string | null; role?: string;
@@ -92,6 +108,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const [, authErr] = await requireAdmin()
+  if (authErr) return authErr
+
   const body = await req.json() as Partial<{
     id?: number; active?: boolean; pin?: string | null; name?: string; role?: string;
     payrollType?: string; monthlySalary?: number; dailyWage?: number;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { Category } from '@prisma/client'
+import { requireAdmin } from '@/lib/api-auth'
+import { inferCategory } from '@/lib/infer-category'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,20 +35,10 @@ function parseCSV(text: string) {
   return rows
 }
 
-function inferCategory(itemName: string): Category {
-  const name = itemName.toUpperCase()
-  if (name.includes('BEER') || name.includes('LAGER')) return Category.BEER
-  if (name.includes('BRANDY')) return Category.BRANDY
-  if (name.includes('WHISKY') || name.includes('WHISKEY')) return Category.WHISKY
-  if (name.includes('RUM')) return Category.RUM
-  if (name.includes('VODKA')) return Category.VODKA
-  if (name.includes('GIN')) return Category.GIN
-  if (name.includes('WINE')) return Category.WINE
-  if (name.includes('BREEZER') || name.includes('PREMIX')) return Category.PREMIX
-  return Category.WHISKY
-}
-
 export async function POST(req: NextRequest) {
+  const [, authErr] = await requireAdmin()
+  if (authErr) return authErr
+
   try {
     const { csvData } = await req.json()
     if (!csvData) return NextResponse.json({ error: 'No data provided' }, { status: 400 })
@@ -100,8 +91,13 @@ export async function POST(req: NextRequest) {
         }
       })
 
-      // Upsert ProductSize with Barcode
-      const productSize = await prisma.productSize.upsert({
+      // Check if the size already exists to track created vs updated
+      const existingSize = await prisma.productSize.findUnique({
+        where: { productId_sizeMl: { productId: product.id, sizeMl } },
+        select: { id: true },
+      })
+
+      await prisma.productSize.upsert({
         where: {
           productId_sizeMl: {
             productId: product.id,
@@ -123,10 +119,10 @@ export async function POST(req: NextRequest) {
         }
       })
 
-      if (productSize.createdAt > new Date(Date.now() - 5000)) {
-        createdCount++
-      } else {
+      if (existingSize) {
         updatedCount++
+      } else {
+        createdCount++
       }
     }
 

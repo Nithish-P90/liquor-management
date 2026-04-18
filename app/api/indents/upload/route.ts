@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseIndentPdf } from '@/lib/pdf-parser'
 import prisma from '@/lib/prisma'
-import { Category } from '@prisma/client'
+import { inferCategory } from '@/lib/infer-category'
+import { requireSession } from '@/lib/api-auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
@@ -9,19 +10,6 @@ export const dynamic = 'force-dynamic'
 
 function safeNumber(value: number, fallback = 0) {
   return Number.isFinite(value) ? value : fallback
-}
-
-function inferCategory(itemName: string): Category {
-  const name = itemName.toUpperCase()
-  if (name.includes('BEER') || name.includes('LAGER')) return Category.BEER
-  if (name.includes('BRANDY')) return Category.BRANDY
-  if (name.includes('WHISKY') || name.includes('WHISKEY')) return Category.WHISKY
-  if (name.includes('RUM')) return Category.RUM
-  if (name.includes('VODKA')) return Category.VODKA
-  if (name.includes('GIN')) return Category.GIN
-  if (name.includes('WINE')) return Category.WINE
-  if (name.includes('BREEZER') || name.includes('PREMIX')) return Category.PREMIX
-  return Category.WHISKY
 }
 
 function bottlePrice(item: {
@@ -48,6 +36,9 @@ function bottlePrice(item: {
 }
 
 export async function POST(req: NextRequest) {
+  const [, authErr] = await requireSession()
+  if (authErr) return authErr
+
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -58,16 +49,23 @@ export async function POST(req: NextRequest) {
     let pdfPath = ''
 
     if (isVercel) {
-      // On Vercel, we can't write to the filesystem. Use a Data URL as the "path".
-      // This will be stored in the DB and rendered in the frontend iframe.
       const base64 = buffer.toString('base64')
       pdfPath = `data:application/pdf;base64,${base64}`
     } else {
-      // Local development: use the filesystem
       const uploadsDir = path.join(process.cwd(), 'uploads', 'indents')
       await mkdir(uploadsDir, { recursive: true })
-      const filename = `${Date.now()}-${file.name.replace(/[^\w.\- ]/g, '_')}`
-      await writeFile(path.join(uploadsDir, filename), buffer)
+      // Sanitize filename: strip path separators and directory traversal sequences,
+      // then allow only alphanumeric, hyphens, underscores, and dots.
+      const baseName = path.basename(file.name).replace(/[^\w.\-]/g, '_')
+      const filename = `${Date.now()}-${baseName}`
+      const filePath = path.join(uploadsDir, filename)
+
+      // Verify resolved path is still within the uploads directory
+      if (!path.resolve(filePath).startsWith(path.resolve(uploadsDir))) {
+        return NextResponse.json({ error: 'Invalid filename' }, { status: 400 })
+      }
+
+      await writeFile(filePath, buffer)
       pdfPath = `uploads/indents/${filename}`
     }
 

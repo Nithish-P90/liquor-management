@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getCurrentStock } from '@/lib/reconciliation'
+import { requireSession } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  const [, err] = await requireSession()
+  if (err) return err
   const { searchParams } = new URL(req.url)
   const barcode = searchParams.get('barcode')
   const itemCode = searchParams.get('itemCode')
