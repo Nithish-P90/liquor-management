@@ -117,28 +117,59 @@ export async function GET() {
     orderBy: { saleDate: 'asc' },
   })
 
-  // Top sellers today
-  const topSellers = await prisma.sale.groupBy({
-    by: ['productSizeId'],
-    where: { saleDate: today },
-    _sum: { quantityBottles: true, totalAmount: true },
-    orderBy: { _sum: { totalAmount: 'desc' } },
-    take: 5,
-  })
+  const thirtyDaysAgo = subtractDays(today, 29)
 
-  const topSellersDetail = await Promise.all(
-    topSellers.map(async t => {
-      const ps = await prisma.productSize.findUnique({
-        where: { id: t.productSizeId },
-        include: { product: true },
-      })
+  async function resolveTopSellers(rows: { productSizeId: number; _sum: { quantityBottles: number | null; totalAmount: any }; _count: { id: number } }[]) {
+    const ids = rows.map(r => r.productSizeId)
+    const sizes = await prisma.productSize.findMany({
+      where: { id: { in: ids } },
+      include: { product: true },
+    })
+    const sizeMap = Object.fromEntries(sizes.map(s => [s.id, s]))
+    return rows.map(t => {
+      const ps = sizeMap[t.productSizeId]
       return {
-        name: `${ps?.product.name} ${ps?.sizeMl}ml`,
+        name: ps?.product.name ?? 'Unknown',
+        sizeMl: ps?.sizeMl ?? 0,
         bottles: t._sum.quantityBottles ?? 0,
         amount: Number(t._sum.totalAmount ?? 0),
+        txCount: t._count.id,
       }
     })
-  )
+  }
+
+  // Top sellers today
+  const topSellersToday = await prisma.sale.groupBy({
+    by: ['productSizeId'],
+    where: { saleDate: today, quantityBottles: { gt: 0 } },
+    _sum: { quantityBottles: true, totalAmount: true },
+    _count: { id: true },
+    orderBy: { _sum: { quantityBottles: 'desc' } },
+    take: 8,
+  })
+  const topSellersDetail = await resolveTopSellers(topSellersToday)
+
+  // Top sellers past 7 days
+  const topSellersWeekRaw = await prisma.sale.groupBy({
+    by: ['productSizeId'],
+    where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+    _sum: { quantityBottles: true, totalAmount: true },
+    _count: { id: true },
+    orderBy: { _sum: { quantityBottles: 'desc' } },
+    take: 8,
+  })
+  const topSellersWeek = await resolveTopSellers(topSellersWeekRaw)
+
+  // Top sellers past 30 days
+  const topSellersMonthRaw = await prisma.sale.groupBy({
+    by: ['productSizeId'],
+    where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+    _sum: { quantityBottles: true, totalAmount: true },
+    _count: { id: true },
+    orderBy: { _sum: { quantityBottles: 'desc' } },
+    take: 8,
+  })
+  const topSellersMonth = await resolveTopSellers(topSellersMonthRaw)
 
   // Recent variance alerts
   const recentAlerts = await prisma.varianceRecord.findMany({
@@ -166,6 +197,8 @@ export async function GET() {
       bottles: s._sum.quantityBottles ?? 0,
     })),
     topSellers: topSellersDetail,
+    topSellersWeek,
+    topSellersMonth,
     recentAlerts: recentAlerts.map(a => ({
       id: a.id,
       product: a.productSize.product.name,

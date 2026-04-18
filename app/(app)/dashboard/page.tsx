@@ -22,6 +22,8 @@ const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.Respons
 
 type ClerkBillingRow = { staffId: number; name: string; bills: number; bottles: number; amount: number }
 
+type TopSellerRow = { name: string; sizeMl: number; bottles: number; amount: number; txCount: number }
+
 type DashboardData = {
   todaySales: { total: number; bottles: number; cash: number; card: number; upi: number }
   miscSaleTotal: number
@@ -29,7 +31,9 @@ type DashboardData = {
   pendingIndents: number
   clerkBilling: ClerkBillingRow[]
   weeklySales: { date: string; amount: number }[]
-  topSellers: { name: string; sizeMl: number; bottles: number; amount: number }[]
+  topSellers: TopSellerRow[]
+  topSellersWeek: TopSellerRow[]
+  topSellersMonth: TopSellerRow[]
   recentAlerts: { id: number; product: string; sizeMl: number; variance: number; date: string; severity: string }[]
 }
 
@@ -50,6 +54,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [leaderTab, setLeaderTab] = useState<'today' | 'week' | 'month'>('week')
 
   useEffect(() => {
     fetch('/api/reports/dashboard').then(r => r.json()).then(setData)
@@ -165,23 +170,18 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4">Top Sellers Today</h2>
-          {data.topSellers.length > 0 ? (
-            <div className="space-y-3">
-              {data.topSellers.slice(0, 6).map((s, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-300 w-4">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 truncate">{s.name}</p>
-                    <p className="text-xs text-slate-400">{s.sizeMl}ml · {s.bottles} bottles</p>
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 flex-shrink-0">{rupee(s.amount)}</span>
-                </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700">Top Sellers</h2>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+              {(['today', 'week', 'month'] as const).map(t => (
+                <button key={t} onClick={() => setLeaderTab(t)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${leaderTab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                  {t === 'today' ? 'Today' : t === 'week' ? '7 Days' : '30 Days'}
+                </button>
               ))}
             </div>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-slate-300 text-sm">No sales today</div>
-          )}
+          </div>
+          <Leaderboard rows={leaderTab === 'today' ? data.topSellers : leaderTab === 'week' ? data.topSellersWeek : data.topSellersMonth} />
         </div>
       </div>
 
@@ -264,6 +264,49 @@ export default function DashboardPage() {
           <div className="text-[11px] text-slate-400 mt-0.5">End day & carry forward</div>
         </button>
       </div>
+    </div>
+  )
+}
+
+function Leaderboard({ rows }: { rows: TopSellerRow[] | undefined }) {
+  if (!rows || rows.length === 0) {
+    return <div className="h-48 flex items-center justify-center text-slate-300 text-sm">No sales data</div>
+  }
+  const maxBottles = Math.max(...rows.map(r => r.bottles), 1)
+  const medals = ['🥇', '🥈', '🥉']
+  const rankColors = [
+    'text-amber-500 bg-amber-50 border-amber-200',
+    'text-slate-500 bg-slate-100 border-slate-200',
+    'text-orange-500 bg-orange-50 border-orange-200',
+  ]
+  return (
+    <div className="space-y-3">
+      {rows.map((s, i) => (
+        <div key={i}>
+          <div className="flex items-center gap-3 mb-1">
+            <div className={`w-7 h-7 flex-shrink-0 rounded-lg border flex items-center justify-center text-xs font-black ${
+              i < 3 ? rankColors[i] : 'text-slate-300 bg-white border-slate-100'
+            }`}>
+              {i < 3 ? medals[i] : i + 1}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate leading-tight">{s.name}</p>
+              <p className="text-[11px] text-slate-400">{s.sizeMl}ml</p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0 text-right">
+              <div>
+                <p className="text-xs font-black text-slate-800">{s.bottles} <span className="font-normal text-slate-400">units</span></p>
+                <p className="text-[10px] text-slate-400">{s.txCount} {s.txCount === 1 ? 'bill' : 'bills'}</p>
+              </div>
+              <p className="text-xs font-bold text-slate-700 w-14 text-right">{rupee(s.amount)}</p>
+            </div>
+          </div>
+          <div className="ml-10 h-1 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${i === 0 ? 'bg-amber-400' : i === 1 ? 'bg-slate-400' : i === 2 ? 'bg-orange-400' : 'bg-blue-300'}`}
+              style={{ width: `${(s.bottles / maxBottles) * 100}%` }} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
