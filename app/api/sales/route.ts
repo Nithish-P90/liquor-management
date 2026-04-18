@@ -120,7 +120,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'quantityBottles must be a positive integer' }, { status: 400 })
   }
 
-  const productSize = await prisma.productSize.findUnique({ where: { id: productSizeId } })
+  const productSize = await prisma.productSize.findUnique({
+    where: { id: productSizeId },
+    include: { product: { select: { category: true } } },
+  })
   if (!productSize) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
   const now = saleTime ? new Date(saleTime) : new Date()
@@ -131,9 +134,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const sale = await prisma.$transaction(async tx => {
-      const availableStock = await getAvailableStock(tx, productSizeId)
-      if (requestedQuantity > availableStock) {
-        throw new Error(`Only ${availableStock} bottles are available for this item`)
+      if (productSize.product.category !== 'MISCELLANEOUS') {
+        const availableStock = await getAvailableStock(tx, productSizeId)
+        if (requestedQuantity > availableStock) {
+          throw new Error(`Only ${availableStock} bottles are available for this item`)
+        }
       }
 
       return tx.sale.create({

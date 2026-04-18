@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 type MiscCategory = 'CIGARETTES' | 'SNACKS' | 'CUPS'
 
@@ -42,6 +43,10 @@ function rupee(n: number) {
 }
 
 export default function MiscSalePage() {
+  const { data: session } = useSession()
+  const user = session?.user as { role?: string } | undefined
+  const canManageItems = user?.role === 'ADMIN' || user?.role === 'CASHIER'
+
   const [barcode, setBarcode] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
@@ -50,12 +55,17 @@ export default function MiscSalePage() {
   const [loading, setLoading] = useState(false)
 
   // Register modal
-  const [registerModal, setRegisterModal] = useState<{ barcode: string } | null>(null)
-  const [regForm, setRegForm] = useState({ name: '', category: 'CIGARETTES' as MiscCategory, price: '' })
+  const [registerModal, setRegisterModal] = useState<{ addToCartOnSave: boolean } | null>(null)
+  const [regForm, setRegForm] = useState({ barcode: '', name: '', category: 'CIGARETTES' as MiscCategory, price: '' })
 
   const barcodeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadSales() }, [date])
+
+  function openRegisterModal(defaultBarcode = '', addToCartOnSave = false) {
+    setRegisterModal({ addToCartOnSave })
+    setRegForm({ barcode: defaultBarcode, name: '', category: 'CIGARETTES', price: '' })
+  }
 
   function loadSales() {
     setLoading(true)
@@ -73,8 +83,11 @@ export default function MiscSalePage() {
     const item: MiscItem | null = await res.json()
 
     if (!item) {
-      setRegisterModal({ barcode: bc })
-      setRegForm({ name: '', category: 'CIGARETTES', price: '' })
+      if (!canManageItems) {
+        showFlash('Only admins and cashiers can add new items', 'err')
+        return
+      }
+      openRegisterModal(bc, true)
       return
     }
 
@@ -91,20 +104,40 @@ export default function MiscSalePage() {
   }
 
   async function registerItem() {
-    if (!regForm.name.trim() || !regForm.price || !registerModal) return
+    if (!registerModal) return
+
+    const cleanBarcode = regForm.barcode.trim()
+    const cleanName = regForm.name.trim()
+    const price = parseFloat(regForm.price)
+
+    if (!cleanBarcode || !cleanName || !Number.isFinite(price) || price <= 0) {
+      showFlash('Barcode, name and valid price are required', 'err')
+      return
+    }
+
     const res = await fetch('/api/misc-items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        barcode: registerModal.barcode,
-        name: regForm.name.trim(),
+        barcode: cleanBarcode,
+        name: cleanName,
         category: regForm.category,
-        price: parseFloat(regForm.price),
+        price,
       }),
     })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      showFlash(data.error ?? 'Failed to add item', 'err')
+      return
+    }
+
     const item: MiscItem = await res.json()
     setRegisterModal(null)
-    addToCart({ ...item, price: Number(item.price) })
+    if (registerModal.addToCartOnSave) {
+      addToCart({ ...item, price: Number(item.price) })
+    }
+    showFlash('Item added successfully', 'ok')
     barcodeRef.current?.focus()
   }
 
@@ -193,6 +226,14 @@ export default function MiscSalePage() {
         >
           Add
         </button>
+        {canManageItems && (
+          <button
+            onClick={() => openRegisterModal('', false)}
+            className="px-5 py-3 bg-slate-700 text-white font-bold rounded-lg text-sm hover:bg-slate-800 transition-colors"
+          >
+            + Add Product
+          </button>
+        )}
       </div>
 
       {/* Cart */}
@@ -291,8 +332,14 @@ export default function MiscSalePage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl">
             <h2 className="text-base font-bold text-slate-800 mb-1">Register New Item</h2>
-            <p className="text-xs text-slate-400 font-mono mb-4">{registerModal.barcode}</p>
+            <p className="text-xs text-slate-400 mb-4">Name, price and barcode will also sync to POS.</p>
             <div className="space-y-3">
+              <input
+                value={regForm.barcode}
+                onChange={e => setRegForm(f => ({ ...f, barcode: e.target.value }))}
+                placeholder="Barcode"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              />
               <input
                 autoFocus
                 value={regForm.name}
@@ -326,7 +373,7 @@ export default function MiscSalePage() {
               <button
                 onClick={registerItem}
                 className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
-              >Register & Add</button>
+              >{registerModal.addToCartOnSave ? 'Register & Add' : 'Register'}</button>
             </div>
           </div>
         </div>
