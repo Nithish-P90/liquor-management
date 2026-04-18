@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { ensureDailyRollover } from '@/lib/rollover'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  await ensureDailyRollover()
+
   // Fire productSizes + session lookup in parallel
   const [productSizes, session] = await Promise.all([
     prisma.productSize.findMany({

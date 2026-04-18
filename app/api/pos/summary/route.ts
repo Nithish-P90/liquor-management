@@ -4,6 +4,7 @@ import { StockEntryType } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
+import { ensureDailyRollover } from '@/lib/rollover'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,8 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  await ensureDailyRollover()
 
   const user = session.user as SessionUser
   const staffId = user.id ? parseInt(user.id) : 0

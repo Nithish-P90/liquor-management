@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { toUtcNoonDate } from '@/lib/date-utils'
 import { getAvailableStock } from '@/lib/stock-utils'
+import { ensureDailyRollover } from '@/lib/rollover'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  await ensureDailyRollover()
 
   const body = await req.json()
   const {
