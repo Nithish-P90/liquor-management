@@ -52,7 +52,7 @@ export async function GET() {
     ...(isStaff && staffId ? { staffId } : {}),
   }
 
-  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, recentLines, openingEntries, closingEntries] = await Promise.all([
+  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, voidAgg, recentLines, openingEntries, closingEntries] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, paymentMode: 'CASH' },
       _sum: { totalAmount: true, quantityBottles: true },
@@ -75,6 +75,11 @@ export async function GET() {
     }),
     prisma.sale.aggregate({
       where: { ...saleWhere, paymentMode: 'SPLIT' },
+      _sum: { totalAmount: true, quantityBottles: true, cashAmount: true, cardAmount: true, upiAmount: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, paymentMode: 'VOID' },
       _sum: { totalAmount: true, quantityBottles: true, cashAmount: true, cardAmount: true, upiAmount: true },
       _count: { _all: true },
     }),
@@ -102,10 +107,10 @@ export async function GET() {
   ])
 
   const paymentTotals = {
-    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0),
-    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0),
-    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0),
-    CREDIT: Number(creditAgg._sum.totalAmount ?? 0),
+    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0) + Number(voidAgg._sum.cashAmount ?? 0),
+    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0) + Number(voidAgg._sum.cardAmount ?? 0),
+    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0) + Number(voidAgg._sum.upiAmount ?? 0),
+    CREDIT: Number(creditAgg._sum.totalAmount ?? 0) + (Number(voidAgg._sum.totalAmount ?? 0) - Number(voidAgg._sum.cashAmount ?? 0) - Number(voidAgg._sum.cardAmount ?? 0) - Number(voidAgg._sum.upiAmount ?? 0)),
     SPLIT: 0,
   }
 
@@ -185,13 +190,14 @@ export async function GET() {
     openingStock: summarizeStockEntries(openingEntries),
     closingStock: summarizeStockEntries(closingEntries),
     todaySales: {
-      bills: cashAgg._count._all + cardAgg._count._all + upiAgg._count._all + creditAgg._count._all + splitAgg._count._all,
+      bills: cashAgg._count._all + cardAgg._count._all + upiAgg._count._all + creditAgg._count._all + splitAgg._count._all + voidAgg._count._all,
       bottles:
         Number(cashAgg._sum.quantityBottles ?? 0) +
         Number(cardAgg._sum.quantityBottles ?? 0) +
         Number(upiAgg._sum.quantityBottles ?? 0) +
         Number(creditAgg._sum.quantityBottles ?? 0) +
-        Number(splitAgg._sum.quantityBottles ?? 0),
+        Number(splitAgg._sum.quantityBottles ?? 0) +
+        Number(voidAgg._sum.quantityBottles ?? 0),
       amount: paymentTotals.CASH + paymentTotals.CARD + paymentTotals.UPI + paymentTotals.CREDIT,
       paymentTotals,
     },

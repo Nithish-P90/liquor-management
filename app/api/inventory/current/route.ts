@@ -49,13 +49,11 @@ export async function GET() {
       : prisma.receiptItem.findMany({ select: { productSizeId: true, totalBottles: true } }),
 
     // Sales since session start (or all time) — group by productSizeId
-    // quantityBottles > 0 excludes VOID rows (which store negative qty) without
-    // requiring the VOID enum value to exist in the DB yet.
+    // Includes negative VOID quantities so stock reflects net sold bottles.
     prisma.sale.groupBy({
       by: ['productSizeId'],
       where: {
         ...(periodStart ? { saleDate: { gte: periodStart } } : {}),
-        quantityBottles: { gt: 0 },
       },
       _sum: { quantityBottles: true },
     }),
@@ -164,7 +162,7 @@ export async function PATCH(req: Request) {
       _sum: { totalBottles: true },
     }),
     prisma.sale.aggregate({
-      where: { productSizeId, quantityBottles: { gt: 0 }, ...(periodStart ? { saleDate: { gte: periodStart } } : {}) },
+      where: { productSizeId, ...(periodStart ? { saleDate: { gte: periodStart } } : {}) },
       _sum: { quantityBottles: true },
     }),
     prisma.stockAdjustment.aggregate({

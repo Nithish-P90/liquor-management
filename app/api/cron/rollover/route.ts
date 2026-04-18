@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { productSizeId: { in: psIdArr }, saleDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd }, quantityBottles: { gt: 0 } },
+      where: { productSizeId: { in: psIdArr }, saleDate: { gte: lastSession.periodStart, lte: lastSession.periodEnd } },
       _sum: { quantityBottles: true },
     }),
     prisma.stockAdjustment.groupBy({

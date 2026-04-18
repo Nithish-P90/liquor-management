@@ -19,40 +19,61 @@ type VoidItemInput = {
   quantityBottles: number
 }
 
-function round2(n: number) {
-  return Math.round(n * 100) / 100
-}
-
-function addRefundFromSale(refund: RefundTotals, sale: {
+type SaleLike = {
   paymentMode: 'CASH' | 'CARD' | 'UPI' | 'CREDIT' | 'SPLIT'
   quantityBottles: number
   totalAmount: unknown
   cashAmount: unknown
   cardAmount: unknown
   upiAmount: unknown
-}, voidQty: number) {
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
+function getRefundBreakup(sale: SaleLike, voidQty: number): RefundTotals {
+  const result: RefundTotals = { cash: 0, card: 0, upi: 0, credit: 0, total: 0 }
   const qty = Math.max(0, voidQty)
-  if (!qty || sale.quantityBottles <= 0) return
+  if (!qty || sale.quantityBottles <= 0) return result
 
   if (sale.paymentMode === 'SPLIT') {
     const ratio = qty / sale.quantityBottles
     const cash = Number(sale.cashAmount ?? 0) * ratio
     const card = Number(sale.cardAmount ?? 0) * ratio
     const upi = Number(sale.upiAmount ?? 0) * ratio
-    refund.cash += cash
-    refund.card += card
-    refund.upi += upi
-    refund.total += cash + card + upi
-    return
+    result.cash += cash
+    result.card += card
+    result.upi += upi
+    result.total += cash + card + upi
+    return result
   }
 
   const unitAmount = Number(sale.totalAmount ?? 0) / sale.quantityBottles
   const amount = unitAmount * qty
-  if (sale.paymentMode === 'CASH') refund.cash += amount
-  else if (sale.paymentMode === 'CARD') refund.card += amount
-  else if (sale.paymentMode === 'UPI') refund.upi += amount
-  else if (sale.paymentMode === 'CREDIT') refund.credit += amount
-  refund.total += amount
+  if (sale.paymentMode === 'CASH') result.cash += amount
+  else if (sale.paymentMode === 'CARD') result.card += amount
+  else if (sale.paymentMode === 'UPI') result.upi += amount
+  else if (sale.paymentMode === 'CREDIT') result.credit += amount
+  result.total += amount
+  return result
+}
+
+function addRefundFromSale(refund: RefundTotals, sale: SaleLike, voidQty: number) {
+  const amount = getRefundBreakup(sale, voidQty)
+  refund.cash += amount.cash
+  refund.card += amount.card
+  refund.upi += amount.upi
+  refund.credit += amount.credit
+  refund.total += amount.total
+}
+
+function parseVoidedSaleId(reason: string | null | undefined) {
+  if (!reason) return null
+  const match = reason.match(/void:sale#(\d+)/i)
+  if (!match) return null
+  const saleId = Number(match[1])
+  return Number.isInteger(saleId) && saleId > 0 ? saleId : null
 }
 
 function normalizeVoidItems(items: unknown): VoidItemInput[] {
@@ -105,6 +126,20 @@ export async function POST(req: NextRequest) {
     const sale = await prisma.sale.findUnique({ where: { id: saleId } })
     if (!sale) return NextResponse.json({ error: 'Sale not found' }, { status: 404 })
 
+    const priorVoids = await prisma.sale.aggregate({
+      where: {
+        paymentMode: 'VOID',
+        quantityBottles: { lt: 0 },
+        overrideReason: { contains: `void:sale#${sale.id}` },
+      },
+      _sum: { quantityBottles: true },
+    })
+    const alreadyVoided = Math.abs(Number(priorVoids._sum.quantityBottles ?? 0))
+    const remainingQty = Math.max(0, sale.quantityBottles - alreadyVoided)
+    if (remainingQty <= 0) {
+      return NextResponse.json({ error: 'Sale already fully voided' }, { status: 409 })
+    }
+
     addRefundFromSale(refund, {
       paymentMode: sale.paymentMode,
       quantityBottles: sale.quantityBottles,
@@ -112,7 +147,16 @@ export async function POST(req: NextRequest) {
       cashAmount: sale.cashAmount,
       cardAmount: sale.cardAmount,
       upiAmount: sale.upiAmount,
-    }, sale.quantityBottles)
+    }, remainingQty)
+
+    const split = getRefundBreakup({
+      paymentMode: sale.paymentMode,
+      quantityBottles: sale.quantityBottles,
+      totalAmount: sale.totalAmount,
+      cashAmount: sale.cashAmount,
+      cardAmount: sale.cardAmount,
+      upiAmount: sale.upiAmount,
+    }, remainingQty)
 
     // Insert a negative VOID row as audit trail instead of deleting the original
     await prisma.sale.create({
@@ -121,10 +165,13 @@ export async function POST(req: NextRequest) {
         saleTime:        now,
         staffId:         staffId,
         productSizeId:   sale.productSizeId,
-        quantityBottles: -sale.quantityBottles,
+        quantityBottles: -remainingQty,
         sellingPrice:    sale.sellingPrice,
-        totalAmount:     0,
+        totalAmount:     -round2(split.total),
         paymentMode:     'VOID',
+        cashAmount:      split.cash !== 0 ? -round2(split.cash) : null,
+        cardAmount:      split.card !== 0 ? -round2(split.card) : null,
+        upiAmount:       split.upi !== 0 ? -round2(split.upi) : null,
         scanMethod:      'MANUAL',
         billId:          sale.billId,
         overrideReason:  reason ?? `void:sale#${sale.id}`,
@@ -148,25 +195,59 @@ export async function POST(req: NextRequest) {
   try {
     await prisma.$transaction(async tx => {
       for (const item of items) {
-        const lines = await tx.sale.findMany({
-          where: {
-            saleDate: today,
-            productSizeId: item.productSizeId,
-            quantityBottles: { gt: 0 },
-          },
-          orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
-        })
+        const [lines, existingVoids] = await Promise.all([
+          tx.sale.findMany({
+            where: {
+              saleDate: today,
+              productSizeId: item.productSizeId,
+              quantityBottles: { gt: 0 },
+              paymentMode: { not: 'VOID' },
+            },
+            orderBy: [{ saleTime: 'desc' }, { id: 'desc' }],
+          }),
+          tx.sale.findMany({
+            where: {
+              saleDate: today,
+              productSizeId: item.productSizeId,
+              paymentMode: 'VOID',
+              quantityBottles: { lt: 0 },
+            },
+            select: { quantityBottles: true, overrideReason: true },
+          }),
+        ])
 
-        const available = lines.reduce((sum, line) => sum + line.quantityBottles, 0)
+        const voidedBySaleId = new Map<number, number>()
+        for (const v of existingVoids) {
+          const id = parseVoidedSaleId(v.overrideReason)
+          if (!id) continue
+          voidedBySaleId.set(id, (voidedBySaleId.get(id) ?? 0) + Math.abs(v.quantityBottles))
+        }
+
+        const candidates = lines.map(line => {
+          const alreadyVoided = voidedBySaleId.get(line.id) ?? 0
+          const remainingQty = Math.max(0, line.quantityBottles - alreadyVoided)
+          return { line, remainingQty }
+        }).filter(x => x.remainingQty > 0)
+
+        const available = candidates.reduce((sum, row) => sum + row.remainingQty, 0)
         if (item.quantityBottles > available) {
           throw new Error(`Only ${available} sold bottles available to void for product #${item.productSizeId}`)
         }
 
         let remaining = item.quantityBottles
-        for (const line of lines) {
+        for (const { line, remainingQty } of candidates) {
           if (remaining <= 0) break
-          const voidQty = Math.min(remaining, line.quantityBottles)
+          const voidQty = Math.min(remaining, remainingQty)
           remaining -= voidQty
+
+          const split = getRefundBreakup({
+            paymentMode: line.paymentMode,
+            quantityBottles: line.quantityBottles,
+            totalAmount: line.totalAmount,
+            cashAmount: line.cashAmount,
+            cardAmount: line.cardAmount,
+            upiAmount: line.upiAmount,
+          }, voidQty)
 
           addRefundFromSale(refund, {
             paymentMode: line.paymentMode,
@@ -186,8 +267,11 @@ export async function POST(req: NextRequest) {
               productSizeId:   line.productSizeId,
               quantityBottles: -voidQty,
               sellingPrice:    line.sellingPrice,
-              totalAmount:     0,
+              totalAmount:     -round2(split.total),
               paymentMode:     'VOID',
+              cashAmount:      split.cash !== 0 ? -round2(split.cash) : null,
+              cardAmount:      split.card !== 0 ? -round2(split.card) : null,
+              upiAmount:       split.upi !== 0 ? -round2(split.upi) : null,
               scanMethod:      'MANUAL',
               billId:          line.billId,
               overrideReason:  reason ?? `void:sale#${line.id}`,

@@ -42,6 +42,16 @@ export async function GET(req: NextRequest) {
         paymentTotals.upi += Number(s.upiAmount ?? 0)
         paymentTotals.split += 0
         break
+      case 'VOID': {
+        const cash = Number(s.cashAmount ?? 0)
+        const card = Number(s.cardAmount ?? 0)
+        const upi = Number(s.upiAmount ?? 0)
+        paymentTotals.cash += cash
+        paymentTotals.card += card
+        paymentTotals.upi += upi
+        paymentTotals.credit += amount - cash - card - upi
+        break
+      }
     }
   })
 
