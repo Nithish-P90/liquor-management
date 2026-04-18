@@ -42,6 +42,12 @@ export default function StaffPage() {
   const [metricsData, setMetricsData] = useState<any[]>([])
   const [metricsLoading, setMetricsLoading] = useState(false)
 
+  function formatMonth(month: string) {
+    const [y, m] = month.split('-').map(Number)
+    if (!y || !m) return month
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+  }
+
   // ── Clerk billing ──────────────────────────────────────────────────────────
   const [billingDate, setBillingDate] = useState(new Date().toISOString().slice(0, 10))
   const [billingData, setBillingData] = useState<any[]>([])
@@ -405,9 +411,11 @@ export default function StaffPage() {
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
                     <th className="text-center px-4 py-3 font-semibold text-gray-600">Role</th>
+                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Payroll</th>
                     <th className="text-center px-4 py-3 font-semibold text-gray-600">Days Present</th>
                     <th className="text-center px-4 py-3 font-semibold text-gray-600">Total Hours</th>
                     <th className="text-center px-4 py-3 font-semibold text-gray-600">Avg Hours/Day</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Salary Owed</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -419,13 +427,36 @@ export default function StaffPage() {
                           {row.role}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-600">
+                        {row.payrollType === 'DAILY'
+                          ? `₹${Number(row.dailyWage || 0).toLocaleString('en-IN')}/day`
+                          : row.payrollType === 'SALARY'
+                            ? `₹${Number(row.monthlySalary || 0).toLocaleString('en-IN')}/mo`
+                            : '—'}
+                      </td>
                       <td className="px-4 py-3 text-center font-medium text-gray-900">{row.daysPresent}</td>
                       <td className="px-4 py-3 text-center text-gray-700">{row.totalHours}h</td>
                       <td className="px-4 py-3 text-center text-gray-500">{row.avgHours}h</td>
+                      <td className="px-4 py-3 text-right">
+                        {row.payrollType === 'DAILY' ? (
+                          <div>
+                            <div className="font-semibold text-emerald-700">₹{Number(row.salaryOwed || 0).toLocaleString('en-IN')}</div>
+                            {Array.isArray(row.monthly) && row.monthly.length > 0 && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {row.monthly
+                                  .map((m: any) => `${formatMonth(m.month)}: ₹${Number(m.salaryOwed || 0).toLocaleString('en-IN')}`)
+                                  .join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {metricsData.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">No attendance records in this range</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">No attendance records in this range</td></tr>
                   )}
                 </tbody>
               </table>

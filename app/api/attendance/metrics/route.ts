@@ -15,7 +15,14 @@ export async function GET(req: NextRequest) {
 
     const staff = await prisma.staff.findMany({
       where: { active: true },
-      select: { id: true, name: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        payrollType: true,
+        dailyWage: true,
+        monthlySalary: true,
+      },
     })
 
     const logs = await prisma.attendanceLog.findMany({
@@ -23,9 +30,29 @@ export async function GET(req: NextRequest) {
       select: { staffId: true, date: true, checkIn: true, checkOut: true },
     })
 
-    const map = new Map<number, { staffId: number; staffName: string; role: string; daysPresent: number; totalHours: number }>()
+    const map = new Map<number, {
+      staffId: number
+      staffName: string
+      role: string
+      payrollType: string
+      dailyWage: number
+      monthlySalary: number
+      daysPresent: number
+      totalHours: number
+      months: Record<string, { daysPresent: number; totalHours: number }>
+    }>()
     for (const s of staff) {
-      map.set(s.id, { staffId: s.id, staffName: s.name, role: s.role, daysPresent: 0, totalHours: 0 })
+      map.set(s.id, {
+        staffId: s.id,
+        staffName: s.name,
+        role: s.role,
+        payrollType: s.payrollType,
+        dailyWage: Number(s.dailyWage ?? 0),
+        monthlySalary: Number(s.monthlySalary ?? 0),
+        daysPresent: 0,
+        totalHours: 0,
+        months: {},
+      })
     }
 
     const todayNoon = toUtcNoonDate(new Date())
@@ -35,6 +62,8 @@ export async function GET(req: NextRequest) {
       if (!entry) continue
 
       entry.daysPresent += 1
+      const d = new Date(l.date)
+      const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 
       let hours = 0
       if (l.checkIn && l.checkOut) {
@@ -48,15 +77,35 @@ export async function GET(req: NextRequest) {
       }
 
       entry.totalHours += hours
+      if (!entry.months[monthKey]) {
+        entry.months[monthKey] = { daysPresent: 0, totalHours: 0 }
+      }
+      entry.months[monthKey].daysPresent += 1
+      entry.months[monthKey].totalHours += hours
     }
 
     const result = Array.from(map.values()).map(r => ({
       staffId: r.staffId,
       staffName: r.staffName,
       role: r.role,
+      payrollType: r.payrollType,
+      dailyWage: r.dailyWage,
+      monthlySalary: r.monthlySalary,
       daysPresent: r.daysPresent,
       totalHours: Math.round(r.totalHours * 10) / 10,
       avgHours: r.daysPresent > 0 ? Math.round((r.totalHours / r.daysPresent) * 10) / 10 : 0,
+      salaryOwed: r.payrollType === 'DAILY' ? Math.round(r.daysPresent * r.dailyWage * 100) / 100 : 0,
+      monthly: Object.entries(r.months)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, m]) => ({
+          month,
+          daysPresent: m.daysPresent,
+          totalHours: Math.round(m.totalHours * 10) / 10,
+          avgHours: m.daysPresent > 0 ? Math.round((m.totalHours / m.daysPresent) * 10) / 10 : 0,
+          salaryOwed: r.payrollType === 'DAILY'
+            ? Math.round(m.daysPresent * r.dailyWage * 100) / 100
+            : 0,
+        })),
     }))
 
     return NextResponse.json(result.sort((a, b) => a.staffName.localeCompare(b.staffName)))
