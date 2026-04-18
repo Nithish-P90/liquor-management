@@ -377,7 +377,7 @@ export default function MiscSalePage() {
               <div key={i} className="px-5 py-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800 truncate">{c.item.name}</p>
-                  <p className="text-xs text-slate-400">{CAT_LABEL[c.item.category]} · {rupee(c.item.price)} each</p>
+                  <p className="text-xs text-slate-400">{CAT_LABEL[c.item.category]} · {rupee(c.item.price)} per piece</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
@@ -418,7 +418,7 @@ export default function MiscSalePage() {
         {catTotals.map(({ cat, qty, amount }) => (
           <div key={cat} className={`bg-white border border-slate-200 border-l-4 ${CAT_COLOR[cat]} rounded-xl p-5`}>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{CAT_LABEL[cat]}</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{qty} <span className="text-sm font-normal text-slate-400">sold</span></p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{qty} <span className="text-sm font-normal text-slate-400">pieces sold</span></p>
             <p className="text-sm font-semibold text-slate-600 mt-0.5">{rupee(amount)}</p>
           </div>
         ))}
@@ -439,7 +439,7 @@ export default function MiscSalePage() {
               <tr className="border-b border-slate-100">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400">Product</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400">Category</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400">Qty</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400">Pieces</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400">Amount</th>
               </tr>
             </thead>
