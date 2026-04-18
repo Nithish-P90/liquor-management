@@ -100,7 +100,7 @@ export default function DashboardPage() {
         <StatCard label="Today's Revenue" value={rupee(today.total)} sub={`${today.bottles} bottles sold`} accent="blue" />
         <StatCard label="Cash" value={rupee(Number(today.cash))} sub="Counter collections" accent="emerald" />
         <StatCard label="Card" value={rupee(Number(today.card))} sub="Card payments" accent="violet" />
-        <StatCard label="UPI" value={rupee(Number(today.upi))} sub="Digital payments" accent="indigo" />
+        <StatCard label="UPI" value={rupee(Number(today.upi))} sub="Digital payments" accent="teal" />
         <StatCard label="Misc Sale" value={rupee(data.miscSaleTotal)} sub="Cigarettes / snacks" accent="sky" />
       </div>
 
@@ -397,7 +397,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   const accents: Record<string, string> = {
     blue: 'border-l-blue-500', emerald: 'border-l-emerald-500',
     violet: 'border-l-violet-500', amber: 'border-l-amber-500',
-    sky: 'border-l-cyan-500', indigo: 'border-l-indigo-500',
+    sky: 'border-l-cyan-500', teal: 'border-l-teal-500',
   }
   return (
     <div className={`bg-white border border-slate-200 border-l-4 ${accents[accent]} rounded-xl p-5`}>

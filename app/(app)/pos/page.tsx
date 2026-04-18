@@ -97,6 +97,40 @@ type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: numb
 type PosNetworkState = 'CHECKING' | 'LIVE' | 'CONNECTED' | 'RECONNECTING' | 'OFFLINE'
 const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
 
+// ── Distinct colors for category pills ──────────────────────────────────────
+const CAT_COLORS: Record<string, { active: string; inactive: string }> = {
+  ALL:           { active: 'bg-slate-800 text-white shadow-sm',     inactive: 'bg-slate-100 text-slate-500 hover:bg-slate-200' },
+  BRANDY:        { active: 'bg-amber-600 text-white shadow-sm',    inactive: 'bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200' },
+  WHISKY:        { active: 'bg-yellow-600 text-white shadow-sm',   inactive: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200' },
+  RUM:           { active: 'bg-orange-600 text-white shadow-sm',   inactive: 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200' },
+  VODKA:         { active: 'bg-sky-600 text-white shadow-sm',      inactive: 'bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-200' },
+  GIN:           { active: 'bg-emerald-600 text-white shadow-sm',  inactive: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200' },
+  WINE:          { active: 'bg-rose-600 text-white shadow-sm',     inactive: 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200' },
+  PREMIX:        { active: 'bg-violet-600 text-white shadow-sm',   inactive: 'bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-200' },
+  BEER:          { active: 'bg-lime-600 text-white shadow-sm',     inactive: 'bg-lime-50 text-lime-700 hover:bg-lime-100 border border-lime-200' },
+  BEVERAGE:      { active: 'bg-cyan-600 text-white shadow-sm',     inactive: 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 border border-cyan-200' },
+  MISCELLANEOUS: { active: 'bg-pink-600 text-white shadow-sm',     inactive: 'bg-pink-50 text-pink-600 hover:bg-pink-100 border border-pink-200' },
+}
+
+// ── Distinct colors for size filter pills ───────────────────────────────────
+const SIZE_COLORS: Record<number, { active: string; inactive: string }> = {
+  1:    { active: 'bg-slate-700 text-white',   inactive: 'bg-slate-50 text-slate-500 border border-slate-300' },
+  60:   { active: 'bg-red-600 text-white',     inactive: 'bg-red-50 text-red-600 border border-red-200' },
+  90:   { active: 'bg-orange-600 text-white',  inactive: 'bg-orange-50 text-orange-600 border border-orange-200' },
+  180:  { active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  200:  { active: 'bg-yellow-600 text-white',  inactive: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
+  250:  { active: 'bg-lime-600 text-white',    inactive: 'bg-lime-50 text-lime-700 border border-lime-200' },
+  275:  { active: 'bg-emerald-600 text-white', inactive: 'bg-emerald-50 text-emerald-600 border border-emerald-200' },
+  330:  { active: 'bg-teal-600 text-white',    inactive: 'bg-teal-50 text-teal-600 border border-teal-200' },
+  375:  { active: 'bg-cyan-600 text-white',    inactive: 'bg-cyan-50 text-cyan-600 border border-cyan-200' },
+  500:  { active: 'bg-sky-600 text-white',     inactive: 'bg-sky-50 text-sky-600 border border-sky-200' },
+  600:  { active: 'bg-blue-600 text-white',    inactive: 'bg-blue-50 text-blue-600 border border-blue-200' },
+  650:  { active: 'bg-indigo-600 text-white',  inactive: 'bg-indigo-50 text-indigo-600 border border-indigo-200' },
+  750:  { active: 'bg-violet-600 text-white',  inactive: 'bg-violet-50 text-violet-600 border border-violet-200' },
+  1000: { active: 'bg-purple-600 text-white',  inactive: 'bg-purple-50 text-purple-600 border border-purple-200' },
+}
+const DEFAULT_SIZE_COLOR = { active: 'bg-fuchsia-600 text-white', inactive: 'bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200' }
+
 function fmt(n: number) { return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) }
 
 function playBeep() {
@@ -839,6 +873,12 @@ export default function POSPage() {
     if (!search) return true
     const q = search.toLowerCase()
     return p.product.name.toLowerCase().includes(q) || p.product.itemCode.toLowerCase().includes(q)
+  }).sort((a, b) => {
+    // In-stock items first, out-of-stock at the bottom
+    const aOos = a.currentStock <= 0 ? 1 : 0
+    const bOos = b.currentStock <= 0 ? 1 : 0
+    if (aOos !== bOos) return aOos - bOos
+    return a.product.name.localeCompare(b.product.name)
   })
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
@@ -985,7 +1025,7 @@ export default function POSPage() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* ── Top Bar ──────────────────────── */}
-        <div className="h-14 bg-white border-b border-slate-100 flex items-center px-5 gap-4 flex-shrink-0">
+        <div className="h-14 bg-gradient-to-r from-white to-slate-50 border-b border-slate-200/60 flex items-center px-5 gap-4 flex-shrink-0 shadow-sm">
           <div className="text-slate-900 font-black text-base tracking-tight">MV <span className="text-blue-600">POS</span></div>
 
           {/* Barcode scan input */}
@@ -1042,13 +1082,16 @@ export default function POSPage() {
         )}
 
         {/* ── Category Pills ───────────────── */}
-        <div className="bg-white border-b border-slate-100 flex overflow-x-auto px-4 py-2.5 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-          {CATS.map(cat => (
-            <button key={cat} onClick={() => { setCategory(cat); setSizeFilter(null) }}
-              className={`px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap rounded-full transition-all ${
-                category === cat ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-              }`}>{cat}</button>
-          ))}
+        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 flex overflow-x-auto px-4 py-2.5 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+          {CATS.map(cat => {
+            const colors = CAT_COLORS[cat] ?? CAT_COLORS.ALL
+            return (
+              <button key={cat} onClick={() => { setCategory(cat); setSizeFilter(null) }}
+                className={`px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap rounded-full transition-all ${
+                  category === cat ? colors.active : colors.inactive
+                }`}>{cat}</button>
+            )
+          })}
         </div>
 
         {/* ── Size Filter Pills ───────────────── */}
@@ -1060,14 +1103,15 @@ export default function POSPage() {
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 border border-slate-200'
               }`}>All Sizes</button>
-            {availableSizes.map(size => (
-              <button key={size} onClick={() => setSizeFilter(sizeFilter === size ? null : size)}
-                className={`px-3 py-1 text-[10px] font-bold whitespace-nowrap rounded-full transition-all ${
-                  sizeFilter === size
-                    ? 'bg-slate-700 text-white shadow-sm'
-                    : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 border border-slate-200'
-                }`}>{size}ml</button>
-            ))}
+            {availableSizes.map(size => {
+              const colors = SIZE_COLORS[size] ?? DEFAULT_SIZE_COLOR
+              return (
+                <button key={size} onClick={() => setSizeFilter(sizeFilter === size ? null : size)}
+                  className={`px-3 py-1 text-[10px] font-bold whitespace-nowrap rounded-full transition-all ${
+                    sizeFilter === size ? colors.active : colors.inactive
+                  }`}>{size}ml</button>
+              )
+            })}
           </div>
         )}
 
@@ -1082,7 +1126,7 @@ export default function POSPage() {
               {products.length === 0 ? 'No products loaded' : 'No matches found'}
             </div>
           ) : (
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5">
               {filtered.map(ps => {
                 const inCart = cart.find(c => c.productSizeId === ps.id)
                 const oos = ps.currentStock === 0
@@ -1096,13 +1140,13 @@ export default function POSPage() {
                   ps.product.category === 'WINE' ? 'bg-rose-400' : 'bg-slate-300'
                 return (
                   <button key={ps.id} onClick={() => (voidMode ? addToVoid(ps) : addToCart(ps))} disabled={disabled}
-                    className={`relative text-left rounded-xl overflow-hidden transition-all duration-150 flex flex-col ${
-                      disabled ? 'bg-white opacity-40 cursor-not-allowed border border-slate-100'
-                        : inCart ? 'bg-white ring-2 ring-blue-500 shadow-lg shadow-blue-100/60'
+                    className={`relative text-left rounded-xl overflow-hidden transition-all duration-200 flex flex-col ${
+                      disabled ? 'bg-slate-50 opacity-35 cursor-not-allowed border border-slate-100 grayscale'
+                        : inCart ? 'bg-white ring-2 ring-blue-500 shadow-lg shadow-blue-200/50 scale-[1.02]'
                         : voidMode ? 'bg-white border border-red-200 hover:shadow-lg hover:border-red-400 cursor-pointer'
-                        : 'bg-white hover:shadow-lg hover:shadow-slate-200/80 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer border border-slate-200/80'
+                        : 'bg-white hover:shadow-md hover:shadow-slate-200/60 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer border border-slate-200/60'
                     }`}>
-                    <div className={`h-1 w-full ${catColor} flex-shrink-0`} />
+                    <div className={`h-1.5 w-full ${catColor} flex-shrink-0`} />
                     <div className="p-3.5 flex flex-col flex-1">
                       {inCart && (
                         <span className="absolute top-2 right-2 min-w-[20px] h-5 bg-blue-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold px-1 shadow">
@@ -1112,12 +1156,10 @@ export default function POSPage() {
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">{ps.product.category}</span>
                       <div className="text-[12px] font-bold text-slate-800 leading-snug line-clamp-2 flex-1 mb-2">{ps.product.name}</div>
                       <div className="mb-2">
-                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          ps.sizeMl >= 750 ? 'bg-indigo-50 text-indigo-600' :
-                          ps.sizeMl >= 375 ? 'bg-blue-50 text-blue-600' :
-                          ps.sizeMl >= 180 ? 'bg-teal-50 text-teal-600' :
-                          'bg-slate-100 text-slate-500'
-                        }`}>{ps.sizeMl}{ps.product.category === 'MISCELLANEOUS' ? '' : 'ml'}</span>
+                        {(() => {
+                          const sc = SIZE_COLORS[ps.sizeMl] ?? DEFAULT_SIZE_COLOR
+                          return <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${sc.inactive}`}>{ps.sizeMl}{ps.product.category === 'MISCELLANEOUS' ? '' : 'ml'}</span>
+                        })()}
                       </div>
                       <div className="flex items-center justify-between mt-auto">
                         <span className="text-sm font-black text-slate-900">{fmt(Number(ps.sellingPrice))}</span>
@@ -1335,17 +1377,19 @@ export default function POSPage() {
               <div className="px-5 pb-5 space-y-3">
                 {/* Payment mode buttons */}
                 <div className="grid grid-cols-5 gap-1.5">
-                  {(['CASH', 'CARD', 'UPI', 'SPLIT', 'PENDING'] as const).map(m => (
-                    <button key={m} onClick={() => { setPayMode(m); if (m !== 'PENDING') { setSelectedTabId(null); setNewTabName('') } }}
-                      className={`py-2.5 text-[10px] font-bold rounded-lg transition-all ${
-                        payMode === m
-                          ? m === 'CASH' ? 'bg-emerald-600 text-white shadow-sm' :
-                            m === 'SPLIT' ? 'bg-violet-600 text-white shadow-sm' :
-                            m === 'PENDING' ? 'bg-amber-500 text-white shadow-sm' :
-                            'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                      }`}>{m}</button>
-                  ))}
+                  {(['CASH', 'CARD', 'UPI', 'SPLIT', 'PENDING'] as const).map(m => {
+                    const modeColor = m === 'CASH' ? 'bg-emerald-600 text-white shadow-sm'
+                      : m === 'CARD' ? 'bg-blue-600 text-white shadow-sm'
+                      : m === 'UPI' ? 'bg-teal-600 text-white shadow-sm'
+                      : m === 'SPLIT' ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-amber-500 text-white shadow-sm'
+                    return (
+                      <button key={m} onClick={() => { setPayMode(m); if (m !== 'PENDING') { setSelectedTabId(null); setNewTabName('') } }}
+                        className={`py-2.5 text-[10px] font-bold rounded-lg transition-all ${
+                          payMode === m ? modeColor : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}>{m}</button>
+                    )
+                  })}
                 </div>
 
                 {/* Cash — tendered with autofill and change calc */}
@@ -1469,6 +1513,8 @@ export default function POSPage() {
                   <button onClick={completeSale} disabled={processing || voidProcessing}
                     className={`py-3.5 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
                       payMode === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/60' :
+                      payMode === 'CARD' ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/60' :
+                      payMode === 'UPI' ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200/60' :
                       payMode === 'SPLIT' ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-200/60' :
                       payMode === 'PENDING' ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200/60' :
                       'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/60'
