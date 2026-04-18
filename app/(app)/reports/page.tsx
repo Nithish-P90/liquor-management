@@ -8,10 +8,27 @@ export default function ReportsPage() {
   const [reportDate] = useState(new Date().toISOString().slice(0,10))
 
   useEffect(() => {
-    fetch('/api/inventory/sessions').then(r => r.json()).then(s => {
-      setSessions(s)
-      if (s[0]) setSelectedSession(s[0].id)
-    })
+    ;(async () => {
+      try {
+        const res = await fetch('/api/inventory/sessions')
+        if (!res.ok) {
+          setSessions([])
+          setSelectedSession(null)
+          return
+        }
+        const data: unknown = await res.json()
+        const list = Array.isArray(data) ? data : []
+        setSessions(list)
+        if (list[0] && typeof list[0] === 'object' && list[0] !== null && 'id' in list[0]) {
+          setSelectedSession(Number((list[0] as { id: unknown }).id) || null)
+        } else {
+          setSelectedSession(null)
+        }
+      } catch {
+        setSessions([])
+        setSelectedSession(null)
+      }
+    })()
   }, [])
 
   async function downloadStockSheet() {

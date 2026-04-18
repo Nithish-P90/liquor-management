@@ -218,28 +218,44 @@ export default function POSPage() {
   const loadProducts = useCallback(async () => {
     try {
       const res = await fetch('/api/pos/products')
-      if (res.ok) setProducts(await res.json())
+      if (!res.ok) {
+        setProducts([])
+        return
+      }
+      const data: unknown = await res.json()
+      setProducts(Array.isArray(data) ? data as ProductSize[] : [])
+    } catch {
+      setProducts([])
     } finally { setLoading(false) }
   }, [])
 
   const loadRecent = useCallback(async () => {
     try {
       const res = await fetch('/api/pos/summary')
-      if (res.ok) {
-        const d = await res.json()
-        setRecentBills(d.recentBills?.slice(0, 8) ?? [])
+      if (!res.ok) {
+        setRecentBills([])
+        return
       }
+      const d: unknown = await res.json()
+      const recent = (d && typeof d === 'object' && 'recentBills' in d)
+        ? (d as { recentBills?: unknown }).recentBills
+        : undefined
+      setRecentBills(Array.isArray(recent) ? recent.slice(0, 8) as RecentBill[] : [])
     } catch { /* ignore */ }
   }, [])
 
   const loadPending = useCallback(async () => {
     try {
       const res = await fetch('/api/pending-bills')
-      if (res.ok) {
-        const data: PendingBill[] = await res.json()
-        setPendingBills(data)
-        setPendingCount(data.length)
+      if (!res.ok) {
+        setPendingBills([])
+        setPendingCount(0)
+        return
       }
+      const data: unknown = await res.json()
+      const list = Array.isArray(data) ? data as PendingBill[] : []
+      setPendingBills(list)
+      setPendingCount(list.length)
     } catch { /* ignore */ }
   }, [])
 
@@ -319,16 +335,30 @@ export default function POSPage() {
     loadProducts()
     loadRecent()
     loadPending()
-    fetch('/api/staff').then(r => r.json()).then((list: StaffMember[]) => {
-      const active = list.filter(s => s.active)
-      setStaff(active)
-      const meId = parseInt(user?.id ?? '0')
-      const me = active.find(s => s.id === meId)
-      const anyCashier = active.find(s => s.role === 'CASHIER')
-      const fallback = me ?? anyCashier ?? active[0] ?? null
-      setCounterStaffId(fallback?.id ?? null)
-      setActiveClerkKey('COUNTER')
-    })
+    ;(async () => {
+      try {
+        const res = await fetch('/api/staff')
+        if (!res.ok) {
+          setStaff([])
+          setCounterStaffId(null)
+          return
+        }
+        const data: unknown = await res.json()
+        const list = Array.isArray(data) ? data as StaffMember[] : []
+        const active = list.filter(s => s.active)
+        setStaff(active)
+        const meId = parseInt(user?.id ?? '0')
+        const me = active.find(s => s.id === meId)
+        const anyCashier = active.find(s => s.role === 'CASHIER')
+        const fallback = me ?? anyCashier ?? active[0] ?? null
+        setCounterStaffId(fallback?.id ?? null)
+      } catch {
+        setStaff([])
+        setCounterStaffId(null)
+      } finally {
+        setActiveClerkKey('COUNTER')
+      }
+    })()
   }, [loadProducts, loadRecent, loadPending, user?.id])
 
   useEffect(() => {
