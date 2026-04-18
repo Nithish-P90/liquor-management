@@ -16,9 +16,16 @@ export async function GET(req: NextRequest) {
   }
 
   const dateParam = req.nextUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10)
-  const saleDate = toUtcNoonDate(new Date(dateParam + 'T12:00:00Z'))
+  const day = toUtcNoonDate(new Date(dateParam + 'T12:00:00Z'))
+  const dayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 0, 0, 0, 0))
+  const nextDayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1, 0, 0, 0, 0))
   const sales = await prisma.miscSale.findMany({
-    where: { saleDate },
+    where: {
+      saleDate: {
+        gte: dayStart,
+        lt: nextDayStart,
+      },
+    },
     include: { item: true },
     orderBy: { createdAt: 'asc' },
   })
@@ -37,18 +44,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'saleDate and items[] are required' }, { status: 400 })
   }
 
+  const items = body.items as Array<{ itemId: number; quantity: number; unitPrice: number; totalAmount: number }>
+  if (items.length === 0) {
+    return NextResponse.json({ error: 'At least one item is required' }, { status: 400 })
+  }
+  const hasInvalid = items.some(item => {
+    return !Number.isInteger(Number(item.itemId)) || Number(item.itemId) <= 0 ||
+      !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+      !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) <= 0 ||
+      !Number.isFinite(Number(item.totalAmount)) || Number(item.totalAmount) <= 0
+  })
+  if (hasInvalid) {
+    return NextResponse.json({ error: 'Invalid item payload' }, { status: 400 })
+  }
+
   const saleDate = toUtcNoonDate(new Date(body.saleDate + 'T12:00:00Z'))
   const now = new Date()
   const created = await prisma.$transaction(
-    body.items.map((item: { itemId: number; quantity: number; unitPrice: number; totalAmount: number }) =>
+    items.map(item =>
       prisma.miscSale.create({
         data: {
-          itemId: item.itemId,
+          itemId: Number(item.itemId),
           saleDate,
           saleTime: now,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalAmount: item.totalAmount,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          totalAmount: Number(item.totalAmount),
           // Misc sales are tracked in a separate ledger and are not split by payment method.
           paymentMode: 'CASH',
         },

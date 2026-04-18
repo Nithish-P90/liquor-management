@@ -87,8 +87,20 @@ export default function MiscSalePage() {
   function loadSales() {
     setLoading(true)
     fetch(`/api/misc-sales?date=${date}`)
-      .then(r => r.json())
-      .then(data => { setSales(data); setLoading(false) })
+      .then(async r => {
+        const data: unknown = await r.json().catch(() => [])
+        if (!r.ok) {
+          showFlash('Failed to load misc sales totals', 'err')
+          setSales([])
+          return
+        }
+        setSales(Array.isArray(data) ? data as SaleRecord[] : [])
+      })
+      .catch(() => {
+        showFlash('Failed to load misc sales totals', 'err')
+        setSales([])
+      })
+      .finally(() => setLoading(false))
   }
 
   async function handleScan() {
@@ -198,7 +210,7 @@ export default function MiscSalePage() {
 
   async function charge() {
     if (cart.length === 0) return
-    await fetch('/api/misc-sales', {
+    const res = await fetch('/api/misc-sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -211,6 +223,13 @@ export default function MiscSalePage() {
         saleDate: date,
       }),
     })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      showFlash(data.error ?? 'Failed to record misc sale', 'err')
+      return
+    }
+
     setCart([])
     showFlash('Sale recorded!', 'ok')
     loadSales()
