@@ -16,7 +16,7 @@ export async function GET() {
   const today = toUtcNoonDate(new Date())
 
   const todayRows = await prisma.sale.findMany({
-    where: { saleDate: today, quantityBottles: { gt: 0 }, paymentMode: { notIn: ['VOID', 'CREDIT'] } },
+    where: { saleDate: today },
     select: {
       id: true,
       saleTime: true,
@@ -41,7 +41,7 @@ export async function GET() {
     amount: number
   }>()
 
-  // Today's sales with split allocation into cash/card/upi
+  // Today's sales with split allocation into cash/card/upi and refund netting
   const todaySales = {
     total: 0,
     bottles: 0,
@@ -52,19 +52,30 @@ export async function GET() {
 
   for (const sale of todayRows) {
     const saleAmount = Number(sale.totalAmount)
-    todaySales.total += saleAmount
-    todaySales.bottles += sale.quantityBottles
+    const isRefund = sale.paymentMode === 'VOID' || sale.quantityBottles < 0
 
     if (sale.paymentMode === 'SPLIT') {
+      todaySales.total += saleAmount
+      todaySales.bottles += sale.quantityBottles
       todaySales.cash += Number(sale.cashAmount ?? 0)
       todaySales.card += Number(sale.cardAmount ?? 0)
       todaySales.upi += Number(sale.upiAmount ?? 0)
     } else if (sale.paymentMode === 'CASH') {
+      todaySales.total += saleAmount
+      todaySales.bottles += sale.quantityBottles
       todaySales.cash += saleAmount
     } else if (sale.paymentMode === 'CARD') {
+      todaySales.total += saleAmount
+      todaySales.bottles += sale.quantityBottles
       todaySales.card += saleAmount
     } else if (sale.paymentMode === 'UPI') {
+      todaySales.total += saleAmount
+      todaySales.bottles += sale.quantityBottles
       todaySales.upi += saleAmount
+    } else if (sale.paymentMode === 'VOID') {
+      // Refunds are paid in cash and stored as negative totalAmount.
+      todaySales.total += saleAmount
+      todaySales.cash += saleAmount
     }
 
     const isCounter = sale.staff.role === 'CASHIER'
@@ -75,14 +86,16 @@ export async function GET() {
       clerkMap.set(key, {
         staffId: isCounter ? 0 : sale.staffId,
         name: label,
-        billKeys: new Set([`${sale.staffId}:${sale.saleTime.toISOString()}`]),
-        bottles: sale.quantityBottles,
+        billKeys: new Set(isRefund ? [] : [`${sale.staffId}:${sale.saleTime.toISOString()}`]),
+        bottles: isRefund ? 0 : sale.quantityBottles,
         amount: saleAmount,
       })
       continue
     }
-    existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
-    existing.bottles += sale.quantityBottles
+    if (!isRefund) {
+      existing.billKeys.add(`${sale.staffId}:${sale.saleTime.toISOString()}`)
+      existing.bottles += sale.quantityBottles
+    }
     existing.amount += saleAmount
   }
 
@@ -148,6 +161,8 @@ export async function GET() {
   ])
 
   const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
+  todaySales.total += miscSaleTotal
+  todaySales.cash += miscSaleTotal
 
   // Resolve all three top-seller sets with a single shared productSize lookup
   const allIds = [...new Set([
