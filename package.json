@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "prisma generate && NODE_OPTIONS=--max-old-space-size=400 next build",
     "migrate": "prisma migrate deploy",
+    "migrate:retry": "bash scripts/migrate-deploy-with-retry.sh",
+    "start:render": "bash scripts/migrate-deploy-with-retry.sh && next start",
     "start": "next start",
     "serve": "next build && next start",
     "lint": "next lint",
