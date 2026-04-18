@@ -96,94 +96,78 @@ export async function GET() {
     }))
     .sort((a, b) => b.amount - a.amount)
 
-  // Active alerts
-  const alerts = await prisma.varianceRecord.count({
-    where: { resolved: false, severity: { not: 'OK' } },
-  })
-  const highAlerts = await prisma.varianceRecord.count({
-    where: { resolved: false, severity: 'HIGH' },
-  })
-
-  // Pending indents
-  const pendingIndents = await prisma.indent.count({ where: { status: 'PENDING' } })
-
-  // Sales last 7 days
-  const sevenDaysAgo = subtractDays(today, 6)
-
-  const weeklySales = await prisma.sale.groupBy({
-    by: ['saleDate'],
-    where: { saleDate: { gte: sevenDaysAgo, lte: today } },
-    _sum: { totalAmount: true, quantityBottles: true },
-    orderBy: { saleDate: 'asc' },
-  })
-
+  const sevenDaysAgo  = subtractDays(today, 6)
   const thirtyDaysAgo = subtractDays(today, 29)
 
-  async function resolveTopSellers(rows: { productSizeId: number; _sum: { quantityBottles: number | null; totalAmount: any }; _count: { id: number } }[]) {
-    const ids = rows.map(r => r.productSizeId)
-    const sizes = await prisma.productSize.findMany({
-      where: { id: { in: ids } },
-      include: { product: true },
-    })
-    const sizeMap = Object.fromEntries(sizes.map(s => [s.id, s]))
+  // Fire all independent queries in parallel
+  const [
+    alerts, highAlerts, pendingIndents, weeklySales,
+    topSellersToday, topSellersWeekRaw, topSellersMonthRaw,
+    recentAlerts, miscAgg,
+  ] = await Promise.all([
+    prisma.varianceRecord.count({ where: { resolved: false, severity: { not: 'OK' } } }),
+    prisma.varianceRecord.count({ where: { resolved: false, severity: 'HIGH' } }),
+    prisma.indent.count({ where: { status: 'PENDING' } }),
+    prisma.sale.groupBy({
+      by: ['saleDate'],
+      where: { saleDate: { gte: sevenDaysAgo, lte: today } },
+      _sum: { totalAmount: true, quantityBottles: true },
+      orderBy: { saleDate: 'asc' },
+    }),
+    prisma.sale.groupBy({
+      by: ['productSizeId'],
+      where: { saleDate: today, quantityBottles: { gt: 0 } },
+      _sum: { quantityBottles: true, totalAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { quantityBottles: 'desc' } },
+      take: 8,
+    }),
+    prisma.sale.groupBy({
+      by: ['productSizeId'],
+      where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+      _sum: { quantityBottles: true, totalAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { quantityBottles: 'desc' } },
+      take: 8,
+    }),
+    prisma.sale.groupBy({
+      by: ['productSizeId'],
+      where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+      _sum: { quantityBottles: true, totalAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { quantityBottles: 'desc' } },
+      take: 8,
+    }),
+    prisma.varianceRecord.findMany({
+      where: { resolved: false, severity: { not: 'OK' } },
+      include: { productSize: { include: { product: true } } },
+      orderBy: [{ severity: 'desc' }, { recordDate: 'desc' }],
+      take: 5,
+    }),
+    prisma.miscSale.aggregate({ where: { saleDate: today }, _sum: { totalAmount: true } }),
+  ])
+
+  const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
+
+  // Resolve all three top-seller sets with a single shared productSize lookup
+  const allIds = [...new Set([
+    ...topSellersToday.map(r => r.productSizeId),
+    ...topSellersWeekRaw.map(r => r.productSizeId),
+    ...topSellersMonthRaw.map(r => r.productSizeId),
+  ])]
+  const allSizes = await prisma.productSize.findMany({ where: { id: { in: allIds } }, include: { product: true } })
+  const sizeMap = Object.fromEntries(allSizes.map(s => [s.id, s]))
+
+  function mapSellers(rows: typeof topSellersToday) {
     return rows.map(t => {
       const ps = sizeMap[t.productSizeId]
-      return {
-        name: ps?.product.name ?? 'Unknown',
-        sizeMl: ps?.sizeMl ?? 0,
-        bottles: t._sum.quantityBottles ?? 0,
-        amount: Number(t._sum.totalAmount ?? 0),
-        txCount: t._count.id,
-      }
+      return { name: ps?.product.name ?? 'Unknown', sizeMl: ps?.sizeMl ?? 0, bottles: t._sum.quantityBottles ?? 0, amount: Number(t._sum.totalAmount ?? 0), txCount: t._count.id }
     })
   }
 
-  // Top sellers today
-  const topSellersToday = await prisma.sale.groupBy({
-    by: ['productSizeId'],
-    where: { saleDate: today, quantityBottles: { gt: 0 } },
-    _sum: { quantityBottles: true, totalAmount: true },
-    _count: { id: true },
-    orderBy: { _sum: { quantityBottles: 'desc' } },
-    take: 8,
-  })
-  const topSellersDetail = await resolveTopSellers(topSellersToday)
-
-  // Top sellers past 7 days
-  const topSellersWeekRaw = await prisma.sale.groupBy({
-    by: ['productSizeId'],
-    where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
-    _sum: { quantityBottles: true, totalAmount: true },
-    _count: { id: true },
-    orderBy: { _sum: { quantityBottles: 'desc' } },
-    take: 8,
-  })
-  const topSellersWeek = await resolveTopSellers(topSellersWeekRaw)
-
-  // Top sellers past 30 days
-  const topSellersMonthRaw = await prisma.sale.groupBy({
-    by: ['productSizeId'],
-    where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
-    _sum: { quantityBottles: true, totalAmount: true },
-    _count: { id: true },
-    orderBy: { _sum: { quantityBottles: 'desc' } },
-    take: 8,
-  })
-  const topSellersMonth = await resolveTopSellers(topSellersMonthRaw)
-
-  // Recent variance alerts
-  const recentAlerts = await prisma.varianceRecord.findMany({
-    where: { resolved: false, severity: { not: 'OK' } },
-    include: { productSize: { include: { product: true } } },
-    orderBy: [{ severity: 'desc' }, { recordDate: 'desc' }],
-    take: 5,
-  })
-
-  const miscAgg = await prisma.miscSale.aggregate({
-    where: { saleDate: today },
-    _sum: { totalAmount: true },
-  })
-  const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
+  const topSellersDetail = mapSellers(topSellersToday)
+  const topSellersWeek   = mapSellers(topSellersWeekRaw)
+  const topSellersMonth  = mapSellers(topSellersMonthRaw)
 
   return NextResponse.json({
     todaySales,

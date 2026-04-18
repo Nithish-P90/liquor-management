@@ -98,14 +98,11 @@ export async function GET() {
 
       const totalExpenses = expMap.get(key) ?? 0
 
-      // Count unsettled pending bills created on this date
-      const pendingUnpaid = await prisma.pendingBill.count({
-        where: { saleDate: date, settled: false },
-      })
-      const pendingTotal = await prisma.pendingBill.aggregate({
-        where: { saleDate: date, settled: false },
-        _sum: { totalAmount: true },
-      })
+      // Count unsettled pending bills created on this date (parallel)
+      const [pendingUnpaid, pendingTotal] = await Promise.all([
+        prisma.pendingBill.count({ where: { saleDate: date, settled: false } }),
+        prisma.pendingBill.aggregate({ where: { saleDate: date, settled: false }, _sum: { totalAmount: true } }),
+      ])
 
       return {
         date,

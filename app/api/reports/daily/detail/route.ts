@@ -31,16 +31,63 @@ export async function GET(req: NextRequest) {
     const isToday = dateOnly.getTime() === toUtcNoonDate(new Date()).getTime()
     const now     = new Date()
 
-    // ── 1. Sales list ──────────────────────────────────────────────────────────
-    const salesRows = await prisma.sale.findMany({
-      where:   { saleDate: dateOnly, quantityBottles: { gt: 0 } },
-      include: {
-        productSize: { include: { product: true } },
-        staff:       { select: { id: true, name: true, role: true } },
-      },
-      orderBy: { saleTime: 'asc' },
-    })
+    // ── Fire all independent top-level queries in parallel ────────────────────
+    const [
+      salesRows,
+      expRows,
+      allStaff,
+      attLogs,
+      adjRows,
+      receiptsRows,
+      session,
+      productSizes,
+      cashRecord,
+      bankDeposits,
+      pendingUnpaid,
+      pendingTotalAgg,
+    ] = await Promise.all([
+      prisma.sale.findMany({
+        where:   { saleDate: dateOnly, quantityBottles: { gt: 0 } },
+        include: {
+          productSize: { include: { product: true } },
+          staff:       { select: { id: true, name: true, role: true } },
+        },
+        orderBy: { saleTime: 'asc' },
+      }),
+      prisma.expenditure.findMany({ where: { expDate: dateOnly }, orderBy: { createdAt: 'asc' } }),
+      prisma.staff.findMany({
+        where:   { active: true },
+        orderBy: { name: 'asc' },
+        select:  { id: true, name: true, role: true, expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
+      }),
+      prisma.attendanceLog.findMany({ where: { date: dateOnly } }),
+      prisma.stockAdjustment.findMany({
+        where:   { adjustmentDate: dateOnly },
+        include: { productSize: { include: { product: true } }, createdBy: { select: { name: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.receiptItem.findMany({
+        where:   { receipt: { receivedDate: dateOnly } },
+        include: { productSize: { include: { product: true } }, receipt: { include: { indent: true } } },
+      }),
+      prisma.inventorySession.findFirst({
+        where: { periodStart: { lte: dateOnly }, periodEnd: { gte: dateOnly } },
+        orderBy: { periodStart: 'desc' },
+      }),
+      prisma.productSize.findMany({
+        include: { product: true },
+        orderBy: [{ product: { category: 'asc' } }, { product: { name: 'asc' } }, { sizeMl: 'desc' }],
+      }),
+      prisma.cashRecord.findUnique({ where: { recordDate: dateOnly } }),
+      prisma.bankTransaction.findMany({ where: { txDate: dateOnly, txType: 'DEPOSIT' }, orderBy: { createdAt: 'asc' } }),
+      prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
+      prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
+    ])
 
+    const pendingUnpaidAmount = Number(pendingTotalAgg._sum.totalAmount ?? 0)
+    const psIds = productSizes.map(ps => ps.id)
+
+    // ── 1. Sales list ──────────────────────────────────────────────────────────
     const sales = salesRows.map(s => ({
       id:          s.id,
       time:        s.saleTime,
@@ -56,7 +103,6 @@ export async function GET(req: NextRequest) {
     }))
 
     // ── 2. Clerk breakup ───────────────────────────────────────────────────────
-    // All CASHIER-role sales are pooled under a single "Clerk" row (staffId = -1)
     const CLERK_POOL_ID = -1
     const clerkMap = new Map<number, { name: string; role: string; bottles: number; total: number; bills: Set<string> }>()
     for (const s of salesRows) {
@@ -78,36 +124,14 @@ export async function GET(req: NextRequest) {
       }
     }
     const clerkBreakup = Array.from(clerkMap.entries())
-      .map(([staffId, d]) => ({
-        staffId,
-        staffName: d.name,
-        role:      d.role,
-        bottles:   d.bottles,
-        total:     d.total,
-        bills:     d.bills.size,
-      }))
+      .map(([staffId, d]) => ({ staffId, staffName: d.name, role: d.role, bottles: d.bottles, total: d.total, bills: d.bills.size }))
       .sort((a, b) => b.total - a.total)
 
     // ── 3. Expenses ────────────────────────────────────────────────────────────
-    const expRows = await prisma.expenditure.findMany({
-      where:   { expDate: dateOnly },
-      orderBy: { createdAt: 'asc' },
-    })
-    const expenses = expRows.map(e => ({
-      id:          e.id,
-      particulars: e.particulars,
-      category:    e.category,
-      amount:      Number(e.amount),
-    }))
+    const expenses = expRows.map(e => ({ id: e.id, particulars: e.particulars, category: e.category, amount: Number(e.amount) }))
 
-    // ── 4. Staff attendance ────────────────────────────────────────────────────
-    const allStaff = await prisma.staff.findMany({
-      where:   { active: true },
-      orderBy: { name: 'asc' },
-      select:  { id: true, name: true, role: true, expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
-    })
-    const attLogs = await prisma.attendanceLog.findMany({ where: { date: dateOnly } })
-    const logMap  = new Map(attLogs.map(l => [l.staffId, l]))
+    // ── 4. Attendance ──────────────────────────────────────────────────────────
+    const logMap = new Map(attLogs.map(l => [l.staffId, l]))
 
     function isLate(actualIso: Date | string | null | undefined, scheduledHHMM: string | null | undefined, graceMinutes: number): boolean {
       if (!actualIso || !scheduledHHMM) return false
@@ -128,154 +152,79 @@ export async function GET(req: NextRequest) {
       }
       const grace = s.lateGraceMinutes ?? 15
       return {
-        staffId:          s.id,
-        staffName:        s.name,
-        role:             s.role,
-        checkIn:          log?.checkIn  ?? null,
-        checkOut:         log?.checkOut ?? null,
-        hoursWorked:      hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
-        status:           !log ? 'ABSENT' : !log.checkOut ? 'IN' : 'OUT',
-        lateCheckIn:      isLate(log?.checkIn,  s.expectedCheckIn,  grace),
-        lateCheckOut:     isLate(log?.checkOut, s.expectedCheckOut, grace),
+        staffId: s.id, staffName: s.name, role: s.role,
+        checkIn: log?.checkIn ?? null, checkOut: log?.checkOut ?? null,
+        hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 10) / 10 : null,
+        status: !log ? 'ABSENT' : !log.checkOut ? 'IN' : 'OUT',
+        lateCheckIn:  isLate(log?.checkIn,  s.expectedCheckIn,  grace),
+        lateCheckOut: isLate(log?.checkOut, s.expectedCheckOut, grace),
         expectedCheckIn:  s.expectedCheckIn  ?? null,
         expectedCheckOut: s.expectedCheckOut ?? null,
       }
     })
 
     // ── 5. Stock adjustments ───────────────────────────────────────────────────
-    const adjRows = await prisma.stockAdjustment.findMany({
-      where:   { adjustmentDate: dateOnly },
-      include: {
-        productSize: { include: { product: true } },
-        createdBy:   { select: { name: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
     const adjustments = adjRows.map(a => ({
-      id:          a.id,
-      productName: a.productSize.product.name,
-      category:    a.productSize.product.category,
-      sizeMl:      a.productSize.sizeMl,
-      type:        a.adjustmentType,
-      qty:         a.quantityBottles,
-      reason:      a.reason,
-      approved:    a.approved,
-      createdBy:   a.createdBy.name,
+      id: a.id, productName: a.productSize.product.name, category: a.productSize.product.category,
+      sizeMl: a.productSize.sizeMl, type: a.adjustmentType, qty: a.quantityBottles,
+      reason: a.reason, approved: a.approved, createdBy: a.createdBy.name,
     }))
 
-    // ── 6. Indent receipts ─────────────────────────────────────────────────────
-    const receiptsRows = await prisma.receiptItem.findMany({
-      where:   { receipt: { receivedDate: dateOnly } },
-      include: {
-        productSize: { include: { product: true } },
-        receipt:     { include: { indent: true } },
-      },
-    })
+    // ── 6. Receipts ────────────────────────────────────────────────────────────
     const receipts = receiptsRows.map(r => ({
-      id:            r.id,
-      indentNumber:  r.receipt.indent.indentNumber,
-      invoiceNumber: r.receipt.indent.invoiceNumber,
-      productName:   r.productSize.product.name,
-      category:      r.productSize.product.category,
-      sizeMl:        r.productSize.sizeMl,
-      cases:         r.casesReceived,
-      bottles:       r.bottlesReceived,
-      totalBottles:  r.totalBottles,
+      id: r.id, indentNumber: r.receipt.indent.indentNumber, invoiceNumber: r.receipt.indent.invoiceNumber,
+      productName: r.productSize.product.name, category: r.productSize.product.category,
+      sizeMl: r.productSize.sizeMl, cases: r.casesReceived, bottles: r.bottlesReceived, totalBottles: r.totalBottles,
     }))
 
     // ── 7. Opening & Closing stock ─────────────────────────────────────────────
-    // Find the inventory session that covers this date (if any)
-    const session = await prisma.inventorySession.findFirst({
-      where: { periodStart: { lte: dateOnly }, periodEnd: { gte: dateOnly } },
-      orderBy: { periodStart: 'desc' },
-    })
+    const periodStart = session?.periodStart ?? dateOnly
+    const boundary    = isToday ? now : new Date(dateOnly.getTime() + 86400000 - 1)
 
-    const productSizes = await prisma.productSize.findMany({
-      include: { product: true },
-      orderBy: [
-        { product: { category: 'asc' } },
-        { product: { name: 'asc' } },
-        { sizeMl: 'desc' },
-      ],
-    })
-    const psIds = productSizes.map(ps => ps.id)
+    // Fire opening entries + stock movement queries in parallel
+    const [openingEntries, allReceiptItems, allSalesAgg, allAdjAgg] = await Promise.all([
+      session
+        ? prisma.stockEntry.findMany({ where: { sessionId: session.id, entryType: 'OPENING' } })
+        : Promise.resolve([]),
+      prisma.receiptItem.findMany({
+        where: { productSizeId: { in: psIds }, receipt: { receivedDate: { gte: periodStart, lte: boundary } } },
+        select: { productSizeId: true, totalBottles: true },
+      }),
+      prisma.sale.groupBy({
+        by: ['productSizeId'],
+        where: { productSizeId: { in: psIds }, saleDate: { gte: periodStart, lte: boundary }, quantityBottles: { gt: 0 } },
+        _sum: { quantityBottles: true },
+      }),
+      prisma.stockAdjustment.groupBy({
+        by: ['productSizeId'],
+        where: { productSizeId: { in: psIds }, approved: true, adjustmentDate: { gte: periodStart, lte: boundary } },
+        _sum: { quantityBottles: true },
+      }),
+    ])
 
-    // Opening stock — from session if available
-    let openingMap = new Map<number, number>()
-    if (session) {
-      const openingEntries = await prisma.stockEntry.findMany({
-        where: { sessionId: session.id, entryType: 'OPENING' },
-      })
-      openingMap = new Map(openingEntries.map(e => [e.productSizeId, e.totalBottles]))
+    const openingMap = new Map(openingEntries.map(e => [e.productSizeId, e.totalBottles]))
+    const rcptMap = new Map<number, number>()
+    for (const r of allReceiptItems) rcptMap.set(r.productSizeId, (rcptMap.get(r.productSizeId) ?? 0) + r.totalBottles)
+    const saleMap = new Map(allSalesAgg.map(s => [s.productSizeId, s._sum.quantityBottles ?? 0]))
+    const adjMap  = new Map(allAdjAgg.map(a => [a.productSizeId, a._sum.quantityBottles ?? 0]))
+
+    // No-session: also query just this date's movements (same queries already scoped to dateOnly above when periodStart=dateOnly)
+    const todaySaleMap = session ? saleMap : new Map(allSalesAgg.map(s => [s.productSizeId, s._sum.quantityBottles ?? 0]))
+    const todayRcptMap = new Map<number, number>()
+    if (!session) {
+      for (const r of allReceiptItems) todayRcptMap.set(r.productSizeId, (todayRcptMap.get(r.productSizeId) ?? 0) + r.totalBottles)
     }
 
     const openingStock = productSizes
       .map(ps => {
         const total = openingMap.get(ps.id) ?? 0
         const { cases, bottles } = splitStock(total, ps.bottlesPerCase)
-        return {
-          productSizeId: ps.id,
-          productName:   ps.product.name,
-          category:      ps.product.category,
-          sizeMl:        ps.sizeMl,
-          cases,
-          bottles,
-          totalBottles:  total,
-          value:         total * Number(ps.sellingPrice),
-        }
+        return { productSizeId: ps.id, productName: ps.product.name, category: ps.product.category, sizeMl: ps.sizeMl, cases, bottles, totalBottles: total, value: total * Number(ps.sellingPrice) }
       })
       .filter(r => r.totalBottles > 0)
 
-    // Stock movements for this date
-    const periodStart = session?.periodStart ?? dateOnly
-    const boundary    = isToday ? now : new Date(dateOnly.getTime() + 86400000 - 1)
-
-    const [allReceiptItems, allSalesAgg, allAdjAgg] = await Promise.all([
-      prisma.receiptItem.findMany({
-        where: {
-          productSizeId: { in: psIds },
-          receipt: { receivedDate: { gte: periodStart, lte: boundary } },
-        },
-        select: { productSizeId: true, totalBottles: true },
-      }),
-      prisma.sale.groupBy({
-        by:    ['productSizeId'],
-        where: { productSizeId: { in: psIds }, saleDate: { gte: periodStart, lte: boundary }, quantityBottles: { gt: 0 } },
-        _sum:  { quantityBottles: true },
-      }),
-      prisma.stockAdjustment.groupBy({
-        by:    ['productSizeId'],
-        where: { productSizeId: { in: psIds }, approved: true, adjustmentDate: { gte: periodStart, lte: boundary } },
-        _sum:  { quantityBottles: true },
-      }),
-    ])
-
-    const rcptMap = new Map<number, number>()
-    for (const r of allReceiptItems) rcptMap.set(r.productSizeId, (rcptMap.get(r.productSizeId) ?? 0) + r.totalBottles)
-    const saleMap = new Map(allSalesAgg.map(s => [s.productSizeId, s._sum.quantityBottles ?? 0]))
-    const adjMap  = new Map(allAdjAgg.map(a => [a.productSizeId, a._sum.quantityBottles ?? 0]))
-
-    // For single-day view without a session, limit stock movement to just this date
-    const todaySaleMap = new Map<number, number>()
-    const todayRcptMap = new Map<number, number>()
-    if (!session) {
-      const [todaySales, todayReceipts] = await Promise.all([
-        prisma.sale.groupBy({
-          by: ['productSizeId'],
-          where: { productSizeId: { in: psIds }, saleDate: dateOnly, quantityBottles: { gt: 0 } },
-          _sum: { quantityBottles: true },
-        }),
-        prisma.receiptItem.findMany({
-          where: { productSizeId: { in: psIds }, receipt: { receivedDate: dateOnly } },
-          select: { productSizeId: true, totalBottles: true },
-        }),
-      ])
-      for (const s of todaySales) todaySaleMap.set(s.productSizeId, s._sum.quantityBottles ?? 0)
-      for (const r of todayReceipts) todayRcptMap.set(r.productSizeId, (todayRcptMap.get(r.productSizeId) ?? 0) + r.totalBottles)
-    }
-
     type ClosingRow = {
-      productSizeId:   number; productName: string; category: string; sizeMl: number
+      productSizeId: number; productName: string; category: string; sizeMl: number
       cases: number; bottles: number; totalBottles: number; value: number
       openingBottles: number; receiptsBottles: number; salesBottles: number; adjBottles: number
     }
@@ -287,15 +236,11 @@ export async function GET(req: NextRequest) {
         const sold = session ? (saleMap.get(ps.id) ?? 0) : (todaySaleMap.get(ps.id) ?? 0)
         const adj  = adjMap.get(ps.id) ?? 0
         const closing = Math.max(0, op + rcpt + adj - sold)
-
         if (closing === 0 && op === 0 && rcpt === 0 && sold === 0) return null
-
         const { cases, bottles } = splitStock(closing, ps.bottlesPerCase)
         return {
-          productSizeId: ps.id, productName: ps.product.name,
-          category: String(ps.product.category), sizeMl: ps.sizeMl,
-          cases, bottles, totalBottles: closing,
-          value: closing * Number(ps.sellingPrice),
+          productSizeId: ps.id, productName: ps.product.name, category: String(ps.product.category), sizeMl: ps.sizeMl,
+          cases, bottles, totalBottles: closing, value: closing * Number(ps.sellingPrice),
           openingBottles: op, receiptsBottles: rcpt, salesBottles: sold, adjBottles: adj,
         } satisfies ClosingRow
       })
@@ -314,20 +259,14 @@ export async function GET(req: NextRequest) {
       } else {
         salesByMode[s.paymentMode] = (salesByMode[s.paymentMode] ?? 0) + amount
       }
-      totalSales       += amount
-      totalBottlesSold += s.quantityBottles
-      totalBills++
+      totalSales += amount; totalBottlesSold += s.quantityBottles; totalBills++
     }
-    const totalExpenses  = expenses.reduce((s, e) => s + e.amount, 0)
-    const closingTotal   = closingStock.reduce((s, r) => s + r.totalBottles, 0)
-    const openingTotal   = openingStock.reduce((s, r) => s + r.totalBottles, 0)
 
-    // ── 9. Cash register / galla tally ────────────────────────────────────────
-    const cashRecord   = await prisma.cashRecord.findUnique({ where: { recordDate: dateOnly } })
-    const bankDeposits = await prisma.bankTransaction.findMany({
-      where: { txDate: dateOnly, txType: 'DEPOSIT' },
-      orderBy: { createdAt: 'asc' },
-    })
+    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
+    const closingTotal  = closingStock.reduce((s, r) => s + r.totalBottles, 0)
+    const openingTotal  = openingStock.reduce((s, r) => s + r.totalBottles, 0)
+
+    // ── 9. Cash flow ───────────────────────────────────────────────────────────
     const cashFlow = {
       openingRegister:    cashRecord ? Number(cashRecord.openingRegister)  : null,
       cashSales:          cashRecord ? Number(cashRecord.cashSales)         : null,
@@ -337,13 +276,6 @@ export async function GET(req: NextRequest) {
       bankDeposits:       bankDeposits.map(b => ({ id: b.id, amount: Number(b.amount), notes: b.notes })),
       totalBankDeposited: bankDeposits.reduce((s, b) => s + Number(b.amount), 0),
     }
-
-    // ── Pending bills (unsettled, created on this date) ────────────────────────
-    const [pendingUnpaid, pendingTotalAgg] = await Promise.all([
-      prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
-      prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
-    ])
-    const pendingUnpaidAmount = Number(pendingTotalAgg._sum.totalAmount ?? 0)
 
     return NextResponse.json({
       date: dateOnly,

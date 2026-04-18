@@ -141,7 +141,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center px-5 py-2.5 text-xs font-semibold transition-all duration-200 ${
+                      className={`flex items-center px-5 py-2.5 text-xs font-semibold transition-colors duration-150 ${
                         active
                           ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600'
                           : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50'

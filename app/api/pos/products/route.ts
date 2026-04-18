@@ -4,21 +4,21 @@ import prisma from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  // Single query: get all product sizes with product info
-  const productSizes = await prisma.productSize.findMany({
-    include: { product: true },
-    orderBy: [
-      { product: { category: 'asc' } },
-      { product: { name: 'asc' } },
-      { sizeMl: 'desc' },
-    ],
-  })
-
-  // Get session start date
-  const session = await prisma.inventorySession.findFirst({
-    orderBy: { periodStart: 'desc' },
-    select: { id: true, periodStart: true },
-  })
+  // Fire productSizes + session lookup in parallel
+  const [productSizes, session] = await Promise.all([
+    prisma.productSize.findMany({
+      include: { product: true },
+      orderBy: [
+        { product: { category: 'asc' } },
+        { product: { name: 'asc' } },
+        { sizeMl: 'desc' },
+      ],
+    }),
+    prisma.inventorySession.findFirst({
+      orderBy: { periodStart: 'desc' },
+      select: { id: true, periodStart: true },
+    }),
+  ])
 
   const sessionStart = session?.periodStart ?? new Date(0)
 
@@ -68,7 +68,8 @@ export async function GET() {
     const receipts = receiptMap.get(ps.id) ?? 0
     const sold = salesMap.get(ps.id) ?? 0
     const adj = adjMap.get(ps.id) ?? 0
-    const currentStock = Math.max(0, opening + receipts + adj - sold)
+    const computedStock = Math.max(0, opening + receipts + adj - sold)
+    const currentStock = ps.product.category === 'MISCELLANEOUS' ? 999999 : computedStock
 
     return {
       id: ps.id,
