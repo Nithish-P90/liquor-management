@@ -54,13 +54,30 @@ export default function MiscSalePage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(false)
 
-  // Register modal
+  // All misc items list
+  const [allItems, setAllItems] = useState<MiscItem[]>([])
+  const [showManage, setShowManage] = useState(false)
+
+  // Register / edit modal
   const [registerModal, setRegisterModal] = useState<{ addToCartOnSave: boolean } | null>(null)
   const [regForm, setRegForm] = useState({ barcode: '', name: '', category: 'CIGARETTES' as MiscCategory, price: '' })
+
+  // Edit modal
+  const [editItem, setEditItem] = useState<MiscItem | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', category: 'CIGARETTES' as MiscCategory, price: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const barcodeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadSales() }, [date])
+  useEffect(() => { if (canManageItems) loadAllItems() }, [canManageItems])
+
+  function loadAllItems() {
+    fetch('/api/misc-items')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setAllItems(data) })
+  }
 
   function openRegisterModal(defaultBarcode = '', addToCartOnSave = false) {
     setRegisterModal({ addToCartOnSave })
@@ -139,6 +156,42 @@ export default function MiscSalePage() {
     }
     showFlash('Item added successfully', 'ok')
     barcodeRef.current?.focus()
+  }
+
+  function openEditModal(item: MiscItem) {
+    setEditItem(item)
+    setEditForm({ name: item.name, category: item.category, price: String(item.price) })
+  }
+
+  async function saveEdit() {
+    if (!editItem) return
+    const price = parseFloat(editForm.price)
+    if (!editForm.name.trim() || !Number.isFinite(price) || price <= 0) {
+      showFlash('Name and valid price are required', 'err'); return
+    }
+    setEditSaving(true)
+    const res = await fetch('/api/misc-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editItem.id, name: editForm.name.trim(), category: editForm.category, price }),
+    })
+    setEditSaving(false)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showFlash(d.error ?? 'Failed to save', 'err'); return }
+    setEditItem(null)
+    showFlash('Item updated', 'ok')
+    loadAllItems()
+  }
+
+  async function confirmDelete(id: number) {
+    const res = await fetch('/api/misc-items', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setDeleteConfirmId(null)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showFlash(d.error ?? 'Failed to delete', 'err'); return }
+    showFlash('Item deleted', 'ok')
+    loadAllItems()
   }
 
   const cartTotal = cart.reduce((s, c) => s + c.item.price * c.quantity, 0)
@@ -227,12 +280,20 @@ export default function MiscSalePage() {
           Add
         </button>
         {canManageItems && (
-          <button
-            onClick={() => openRegisterModal('', false)}
-            className="px-5 py-3 bg-slate-700 text-white font-bold rounded-lg text-sm hover:bg-slate-800 transition-colors"
-          >
-            + Add Product
-          </button>
+          <>
+            <button
+              onClick={() => openRegisterModal('', false)}
+              className="px-5 py-3 bg-slate-700 text-white font-bold rounded-lg text-sm hover:bg-slate-800 transition-colors"
+            >
+              + Add
+            </button>
+            <button
+              onClick={() => setShowManage(v => !v)}
+              className={`px-5 py-3 font-bold rounded-lg text-sm transition-colors border ${showManage ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              Manage Items
+            </button>
+          </>
         )}
       </div>
 

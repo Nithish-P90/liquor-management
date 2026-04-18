@@ -32,12 +32,6 @@ yarn-error.log*
 # app uploads
 /uploads
 
-# vercel
-.vercel
-
-# cloudflare / opennext build output
-/.open-next/
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

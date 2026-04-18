@@ -16,9 +16,70 @@ export async function GET(req: NextRequest) {
   }
 
   const barcode = req.nextUrl.searchParams.get('barcode')
-  if (!barcode) return NextResponse.json(null)
-  const item = await prisma.miscItem.findUnique({ where: { barcode } })
-  return NextResponse.json(item)
+  if (barcode) {
+    const item = await prisma.miscItem.findUnique({ where: { barcode } })
+    return NextResponse.json(item)
+  }
+
+  // List all misc items
+  const items = await prisma.miscItem.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
+  return NextResponse.json(items)
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const user = session?.user as { role?: string } | undefined
+  if (!session || !isAllowedRole(user?.role)) {
+    return NextResponse.json({ error: 'Only admins and cashiers can edit misc items' }, { status: 403 })
+  }
+
+  const body = await req.json()
+  const id = Number(body?.id)
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const existing = await prisma.miscItem.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+
+  const name = body?.name !== undefined ? String(body.name).trim() : existing.name
+  const category = body?.category !== undefined ? String(body.category).trim() : existing.category
+  const price = body?.price !== undefined ? Number(body.price) : Number(existing.price)
+
+  if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  if (!Number.isFinite(price) || price <= 0) return NextResponse.json({ error: 'Valid price required' }, { status: 400 })
+  if (!['CIGARETTES', 'SNACKS', 'CUPS'].includes(category)) {
+    return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
+  }
+
+  const updated = await prisma.$transaction(async tx => {
+    const item = await tx.miscItem.update({ where: { id }, data: { name, category, price } })
+    // Keep linked productSize in sync
+    const ps = await tx.productSize.findUnique({ where: { barcode: existing.barcode } })
+    if (ps) {
+      await tx.productSize.update({ where: { id: ps.id }, data: { mrp: price, sellingPrice: price } })
+      await tx.product.update({ where: { id: ps.productId }, data: { name } })
+    }
+    return item
+  })
+
+  return NextResponse.json(updated)
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const user = session?.user as { role?: string } | undefined
+  if (!session || !isAllowedRole(user?.role)) {
+    return NextResponse.json({ error: 'Only admins and cashiers can delete misc items' }, { status: 403 })
+  }
+
+  const body = await req.json()
+  const id = Number(body?.id)
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const existing = await prisma.miscItem.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+
+  await prisma.miscItem.delete({ where: { id } })
+  return NextResponse.json({ success: true })
 }
 
 export async function POST(req: NextRequest) {
