@@ -87,6 +87,8 @@ export default function CashPage() {
   const user = session?.user as { role?: string } | undefined
   const isAdmin = user?.role === 'ADMIN'
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const isToday = date === new Date().toISOString().slice(0, 10)
+  const isPast = !isToday
   const [form, setForm] = useState<CashForm>(emptyForm())
   const [summary, setSummary] = useState<DaySummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
@@ -291,10 +293,11 @@ export default function CashPage() {
             <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">Bank Deposit</p>
             <p className="text-xs text-slate-400 mb-3">Record when locker cash is deposited to bank</p>
             <button
-              onClick={() => setShowBankModal(true)}
-              className="w-full py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors"
+              onClick={() => { if (!isPast) setShowBankModal(true) }}
+              disabled={isPast}
+              className={`w-full py-2 text-xs font-bold rounded-lg transition-colors ${isPast ? 'bg-slate-300 text-slate-400 cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'}`}
             >
-              Record Bank Deposit
+              {isPast ? 'Locked — past day' : 'Record Bank Deposit'}
             </button>
           </div>
         </div>
@@ -377,12 +380,12 @@ export default function CashPage() {
           </div>
           {renderField('Cash Sales Today', 'cashSales', 'Auto from billed cash + misc sales', true)}
           {renderField('Expenses from Counter', 'expenses', 'Auto from expenditure register', true)}
-          {renderField('Transferred to Locker', 'cashToLocker', `Enter only actual transfer made. Max ${rupee(maxTransfer)}`)}
+          {renderField('Transferred to Locker', 'cashToLocker', isPast ? 'Locked — past day' : `Enter only actual transfer made. Max ${rupee(maxTransfer)}`, isPast)}
           <div className="p-3 bg-slate-50 rounded-lg text-sm flex justify-between">
             <span className="text-slate-500">Expected Closing</span>
             <strong className="text-blue-700">{rupee(expectedClosing)}</strong>
           </div>
-          {renderField('Closing Register' + (isAdmin ? '' : ' (Auto)'), 'closingRegister', isAdmin ? 'Admin override — auto-computed value shown above' : 'Auto = opening + billed cash - expenses - locker transfer', !isAdmin)}
+          {renderField('Closing Register' + (isAdmin && isToday ? '' : ' (Auto)'), 'closingRegister', isPast ? 'Locked — past day' : isAdmin ? 'Admin override — auto-computed value shown above' : 'Auto = opening + billed cash - expenses - locker transfer', !isAdmin || isPast)}
           {registerVar !== 0 && (
             <div className={`p-2.5 rounded-lg text-sm font-semibold flex justify-between ${Math.abs(registerVar) > 200 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
               <span>Variance</span>
@@ -463,22 +466,29 @@ export default function CashPage() {
       </div>
 
       {/* Notes */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
+      <div className={`bg-white border border-slate-200 rounded-xl p-5 ${isPast ? 'opacity-60' : ''}`}>
         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Notes</label>
         <textarea
           value={form.notes}
-          onChange={e => setForm({ ...form, notes: e.target.value })}
+          onChange={e => { if (!isPast) setForm({ ...form, notes: e.target.value }) }}
+          readOnly={isPast}
           rows={2}
-          placeholder="Any notes for today..."
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder={isPast ? 'Locked — past day' : 'Any notes for today...'}
+          className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none resize-none ${isPast ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500'}`}
         />
       </div>
 
       <div className="flex justify-end">
-        <button onClick={save} disabled={loading}
-          className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {loading ? 'Saving...' : summaryLoading ? 'Loading day data...' : 'Save Cash Record'}
-        </button>
+        {isPast ? (
+          <div className="px-8 py-3 bg-slate-200 text-slate-400 rounded-xl font-bold cursor-not-allowed text-sm">
+            Past day — read only
+          </div>
+        ) : (
+          <button onClick={save} disabled={loading}
+            className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            {loading ? 'Saving...' : summaryLoading ? 'Loading day data...' : 'Save Cash Record'}
+          </button>
+        )}
       </div>
 
       {/* Bank Deposit / KSBCL Payment Modal */}
