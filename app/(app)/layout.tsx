@@ -13,6 +13,7 @@ const adminNav = [
       { href: '/dashboard', label: 'Dashboard' },
       { href: '/pos', label: 'Point of Sale' },
       { href: '/misc-sale', label: 'Misc Sale' },
+      { href: '/misc-sale/ledger', label: 'Misc Ledger' },
       { href: '/clerks', label: 'Clerk Billing' },
       { href: '/sales', label: 'Sales History' },
     ],
@@ -52,6 +53,7 @@ const staffNav = [
     items: [
       { href: '/pos', label: 'Point of Sale' },
       { href: '/misc-sale', label: 'Misc Sale' },
+      { href: '/misc-sale/ledger', label: 'Misc Ledger' },
       { href: '/clerks', label: 'Clerk Billing' },
       { href: '/sales', label: 'Bill History' },
       { href: '/attendance', label: 'Face Attendance' },
