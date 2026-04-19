@@ -132,7 +132,7 @@ export async function GET() {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: today, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+      where: { saleDate: today, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },
@@ -140,7 +140,7 @@ export async function GET() {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+      where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },
@@ -148,7 +148,7 @@ export async function GET() {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+      where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },

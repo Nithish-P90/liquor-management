@@ -86,7 +86,7 @@ export async function GET() {
       _count: { _all: true },
     }),
     prisma.sale.findMany({
-      where: { ...saleWhere, quantityBottles: { gt: 0 } },
+      where: { ...saleWhere, quantityBottles: { not: 0 } },
       include: {
         productSize: { include: { product: true } },
         staff: { select: { id: true, name: true, role: true } },

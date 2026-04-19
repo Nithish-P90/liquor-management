@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       voidAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
-        where:   { saleDate: dateOnly, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+        where:   { saleDate: dateOnly, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         include: {
           productSize: { include: { product: true } },
           staff:       { select: { id: true, name: true, role: true } },
@@ -219,7 +219,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.sale.groupBy({
         by: ['productSizeId'],
-        where: { productSizeId: { in: psIds }, saleDate: { gte: periodStart, lte: boundary }, quantityBottles: { gt: 0 } },
+        where: { productSizeId: { in: psIds }, saleDate: { gte: periodStart, lte: boundary }, quantityBottles: { not: 0 } },
         _sum: { quantityBottles: true },
       }),
       prisma.stockAdjustment.groupBy({

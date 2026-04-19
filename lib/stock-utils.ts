@@ -37,7 +37,7 @@ export async function getAvailableStock(tx: TxClient, productSizeId: number): Pr
         where: {
           productSizeId,
           saleDate: { gte: latestSession!.periodStart },
-          quantityBottles: { gt: 0 },
+          quantityBottles: { not: 0 },
         },
         _sum: { quantityBottles: true },
       }),
@@ -76,7 +76,7 @@ export async function getAvailableStock(tx: TxClient, productSizeId: number): Pr
       _sum: { totalBottles: true },
     }),
     tx.sale.aggregate({
-      where: { productSizeId, quantityBottles: { gt: 0 } },
+      where: { productSizeId, quantityBottles: { not: 0 } },
       _sum: { quantityBottles: true },
     }),
     tx.stockAdjustment.aggregate({

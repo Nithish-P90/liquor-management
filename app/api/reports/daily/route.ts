@@ -19,7 +19,7 @@ export async function GET() {
     const [salesDates, miscDates, expDates, attDates] = await Promise.all([
       prisma.sale.groupBy({
         by: ['saleDate'],
-        where: { saleDate: { gte: dates[dates.length - 1], lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+        where: { saleDate: { gte: dates[dates.length - 1], lte: today }, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true, quantityBottles: true },
         _count: { _all: true },
       }),
@@ -104,7 +104,7 @@ export async function GET() {
       // Per-mode aggregation for this date
       const modeAgg = await prisma.sale.groupBy({
         by: ['paymentMode'],
-        where: { saleDate: date, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
+        where: { saleDate: date, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true, quantityBottles: true, cashAmount: true, cardAmount: true, upiAmount: true },
         _count: { _all: true },
       })

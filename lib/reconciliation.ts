@@ -39,9 +39,9 @@ export async function runReconciliation(date: Date, sessionId: number) {
     })
     const receiptBottles = receiptItems.reduce((s: number, r: any) => s + r.totalBottles, 0)
 
-    // Get sales for this date (exclude VOID rows which have negative qty)
+    // Get sales for this date (including VOID rows which have negative qty to correctly offset stock)
     const salesAgg = await prisma.sale.aggregate({
-      where: { productSizeId: ps.id, saleDate: dateOnly, quantityBottles: { gt: 0 } },
+      where: { productSizeId: ps.id, saleDate: dateOnly, quantityBottles: { not: 0 } },
       _sum: { quantityBottles: true },
     })
     const soldBottles = salesAgg._sum.quantityBottles ?? 0
@@ -161,7 +161,7 @@ export async function getCurrentStock(productSizeId: number, targetSessionId?: n
         where: {
           productSizeId,
           saleDate: { gte: latestSession!.periodStart },
-          quantityBottles: { gt: 0 },
+          quantityBottles: { not: 0 },
         },
         _sum: { quantityBottles: true },
       }),
@@ -198,7 +198,7 @@ export async function getCurrentStock(productSizeId: number, targetSessionId?: n
       _sum: { totalBottles: true },
     }),
     prisma.sale.aggregate({
-      where: { productSizeId, quantityBottles: { gt: 0 } },
+      where: { productSizeId, quantityBottles: { not: 0 } },
       _sum: { quantityBottles: true },
     }),
     prisma.stockAdjustment.aggregate({
