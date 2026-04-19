@@ -37,6 +37,20 @@ type MiscSalesSummary = {
   categories: Record<MiscCategory, CategorySummary>
 }
 
+type RangeSummary = {
+  from: string
+  to: string
+  totalAmount: number
+  totalItems: number
+  totalEntries: number
+  byMode: Array<{ mode: string; amount: number; qty: number }>
+  categories: {
+    CIGARETTES: { amount: number; items: number; entries: number }
+    SNACKS: { amount: number; items: number; entries: number }
+    CUPS: { amount: number; items: number; entries: number }
+  }
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CATEGORIES: MiscCategory[] = ['CIGARETTES', 'SNACKS', 'CUPS']
@@ -147,6 +161,15 @@ export default function MiscSalePage() {
   const [charging, setCharging] = useState(false)
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
+  // Date-range summary
+  const [showRange, setShowRange] = useState(false)
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
+  })
+  const [rangeTo, setRangeTo] = useState(() => new Date().toISOString().slice(0, 10))
+  const [rangeSummary, setRangeSummary] = useState<RangeSummary | null>(null)
+  const [rangeLoading, setRangeLoading] = useState(false)
+
   // Barcode scan
   const [barcode, setBarcode] = useState('')
   const barcodeRef = useRef<HTMLInputElement>(null)
@@ -210,6 +233,21 @@ export default function MiscSalePage() {
     window.addEventListener('misc-sales:updated', h)
     return () => window.removeEventListener('misc-sales:updated', h)
   }, [loadSales])
+
+  const loadRangeSummary = useCallback(async () => {
+    setRangeLoading(true)
+    try {
+      const res = await fetch(`/api/misc-sales?from=${encodeURIComponent(rangeFrom)}&to=${encodeURIComponent(rangeTo)}`, { cache: 'no-store' })
+      if (!res.ok) { setRangeSummary(null); return }
+      const data = await res.json() as RangeSummary
+      setRangeSummary(data)
+    } catch { setRangeSummary(null) }
+    finally { setRangeLoading(false) }
+  }, [rangeFrom, rangeTo])
+
+  useEffect(() => {
+    if (showRange && status === 'authenticated') void loadRangeSummary()
+  }, [showRange, rangeFrom, rangeTo, status, loadRangeSummary])
 
   // ── Cart ────────────────────────────────────────────────────────────────────
 
@@ -382,6 +420,14 @@ export default function MiscSalePage() {
             onChange={e => setDate(e.target.value)}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
+          <button
+            onClick={() => setShowRange(v => !v)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+              showRange ? 'bg-indigo-700 text-white border-indigo-700' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            {showRange ? 'Hide Range' : 'Range Summary'}
+          </button>
           {canManage && (
             <button
               onClick={() => setShowManage(v => !v)}
@@ -394,6 +440,99 @@ export default function MiscSalePage() {
           )}
         </div>
       </div>
+
+      {/* ── Date-range summary panel ───────────────────────────────────────── */}
+      {showRange && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 bg-indigo-100/60 border-b border-indigo-200 flex items-center justify-between flex-wrap gap-3">
+            <h2 className="text-sm font-bold text-indigo-800">Range Summary</h2>
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="date" value={rangeFrom}
+                onChange={e => setRangeFrom(e.target.value)}
+                className="px-3 py-1.5 border border-indigo-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              />
+              <span className="text-indigo-400 font-semibold">→</span>
+              <input
+                type="date" value={rangeTo}
+                onChange={e => setRangeTo(e.target.value)}
+                className="px-3 py-1.5 border border-indigo-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              />
+              <button
+                onClick={() => void loadRangeSummary()}
+                disabled={rangeLoading}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {rangeLoading ? '…' : 'Load'}
+              </button>
+            </div>
+          </div>
+
+          {rangeLoading && (
+            <div className="flex items-center justify-center h-20">
+              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {!rangeLoading && rangeSummary && (
+            <div className="px-5 py-4 space-y-4">
+              {/* Totals row */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white border border-indigo-100 rounded-xl p-4 text-center">
+                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-wide mb-1">Total Revenue</p>
+                  <p className="text-2xl font-black text-indigo-900">{rupee(rangeSummary.totalAmount)}</p>
+                </div>
+                <div className="bg-white border border-indigo-100 rounded-xl p-4 text-center">
+                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-wide mb-1">Items Sold</p>
+                  <p className="text-2xl font-black text-indigo-900">{rangeSummary.totalItems}</p>
+                </div>
+                <div className="bg-white border border-indigo-100 rounded-xl p-4 text-center">
+                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-wide mb-1">Transactions</p>
+                  <p className="text-2xl font-black text-indigo-900">{rangeSummary.totalEntries}</p>
+                </div>
+              </div>
+
+              {/* By payment mode */}
+              {rangeSummary.byMode.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-indigo-500 uppercase tracking-wide mb-2">By Payment Mode</p>
+                  <div className="flex flex-wrap gap-2">
+                    {rangeSummary.byMode.map(m => (
+                      <div key={m.mode} className="bg-white border border-indigo-100 rounded-lg px-4 py-2 flex items-center gap-3">
+                        <span className="text-xs font-bold text-indigo-400 uppercase">{m.mode}</span>
+                        <span className="font-bold text-slate-800">{rupee(m.amount)}</span>
+                        <span className="text-xs text-slate-400">{m.qty} items</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* By category */}
+              <div>
+                <p className="text-xs font-bold text-indigo-500 uppercase tracking-wide mb-2">By Category</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {(Object.entries(rangeSummary.categories) as [MiscCategory, { amount: number; items: number; entries: number }][]).map(([cat, c]) => {
+                    const colors = CAT_COLORS[cat]
+                    return (
+                      <div key={cat} className={`${colors.bg} border ${colors.border} rounded-xl p-4`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${colors.text} mb-1`}>{CAT_LABEL[cat]}</p>
+                        <p className="text-xl font-black text-slate-900">{c.items} <span className="text-xs font-normal text-slate-400">sold</span></p>
+                        <p className={`text-sm font-bold ${colors.text}`}>{rupee(c.amount)}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{c.entries} entries</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!rangeLoading && !rangeSummary && (
+            <div className="px-5 py-8 text-center text-sm text-indigo-400">No data for this range.</div>
+          )}
+        </div>
+      )}
 
       {/* ── Flash ───────────────────────────────────────────────────────────── */}
       {flash && (

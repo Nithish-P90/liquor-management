@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 
-const CATEGORIES = ['WAGES', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'KSBCL_PAYMENT', 'OTHER']
+const CATEGORIES = ['WAGES', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'KSBCL_PAYMENT', 'MISC_PAYOUT', 'OTHER']
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([])

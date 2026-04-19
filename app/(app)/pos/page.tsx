@@ -778,7 +778,7 @@ export default function POSPage() {
 
       if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('One or more items failed')
 
-      // ── Post misc items (cashier revenue, separate tally) ─────────────────
+      // ── Post misc items (cashier revenue, tallied under same payment mode) ──
       if (savedMiscCart.length > 0) {
         const d = new Date()
         const saleDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -788,6 +788,7 @@ export default function POSPage() {
           body: JSON.stringify({
             saleDate: saleDateStr,
             staffId: activeClerk.staffId,
+            paymentMode: savedPayMode,  // same mode as the bill — owner sees full tally
             items: savedMiscCart.map(c => ({ itemId: c.itemId, quantity: c.qty })),
           }),
         })

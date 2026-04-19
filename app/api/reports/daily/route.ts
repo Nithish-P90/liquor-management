@@ -78,6 +78,20 @@ export async function GET() {
       })
     }
 
+    // Batch fetch misc sales grouped by date + paymentMode (avoids per-date queries)
+    const miscModesByDate = await prisma.miscSale.groupBy({
+      by: ['saleDate', 'paymentMode'],
+      where: { saleDate: { gte: dates[dates.length - 1], lte: today } },
+      _sum: { totalAmount: true },
+    })
+    const miscModeMap = new Map<string, Record<string, number>>()
+    for (const g of miscModesByDate) {
+      const key = new Date(g.saleDate).toISOString()
+      if (!miscModeMap.has(key)) miscModeMap.set(key, {})
+      const modes = miscModeMap.get(key)!
+      modes[g.paymentMode] = (modes[g.paymentMode] ?? 0) + Number(g._sum.totalAmount ?? 0)
+    }
+
     // For each active date get per-mode sales breakdown
     const activeDateArr = Array.from(activeDates)
       .map(iso => new Date(iso))
@@ -121,10 +135,18 @@ export async function GET() {
       salesByMode.CASH += voidAmount
       totalSales += voidAmount
 
+      // Add misc amounts into the same payment-mode buckets
+      // (cashier collects these amounts under the same mode as the bill,
+      //  then takes it out via a "Misc Payout" expense)
+      const miscModes = miscModeMap.get(key) ?? {}
+      for (const [mode, amount] of Object.entries(miscModes)) {
+        salesByMode[mode] = (salesByMode[mode] ?? 0) + amount
+      }
+
       const totalExpenses = expMap.get(key) ?? 0
       const misc = miscMap.get(key) ?? { amount: 0, items: 0, entries: 0 }
-      // Liquor net cash: owner collects cash from liquor sales minus expenses.
-      // Misc cash stays with cashiers — it is NOT included in owner net cash.
+      // netCash = full CASH collected (liquor + misc) minus expenses.
+      // Owner uses a "Misc Payout" expense entry to deduct what cashier takes.
       const netCash = salesByMode.CASH - totalExpenses
 
       // Count unsettled pending bills created on this date (parallel)

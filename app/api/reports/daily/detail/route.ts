@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.miscSale.findMany({
         where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } },
-        include: { item: true },
+        include: { item: true, staff: { select: { id: true, name: true, role: true } } },
         orderBy: { saleTime: 'asc' },
       }),
       prisma.expenditure.findMany({ where: { expDate: dateOnly }, orderBy: { createdAt: 'asc' } }),
@@ -293,6 +293,13 @@ export async function GET(req: NextRequest) {
     const miscItemsSold = miscSales.reduce((sum, row) => sum + row.qty, 0)
     const miscEntries = miscSales.length
     const voidAmount = Number(voidAgg._sum.totalAmount ?? 0)
+
+    // Add misc amounts into the same payment-mode buckets
+    for (const ms of miscRows) {
+      const amount = Number(ms.totalAmount)
+      const mode = ms.paymentMode as string
+      salesByMode[mode] = (salesByMode[mode] ?? 0) + amount
+    }
 
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
     const closingTotal  = closingStock.reduce((s, r) => s + r.totalBottles, 0)

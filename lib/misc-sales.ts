@@ -42,11 +42,20 @@ export type NormalizedMiscSaleItem = {
   quantity: number
 }
 
+const VALID_MISC_PAYMENT_MODES = ['CASH', 'CARD', 'UPI', 'SPLIT', 'CREDIT'] as const
+type MiscPaymentMode = typeof VALID_MISC_PAYMENT_MODES[number]
+
+function validMiscPaymentMode(v: unknown): MiscPaymentMode {
+  if (VALID_MISC_PAYMENT_MODES.includes(v as MiscPaymentMode)) return v as MiscPaymentMode
+  return 'CASH'
+}
+
 type CreateMiscSalesArgs = {
   saleDateInput?: string | null
   requestedStaffId?: unknown
   sessionStaffId?: unknown
   itemsInput: unknown
+  paymentMode?: unknown  // payment mode used by the customer (defaults to CASH)
 }
 
 type CreatedMiscLine = {
@@ -271,6 +280,7 @@ export async function createMiscSalesForDate(args: CreateMiscSalesArgs) {
 
   const priceById = new Map(dbItems.map(item => [item.id, round2(asNumber(item.price))]))
   const now = new Date()
+  const paymentMode = validMiscPaymentMode(args.paymentMode)
 
   const rows: CreatedMiscLine[] = normalizedItems.map(item => {
     const unitPrice = priceById.get(item.itemId) ?? 0
@@ -292,7 +302,7 @@ export async function createMiscSalesForDate(args: CreateMiscSalesArgs) {
       quantity: row.quantity,
       unitPrice: row.unitPrice,
       totalAmount: row.totalAmount,
-      paymentMode: 'CASH',
+      paymentMode,
     })),
   })
 

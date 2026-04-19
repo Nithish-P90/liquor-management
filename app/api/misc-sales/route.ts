@@ -6,6 +6,7 @@ import {
   listMiscSalesForDate,
   resolveMiscSalesDay,
 } from '@/lib/misc-sales'
+import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,10 +35,58 @@ export async function GET(req: NextRequest) {
   }
 
   const dateParam = req.nextUrl.searchParams.get('date')
+  const fromParam = req.nextUrl.searchParams.get('from')
+  const toParam   = req.nextUrl.searchParams.get('to')
   const sessionStaffId = Number(user?.id ?? 0)
   const scopedStaffId = user?.role === 'STAFF' && Number.isInteger(sessionStaffId) && sessionStaffId > 0
     ? sessionStaffId
     : null
+
+  // ── Date range summary (/api/misc-sales?from=YYYY-MM-DD&to=YYYY-MM-DD) ──
+  if (fromParam && toParam) {
+    try {
+      const fromScope = resolveMiscSalesDay(fromParam)
+      const toScope   = resolveMiscSalesDay(toParam)
+      const where = {
+        saleDate: { gte: fromScope.dayStart, lte: toScope.nextDayStart },
+        ...(scopedStaffId ? { staffId: scopedStaffId } : {}),
+      }
+      const [agg, catAgg] = await Promise.all([
+        prisma.miscSale.aggregate({
+          where,
+          _sum: { totalAmount: true, quantity: true },
+          _count: { _all: true },
+        }),
+        prisma.miscSale.groupBy({
+          by: ['paymentMode'],
+          where,
+          _sum: { totalAmount: true, quantity: true },
+          _count: { _all: true },
+        }),
+      ])
+      const [catCigAgg, catSnkAgg, catCupAgg] = await Promise.all([
+        prisma.miscSale.aggregate({ where: { ...where, item: { category: 'CIGARETTES' } }, _sum: { totalAmount: true, quantity: true }, _count: { _all: true } }),
+        prisma.miscSale.aggregate({ where: { ...where, item: { category: 'SNACKS' } },     _sum: { totalAmount: true, quantity: true }, _count: { _all: true } }),
+        prisma.miscSale.aggregate({ where: { ...where, item: { category: 'CUPS' } },       _sum: { totalAmount: true, quantity: true }, _count: { _all: true } }),
+      ])
+      return NextResponse.json({
+        from: fromScope.isoDate,
+        to: toScope.isoDate,
+        totalAmount: Number(agg._sum.totalAmount ?? 0),
+        totalItems: Number(agg._sum.quantity ?? 0),
+        totalEntries: agg._count._all,
+        byMode: catAgg.map(g => ({ mode: g.paymentMode, amount: Number(g._sum.totalAmount ?? 0), qty: Number(g._sum.quantity ?? 0) })),
+        categories: {
+          CIGARETTES: { amount: Number(catCigAgg._sum.totalAmount ?? 0), items: Number(catCigAgg._sum.quantity ?? 0), entries: catCigAgg._count._all },
+          SNACKS:     { amount: Number(catSnkAgg._sum.totalAmount ?? 0), items: Number(catSnkAgg._sum.quantity ?? 0), entries: catSnkAgg._count._all },
+          CUPS:       { amount: Number(catCupAgg._sum.totalAmount ?? 0), items: Number(catCupAgg._sum.quantity ?? 0), entries: catCupAgg._count._all },
+        },
+      }, { headers: NO_STORE_HEADERS })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load range summary'
+      return NextResponse.json({ error: message }, { status: 400, headers: NO_STORE_HEADERS })
+    }
+  }
 
   try {
     const { scope, rows, summary } = await listMiscSalesForDate({
@@ -63,6 +112,7 @@ export async function GET(req: NextRequest) {
           barcode: sale.item.barcode,
           name: sale.item.name,
           category: sale.item.category,
+          unit: sale.item.unit,
           price: Number(sale.item.price),
         },
       })),
@@ -103,6 +153,7 @@ export async function POST(req: NextRequest) {
       requestedStaffId: body?.staffId,
       sessionStaffId: user?.id,
       itemsInput: body?.items,
+      paymentMode: body?.paymentMode,
     })
 
     const scope = resolveMiscSalesDay(saleDateInput)
