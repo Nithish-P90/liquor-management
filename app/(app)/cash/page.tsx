@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 type CashForm = {
   openingRegister: number
@@ -52,14 +53,6 @@ type DaySummary = {
       amount: number
     }[]
   }
-  closingStock: {
-    taken: boolean
-    sessionId: number | null
-    periodStart: string | null
-    periodEnd: string | null
-    lines: number
-    bottles: number
-  }
 }
 
 type BankData = {
@@ -79,7 +72,20 @@ function rupee(n: number) {
   return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
+function fmtDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+function fmtDateFromISO(iso: string) {
+  const d = new Date(iso)
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
+}
+
 export default function CashPage() {
+  const { data: session } = useSession()
+  const user = session?.user as { role?: string } | undefined
+  const isAdmin = user?.role === 'ADMIN'
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [form, setForm] = useState<CashForm>(emptyForm())
   const [summary, setSummary] = useState<DaySummary | null>(null)
@@ -182,6 +188,7 @@ export default function CashPage() {
       body: JSON.stringify({
         recordDate: date,
         cashToLocker: form.cashToLocker,
+        closingRegister: isAdmin ? form.closingRegister : undefined,
         notes: form.notes,
       }),
     })
@@ -263,9 +270,6 @@ export default function CashPage() {
           {summary?.lastSale
             ? ` Last sale: ${new Date(summary.lastSale.saleTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} (${summary.lastSale.productName} ${summary.lastSale.sizeMl}ml).`
             : ' No sale found for this day.'}
-          {summary?.closingStock.taken
-            ? ' Closing stock is recorded.'
-            : ' Closing stock is pending. Please take physical closing stock.'}
         </div>
       )}
 
@@ -299,7 +303,7 @@ export default function CashPage() {
       {/* System vs Manual Sales */}
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         <h2 className="text-sm font-bold text-slate-700 mb-3">
-          Sales — {new Date(date + 'T12:00:00').toLocaleDateString('en-GB')}
+          Sales — {fmtDate(date)}
         </h2>
         <div className="mb-3">
           <p className="text-xs text-slate-500">Auto-tallied from POS sales and expenditure entries. Counter cash stays in galla unless transferred to locker.</p>
@@ -378,7 +382,7 @@ export default function CashPage() {
             <span className="text-slate-500">Expected Closing</span>
             <strong className="text-blue-700">{rupee(expectedClosing)}</strong>
           </div>
-          {renderField('Closing Register (Auto)', 'closingRegister', 'Auto = opening + billed cash - expenses - locker transfer', true)}
+          {renderField('Closing Register' + (isAdmin ? '' : ' (Auto)'), 'closingRegister', isAdmin ? 'Admin override — auto-computed value shown above' : 'Auto = opening + billed cash - expenses - locker transfer', !isAdmin)}
           {registerVar !== 0 && (
             <div className={`p-2.5 rounded-lg text-sm font-semibold flex justify-between ${Math.abs(registerVar) > 200 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
               <span>Variance</span>
@@ -413,7 +417,7 @@ export default function CashPage() {
             <tbody className="divide-y divide-slate-50">
               {bankData.transactions.map(t => (
                 <tr key={t.id}>
-                  <td className="py-2 text-slate-500">{new Date(t.txDate).toLocaleDateString('en-GB')}</td>
+                  <td className="py-2 text-slate-500">{fmtDateFromISO(t.txDate)}</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.txType === 'DEPOSIT' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                       {t.txType === 'DEPOSIT' ? 'Deposit' : 'KSBCL Payment'}
@@ -428,37 +432,7 @@ export default function CashPage() {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-bold text-slate-700">Closing Stock Snapshot</h2>
-            {summary?.closingStock.taken ? (
-              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700">Taken</span>
-            ) : (
-              <span className="rounded-full bg-yellow-100 px-2 py-1 text-[11px] font-semibold text-yellow-700">Pending</span>
-            )}
-          </div>
-          {summary?.closingStock.taken ? (
-            <div className="mt-3 space-y-1 text-sm text-slate-600">
-              <div>Session #{summary.closingStock.sessionId}</div>
-              <div>{summary.closingStock.lines} products counted</div>
-              <div>{summary.closingStock.bottles} bottles in closing entry</div>
-              {summary.closingStock.periodStart && summary.closingStock.periodEnd && (
-                <div className="text-xs text-slate-400">
-                  Period: {new Date(summary.closingStock.periodStart).toLocaleDateString('en-GB')} to {new Date(summary.closingStock.periodEnd).toLocaleDateString('en-GB')}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-3 space-y-3">
-              <p className="text-sm text-yellow-700">Closing stock not captured for this day. Take physical stock before closing the register.</p>
-              <a href="/inventory/closing" className="inline-flex rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700">
-                Go to Closing Stock
-              </a>
-            </div>
-          )}
-        </div>
-
+      <div>
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <h2 className="text-sm font-bold text-slate-700">Day Expenditure Sheet</h2>
           <p className="mt-1 text-xs text-slate-400">This is auto-read from the expenditure register for the selected day.</p>

@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const [, err] = await requireSession()
+  const [sessionData, err] = await requireSession()
   if (err) return err
 
   const body = await req.json()
@@ -282,6 +282,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 409 })
   }
 
+  // Admin can override closing register
+  const isAdmin = sessionData.user.role === 'ADMIN'
+  const closingRegister = isAdmin && typeof body?.closingRegister === 'number' && body.closingRegister >= 0
+    ? round2(body.closingRegister)
+    : ledger.closingRegister
+
   const notes = typeof body?.notes === 'string' ? body.notes : (existing?.notes ?? null)
 
   const record = await prisma.cashRecord.upsert({
@@ -291,7 +297,7 @@ export async function POST(req: NextRequest) {
       cashSales: ledger.cashSales,
       expenses: ledger.expenses,
       cashToLocker: ledger.cashToLocker,
-      closingRegister: ledger.closingRegister,
+      closingRegister,
       cardSales: ledger.cardSales,
       upiSales: ledger.upiSales,
       creditSales: ledger.creditSales,
@@ -304,7 +310,7 @@ export async function POST(req: NextRequest) {
       cashSales: ledger.cashSales,
       expenses: ledger.expenses,
       cashToLocker: ledger.cashToLocker,
-      closingRegister: ledger.closingRegister,
+      closingRegister,
       cardSales: ledger.cardSales,
       upiSales: ledger.upiSales,
       creditSales: ledger.creditSales,
