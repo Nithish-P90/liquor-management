@@ -300,11 +300,25 @@ function groupBySize(rows: TopSellerRow[]): SizeGroup[] {
   return Array.from(map.values()).sort((a, b) => b.bottles - a.bottles)
 }
 
+const SIZE_BADGE_COLORS: Record<number, string> = {
+  1:    'bg-slate-100 text-slate-600 border-slate-200',
+  60:   'bg-red-100 text-red-700 border-red-200',
+  90:   'bg-orange-100 text-orange-700 border-orange-200',
+  180:  'bg-amber-100 text-amber-700 border-amber-200',
+  200:  'bg-yellow-100 text-yellow-700 border-yellow-200',
+  250:  'bg-lime-100 text-lime-700 border-lime-200',
+  275:  'bg-emerald-100 text-emerald-700 border-emerald-200',
+  330:  'bg-teal-100 text-teal-700 border-teal-200',
+  375:  'bg-cyan-100 text-cyan-700 border-cyan-200',
+  500:  'bg-sky-100 text-sky-700 border-sky-200',
+  600:  'bg-blue-100 text-blue-700 border-blue-200',
+  650:  'bg-indigo-100 text-indigo-700 border-indigo-200',
+  750:  'bg-violet-100 text-violet-700 border-violet-200',
+  1000: 'bg-purple-100 text-purple-700 border-purple-200',
+}
+
 function sizeBadgeColor(sizeMl: number) {
-  if (sizeMl >= 750) return 'bg-indigo-100 text-indigo-700 border-indigo-200'
-  if (sizeMl >= 375) return 'bg-blue-100 text-blue-700 border-blue-200'
-  if (sizeMl >= 180) return 'bg-teal-100 text-teal-700 border-teal-200'
-  return 'bg-slate-100 text-slate-600 border-slate-200'
+  return SIZE_BADGE_COLORS[sizeMl] ?? 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200'
 }
 
 function Leaderboard({ rows, groupBy }: { rows: TopSellerRow[] | undefined; groupBy: 'product' | 'size' }) {
@@ -394,14 +408,21 @@ function Leaderboard({ rows, groupBy }: { rows: TopSellerRow[] | undefined; grou
 }
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent: string }) {
-  const accents: Record<string, string> = {
-    blue: 'border-l-blue-500', emerald: 'border-l-emerald-500',
-    violet: 'border-l-violet-500', amber: 'border-l-amber-500',
-    sky: 'border-l-cyan-500', orange: 'border-l-orange-500',
+  const styles: Record<string, { border: string; bg: string; label: string; dot: string }> = {
+    blue:    { border: 'border-l-blue-500',    bg: 'bg-blue-50/40',    label: 'text-blue-600',    dot: 'bg-blue-500' },
+    emerald: { border: 'border-l-emerald-500', bg: 'bg-emerald-50/40', label: 'text-emerald-600', dot: 'bg-emerald-500' },
+    violet:  { border: 'border-l-violet-500',  bg: 'bg-violet-50/40',  label: 'text-violet-600',  dot: 'bg-violet-500' },
+    amber:   { border: 'border-l-amber-500',   bg: 'bg-amber-50/40',   label: 'text-amber-600',   dot: 'bg-amber-500' },
+    sky:     { border: 'border-l-cyan-500',     bg: 'bg-cyan-50/40',    label: 'text-cyan-600',    dot: 'bg-cyan-500' },
+    orange:  { border: 'border-l-orange-500',   bg: 'bg-orange-50/40',  label: 'text-orange-600',  dot: 'bg-orange-500' },
   }
+  const s = styles[accent] ?? styles.blue
   return (
-    <div className={`bg-white border border-slate-200 border-l-4 ${accents[accent]} rounded-xl p-5`}>
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
+    <div className={`${s.bg} border border-slate-200 border-l-4 ${s.border} rounded-xl p-5`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+        <p className={`text-xs font-semibold uppercase tracking-wide ${s.label}`}>{label}</p>
+      </div>
       <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
       <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
     </div>
