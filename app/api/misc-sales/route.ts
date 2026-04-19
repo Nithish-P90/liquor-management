@@ -1,35 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import prisma from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
-import { toUtcNoonDate } from '@/lib/date-utils'
+import {
+  createMiscSalesForDate,
+  listMiscSalesForDate,
+  resolveMiscSalesDay,
+} from '@/lib/misc-sales'
+
+export const dynamic = 'force-dynamic'
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+}
 
 function isAllowedRole(role?: string) {
   return role === 'ADMIN' || role === 'CASHIER' || role === 'STAFF'
 }
 
+function toErrorStatus(message: string) {
+  if (message.startsWith('Invalid date')) return 400
+  if (message === 'At least one item is required') return 400
+  if (message === 'Invalid item payload') return 400
+  if (message.startsWith('Unknown misc item id')) return 404
+  if (message === 'No active staff found for misc sale attribution') return 400
+  return 500
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  const user = session?.user as { role?: string } | undefined
+  const user = session?.user as { id?: string; role?: string } | undefined
   if (!session || !isAllowedRole(user?.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const dateParam = req.nextUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10)
-  const day = toUtcNoonDate(new Date(dateParam + 'T12:00:00Z'))
-  const dayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 0, 0, 0, 0))
-  const nextDayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1, 0, 0, 0, 0))
-  const sales = await prisma.miscSale.findMany({
-    where: {
-      saleDate: {
-        gte: dayStart,
-        lt: nextDayStart,
-      },
-    },
-    include: { item: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  return NextResponse.json(sales)
+  const dateParam = req.nextUrl.searchParams.get('date')
+  const sessionStaffId = Number(user?.id ?? 0)
+  const scopedStaffId = user?.role === 'STAFF' && Number.isInteger(sessionStaffId) && sessionStaffId > 0
+    ? sessionStaffId
+    : null
+
+  try {
+    const { scope, rows, summary } = await listMiscSalesForDate({
+      dateInput: dateParam,
+      staffId: scopedStaffId,
+    })
+
+    return NextResponse.json({
+      date: scope.isoDate,
+      summary,
+      rows: rows.map(sale => ({
+        id: sale.id,
+        staffId: sale.staffId,
+        staffName: sale.staff.name,
+        quantity: sale.quantity,
+        unitPrice: Number(sale.unitPrice),
+        totalAmount: Number(sale.totalAmount),
+        saleDate: scope.isoDate,
+        saleTime: sale.saleTime,
+        paymentMode: sale.paymentMode,
+        item: {
+          id: sale.item.id,
+          barcode: sale.item.barcode,
+          name: sale.item.name,
+          category: sale.item.category,
+          price: Number(sale.item.price),
+        },
+      })),
+    }, {
+      headers: NO_STORE_HEADERS,
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to load misc sales'
+    return NextResponse.json({ error: message }, { status: toErrorStatus(message), headers: NO_STORE_HEADERS })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -39,56 +82,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Only admins and cashiers can record misc sales' }, { status: 403 })
   }
 
-  const body = await req.json()
-  if (!Array.isArray(body?.items) || !body?.saleDate) {
-    return NextResponse.json({ error: 'saleDate and items[] are required' }, { status: 400 })
+  const body = await req.json().catch(() => null)
+  const saleDateInput = typeof body?.saleDate === 'string' ? body.saleDate : null
+
+  if (!saleDateInput) {
+    return NextResponse.json({ error: 'saleDate is required' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
-  let staffId = Number(body?.staffId ?? user?.id ?? 0)
-  if (!Number.isInteger(staffId) || staffId <= 0) {
-    const fallbackStaff = await prisma.staff.findFirst({
-      where: { active: true, role: { in: ['ADMIN', 'CASHIER'] } },
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    })
-    if (!fallbackStaff) {
-      return NextResponse.json({ error: 'No active cashier/admin found for misc sale attribution' }, { status: 400 })
+  if (user?.role === 'STAFF') {
+    const userStaffId = Number(user.id ?? 0)
+    const requestedStaffId = Number(body?.staffId ?? userStaffId)
+    if (!Number.isInteger(userStaffId) || userStaffId <= 0 || requestedStaffId !== userStaffId) {
+      return NextResponse.json({ error: 'Staff can only record misc sales under their own staff id' }, { status: 403, headers: NO_STORE_HEADERS })
     }
-    staffId = fallbackStaff.id
   }
 
-  const items = body.items as Array<{ itemId: number; quantity: number; unitPrice: number; totalAmount: number }>
-  if (items.length === 0) {
-    return NextResponse.json({ error: 'At least one item is required' }, { status: 400 })
-  }
-  const hasInvalid = items.some(item => {
-    return !Number.isInteger(Number(item.itemId)) || Number(item.itemId) <= 0 ||
-      !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
-      !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) <= 0 ||
-      !Number.isFinite(Number(item.totalAmount)) || Number(item.totalAmount) <= 0
-  })
-  if (hasInvalid) {
-    return NextResponse.json({ error: 'Invalid item payload' }, { status: 400 })
-  }
+  try {
+    const created = await createMiscSalesForDate({
+      saleDateInput,
+      requestedStaffId: body?.staffId,
+      sessionStaffId: user?.id,
+      itemsInput: body?.items,
+    })
 
-  const saleDate = toUtcNoonDate(new Date(body.saleDate + 'T12:00:00Z'))
-  const now = new Date()
-  const created = await prisma.$transaction(
-    items.map(item =>
-      prisma.miscSale.create({
-        data: {
-          staffId,
-          itemId: Number(item.itemId),
-          saleDate,
-          saleTime: now,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          totalAmount: Number(item.totalAmount),
-          // Misc sales are tracked in a separate ledger and are not split by payment method.
-          paymentMode: 'CASH',
-        },
-      })
-    )
-  )
-  return NextResponse.json({ count: created.length })
+    const scope = resolveMiscSalesDay(saleDateInput)
+    const scopedStaffId = user?.role === 'STAFF' ? Number(user.id ?? 0) : null
+    const { summary } = await listMiscSalesForDate({
+      dateInput: scope.isoDate,
+      staffId: Number.isInteger(scopedStaffId) && (scopedStaffId ?? 0) > 0 ? scopedStaffId : null,
+    })
+
+    return NextResponse.json({
+      success: true,
+      date: created.scope.isoDate,
+      staffId: created.staffId,
+      count: created.createdLines.length,
+      created: created.createdLines,
+      createdTotals: created.createdTotals,
+      summary,
+    }, {
+      headers: NO_STORE_HEADERS,
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to record misc sale'
+    return NextResponse.json({ error: message }, { status: toErrorStatus(message), headers: NO_STORE_HEADERS })
+  }
 }

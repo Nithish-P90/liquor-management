@@ -310,15 +310,19 @@ export async function POST(req: NextRequest) {
             throw new Error('Selected clerk does not match the sale clerk')
           }
 
-          const priorVoids = await tx.sale.aggregate({
+          // Fetch candidate void rows and filter by exact saleId using regex (avoids
+          // `contains: "void:sale#5"` matching "void:sale#50").
+          const priorVoidRows = await tx.sale.findMany({
             where: {
               paymentMode: 'VOID',
               quantityBottles: { lt: 0 },
               overrideReason: { contains: `void:sale#${sale.id}` },
             },
-            _sum: { quantityBottles: true },
+            select: { quantityBottles: true, overrideReason: true },
           })
-          const alreadyVoided = Math.abs(Number(priorVoids._sum.quantityBottles ?? 0))
+          const alreadyVoided = priorVoidRows
+            .filter(r => parseVoidedSaleId(r.overrideReason) === sale.id)
+            .reduce((sum, r) => sum + Math.abs(Number(r.quantityBottles ?? 0)), 0)
           const remainingQty = Math.max(0, sale.quantityBottles - alreadyVoided)
           if (remainingQty <= 0) throw new Error('Sale already fully voided')
 

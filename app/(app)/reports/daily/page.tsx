@@ -238,8 +238,13 @@ export default function DailyLedgerPage() {
                   <div>
                     <span className="text-gray-400 text-xs">Liquor Sales</span>
                     <div className="font-bold text-gray-900">{fmt(s.financials.totalSales)}</div>
-                    {(s.financials.miscSalesTotal ?? 0) > 0 && (
-                      <div className="text-[11px] text-cyan-600">misc separate {fmt(s.financials.miscSalesTotal ?? 0)}</div>
+                    <div className="text-[11px] text-gray-400">{s.financials.totalBills} bills · {s.financials.totalBottlesSold} btls</div>
+                  </div>
+                  <div>
+                    <span className="text-cyan-500 text-xs font-semibold">Misc (Cashier)</span>
+                    <div className="font-bold text-cyan-700">{fmt(s.financials.miscSalesTotal ?? 0)}</div>
+                    {(s.financials.miscItemsSold ?? 0) > 0 && (
+                      <div className="text-[11px] text-cyan-400">{s.financials.miscItemsSold} items</div>
                     )}
                   </div>
                   <div>
@@ -247,12 +252,8 @@ export default function DailyLedgerPage() {
                     <div className="font-bold text-red-600">{fmt(s.financials.totalExpenses)}</div>
                   </div>
                   <div>
-                    <span className="text-gray-400 text-xs">Net Cash</span>
+                    <span className="text-gray-400 text-xs">Liquor Net Cash</span>
                     <div className="font-bold text-emerald-600">{fmt(s.financials.netCash)}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 text-xs">Bottles</span>
-                    <div className="font-bold text-gray-700">{s.financials.totalBottlesSold} btls · {s.financials.totalBills} bills</div>
                   </div>
                   {(s.financials.pendingUnpaid ?? 0) > 0 && (
                     <div>
@@ -319,16 +320,15 @@ export default function DailyLedgerPage() {
                         {/* ── SUMMARY ──────────────────────────────────────── */}
                         {activeTab === 'summary' && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            {/* Sales breakdown */}
+                            {/* Liquor Sales breakdown (owner revenue) */}
                             <div>
-                              <SectionTitle>Sales Breakdown</SectionTitle>
+                              <SectionTitle>Liquor Sales — Owner Revenue</SectionTitle>
                               <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 text-sm">
                                 {[
                                   ['Cash',          detail.financials.salesByMode.CASH,   'text-green-700'],
                                   ['UPI / Digital', detail.financials.salesByMode.UPI,    'text-purple-700'],
                                   ['Card',          detail.financials.salesByMode.CARD,   'text-blue-700'],
                                   ['Credit',        detail.financials.salesByMode.CREDIT, 'text-orange-700'],
-                                  ['Misc Sales (Separate)', detail.financials.miscSalesTotal ?? 0, 'text-cyan-700'],
                                   ['Pending (Unpaid)', detail.financials.pendingUnpaidAmount ?? 0, 'text-orange-600'],
                                 ].map(([label, val, cls]) => (
                                   <div key={String(label)} className="flex justify-between px-4 py-2.5">
@@ -345,8 +345,26 @@ export default function DailyLedgerPage() {
                                   <span className="text-red-700 font-bold">{fmt(detail.financials.totalExpenses)}</span>
                                 </div>
                                 <div className="flex justify-between px-4 py-3 bg-emerald-50 border-t border-emerald-200">
-                                  <span className="text-emerald-800 font-bold">Net Cash</span>
+                                  <span className="text-emerald-800 font-bold">Net Cash (Owner)</span>
                                   <span className="text-emerald-800 font-black">{fmt(detail.financials.netCash)}</span>
+                                </div>
+                              </div>
+
+                              {/* Misc Sales (cashier revenue — separate, not owner income) */}
+                              <div className="mt-4">
+                                <SectionTitle>Misc Sales — Cashier Revenue</SectionTitle>
+                                <div className="bg-cyan-50 border border-cyan-200 rounded-xl divide-y divide-cyan-100 text-sm">
+                                  <div className="flex justify-between px-4 py-2.5">
+                                    <span className="text-cyan-700">Items Sold</span>
+                                    <span className="font-semibold text-cyan-800">{detail.financials.miscItemsSold ?? 0} items ({detail.financials.miscEntries ?? 0} entries)</span>
+                                  </div>
+                                  <div className="flex justify-between px-4 py-3 font-bold">
+                                    <span className="text-cyan-800">Total Misc Revenue</span>
+                                    <span className="text-cyan-900 font-black">{fmt(detail.financials.miscSalesTotal ?? 0)}</span>
+                                  </div>
+                                  <div className="px-4 py-2 bg-cyan-100/60 rounded-b-xl">
+                                    <span className="text-[11px] text-cyan-600 italic">Collected by cashiers — not included in owner net cash</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -492,7 +510,7 @@ export default function DailyLedgerPage() {
                                 <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                                   <td className="px-4 py-2.5 text-gray-600" colSpan={2}>Liquor Total</td>
                                   <td className="px-4 py-2.5 text-right">{detail.financials.totalBottlesSold} btl</td>
-                                  <td className="px-4 py-2.5 text-right">{fmt(detail.financials.totalSales - (detail.financials.miscSalesTotal ?? 0))}</td>
+                                  <td className="px-4 py-2.5 text-right">{fmt(detail.financials.totalSales)}</td>
                                   <td colSpan={2} />
                                 </tr>
                               )}
@@ -550,35 +568,53 @@ export default function DailyLedgerPage() {
 
                         {/* ── CASH TALLY ────────────────────────────────────── */}
                         {activeTab === 'cash' && (
-                          <div className="max-w-lg">
-                            <SectionTitle>Galla (Cash Register) Tally</SectionTitle>
-                            {detail.cashFlow ? (
-                              <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 text-sm">
-                                {[
-                                  { label: 'Opening Register',  val: detail.cashFlow.openingRegister ?? 0,  cls: 'text-gray-700' },
-                                  { label: '+ Cash Sales',      val: detail.cashFlow.cashSales ?? 0,        cls: 'text-green-700' },
-                                  { label: '  of which Misc',   val: detail.financials.miscSalesTotal ?? 0, cls: 'text-cyan-700' },
-                                  { label: '− Expenses',        val: detail.cashFlow.expenses ?? 0,         cls: 'text-red-600'  },
-                                  { label: '→ Moved to Locker', val: detail.cashFlow.cashToLocker ?? 0,     cls: 'text-amber-700' },
-                                  { label: 'Closing Register',  val: detail.cashFlow.closingRegister ?? 0,  cls: 'text-gray-900 font-black' },
-                                ].map(({ label, val, cls }) => (
-                                  <div key={label} className="flex justify-between px-4 py-3">
-                                    <span className="text-gray-500">{label}</span>
-                                    <span className={cls}>{fmt(val)}</span>
+                          <div className="max-w-lg space-y-5">
+                            {/* Liquor cash register (owner) */}
+                            <div>
+                              <SectionTitle>Galla (Cash Register) — Owner Tally</SectionTitle>
+                              {detail.cashFlow ? (
+                                <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 text-sm">
+                                  {[
+                                    { label: 'Opening Register',  val: detail.cashFlow.openingRegister ?? 0,  cls: 'text-gray-700' },
+                                    { label: '+ Liquor Cash Sales', val: detail.cashFlow.cashSales ?? 0,      cls: 'text-green-700' },
+                                    { label: '− Expenses',        val: detail.cashFlow.expenses ?? 0,         cls: 'text-red-600'  },
+                                    { label: '→ Moved to Locker', val: detail.cashFlow.cashToLocker ?? 0,     cls: 'text-amber-700' },
+                                    { label: 'Closing Register',  val: detail.cashFlow.closingRegister ?? 0,  cls: 'text-gray-900 font-black' },
+                                  ].map(({ label, val, cls }) => (
+                                    <div key={label} className="flex justify-between px-4 py-3">
+                                      <span className="text-gray-500">{label}</span>
+                                      <span className={cls}>{fmt(val)}</span>
+                                    </div>
+                                  ))}
+                                  {detail.cashFlow.bankDeposits.map(dep => (
+                                    <div key={dep.id} className="flex justify-between px-4 py-3 bg-blue-50">
+                                      <span className="text-blue-700 font-medium">
+                                        Bank Deposit{dep.notes ? ` — ${dep.notes}` : ''}
+                                      </span>
+                                      <span className="text-blue-700 font-bold">{fmt(dep.amount)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl text-gray-400">
+                                  No cash register entry for this day.
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Misc cash (cashier) — separate float */}
+                            {(detail.financials.miscSalesTotal ?? 0) > 0 && (
+                              <div>
+                                <SectionTitle>Misc Cash — Cashier Float (Separate)</SectionTitle>
+                                <div className="bg-cyan-50 border border-cyan-200 rounded-xl divide-y divide-cyan-100 text-sm">
+                                  <div className="flex justify-between px-4 py-3">
+                                    <span className="text-cyan-700">Misc Sales Collected</span>
+                                    <span className="text-cyan-900 font-bold">{fmt(detail.financials.miscSalesTotal ?? 0)}</span>
                                   </div>
-                                ))}
-                                {detail.cashFlow.bankDeposits.map(dep => (
-                                  <div key={dep.id} className="flex justify-between px-4 py-3 bg-blue-50">
-                                    <span className="text-blue-700 font-medium">
-                                      Bank Deposit{dep.notes ? ` — ${dep.notes}` : ''}
-                                    </span>
-                                    <span className="text-blue-700 font-bold">{fmt(dep.amount)}</span>
+                                  <div className="px-4 py-2 rounded-b-xl">
+                                    <span className="text-[11px] text-cyan-600 italic">Cashier retains this amount — does not go into owner galla</span>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl text-gray-400">
-                                No cash register entry for this day.
+                                </div>
                               </div>
                             )}
                           </div>

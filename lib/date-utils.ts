@@ -1,6 +1,6 @@
 export function toUtcNoonDate(value?: Date | string): Date {
   const d = value ? new Date(value) : new Date()
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0))
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0))
 }
 
 export function subtractDays(date: Date, days: number): Date {

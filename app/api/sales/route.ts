@@ -38,15 +38,23 @@ async function runSaleTransactionWithRetry<T>(run: () => Promise<T>, maxAttempts
   throw lastError
 }
 
+const VALID_PAYMENT_MODES = ['CASH', 'CARD', 'UPI', 'SPLIT', 'VOID', 'PENDING', 'CREDIT']
+
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const dateStr = searchParams.get('date')
   const staffId = searchParams.get('staffId')
   const limit = parseInt(searchParams.get('limit') ?? '50')
 
-  const where: any = {}
+  const where: Record<string, unknown> = {}
   if (dateStr) where.saleDate = toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
-  if (staffId) where.staffId = parseInt(staffId)
+  if (staffId) {
+    const sid = parseInt(staffId)
+    if (!isNaN(sid) && sid > 0) where.staffId = sid
+  }
 
   const sales = await prisma.sale.findMany({
     where,
@@ -55,7 +63,7 @@ export async function GET(req: NextRequest) {
       staff: { select: { id: true, name: true } },
     },
     orderBy: { saleTime: 'desc' },
-    take: limit,
+    take: Math.min(limit, 500),
   })
   return NextResponse.json(sales)
 }
@@ -77,6 +85,10 @@ export async function POST(req: NextRequest) {
   const requestedQuantity = Number(quantityBottles)
   if (!Number.isInteger(requestedQuantity) || requestedQuantity <= 0) {
     return NextResponse.json({ error: 'quantityBottles must be a positive integer' }, { status: 400 })
+  }
+
+  if (!paymentMode || !VALID_PAYMENT_MODES.includes(paymentMode)) {
+    return NextResponse.json({ error: `Invalid paymentMode. Must be one of: ${VALID_PAYMENT_MODES.join(', ')}` }, { status: 400 })
   }
 
   const productSize = await prisma.productSize.findUnique({
@@ -105,7 +117,7 @@ export async function POST(req: NextRequest) {
           data: {
             saleDate,
             saleTime: now,
-            staffId: staffId ?? parseInt(((session.user as { id?: string } | undefined)?.id) ?? '0'),
+            staffId: staffId ?? parseInt(((session.user as { id?: string } | undefined)?.id) ?? ''),
             productSizeId,
             quantityBottles: requestedQuantity,
             sellingPrice: productSize.sellingPrice,

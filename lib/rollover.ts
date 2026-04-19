@@ -93,11 +93,25 @@ export async function ensureDailyRollover(): Promise<EnsureDailyRolloverResult> 
 
   let newSessionId = sessionToday?.id
   if (!newSessionId) {
+    // Find the first active admin to use as session creator; fall back to any active staff
+    const adminStaff = await prisma.staff.findFirst({
+      where: { active: true, role: 'ADMIN' },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    })
+    const anyStaff = adminStaff ?? await prisma.staff.findFirst({
+      where: { active: true },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    })
+    if (!anyStaff) {
+      return { status: 'no_history', msg: 'No active staff found to create inventory session.' }
+    }
     const created = await prisma.inventorySession.create({
       data: {
         periodStart: today,
         periodEnd: today,
-        staffId: 1,
+        staffId: anyStaff.id,
       },
       select: { id: true },
     })

@@ -576,7 +576,7 @@ export default function SalesPage() {
                   <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-xs">Product</th>
                   <th className="text-center px-3 py-2.5 font-semibold text-gray-500 text-xs">Category</th>
                   <th className="text-center px-3 py-2.5 font-semibold text-gray-500 text-xs">Size</th>
-                  <th className="text-right px-3 py-2.5 font-semibold text-gray-500 text-xs">Bottles Sold</th>
+                  <th className="text-right px-3 py-2.5 font-semibold text-gray-500 text-xs">Qty Sold</th>
                   <th className="text-right px-4 py-2.5 font-semibold text-gray-500 text-xs">Total Revenue</th>
                 </tr>
               </thead>
@@ -592,7 +592,9 @@ export default function SalesPage() {
                     <td className="px-3 py-2.5 text-center text-gray-500 text-xs">{it.sizeMl}ml</td>
                     <td className="px-3 py-2.5 text-right font-bold text-gray-800">
                       {it.totalBottles}
-                      <span className="text-xs font-normal text-gray-400 ml-1">btl</span>
+                      <span className="text-xs font-normal text-gray-400 ml-1">
+                        {it.category === 'MISCELLANEOUS' ? 'pcs' : 'btl'}
+                      </span>
                     </td>
                     <td className="px-4 py-2.5 text-right font-black text-gray-900">{fmt(it.totalAmount)}</td>
                   </tr>
@@ -601,8 +603,17 @@ export default function SalesPage() {
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                   <td className="px-4 py-2.5 text-gray-600" colSpan={3}>Total</td>
-                  <td className="px-3 py-2.5 text-right text-gray-800">
-                    {itemTotals.reduce((s, i) => s + i.totalBottles, 0)} btl
+                  <td className="px-3 py-2.5 text-right text-gray-800 text-xs leading-tight">
+                    {(() => {
+                      const btl = itemTotals.filter(i => i.category !== 'MISCELLANEOUS').reduce((s, i) => s + i.totalBottles, 0)
+                      const pcs = itemTotals.filter(i => i.category === 'MISCELLANEOUS').reduce((s, i) => s + i.totalBottles, 0)
+                      return (
+                        <>
+                          {btl > 0 && <div>{btl} btl</div>}
+                          {pcs > 0 && <div>{pcs} pcs</div>}
+                        </>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-2.5 text-right text-gray-900">{fmt(totalAmount)}</td>
                 </tr>

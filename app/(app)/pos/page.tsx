@@ -392,6 +392,21 @@ export default function POSPage() {
   }, [loadProducts, loadRecent, loadPending, user?.id])
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      void loadRecent()
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [loadRecent])
+
+  useEffect(() => {
+    const onMiscUpdated = () => {
+      void loadRecent()
+    }
+    window.addEventListener('misc-sales:updated', onMiscUpdated)
+    return () => window.removeEventListener('misc-sales:updated', onMiscUpdated)
+  }, [loadRecent])
+
+  useEffect(() => {
     scanRef.current?.focus()
   }, [])
 

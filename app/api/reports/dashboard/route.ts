@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { subtractDays, toUtcNoonDate } from '@/lib/date-utils'
+import { subtractDays } from '@/lib/date-utils'
+import { aggregateMiscSalesForScope, resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -13,12 +14,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Owner dashboard is admin only' }, { status: 403 })
   }
 
-  const today = toUtcNoonDate(new Date())
-  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
-  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
+  const miscScope = resolveMiscSalesDay()
+  const today = miscScope.day
 
   const todayRows = await prisma.sale.findMany({
-    where: { saleDate: today },
+    where: { saleDate: today, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
     select: {
       id: true,
       saleTime: true,
@@ -118,20 +118,21 @@ export async function GET() {
   const [
     alerts, highAlerts, pendingIndents, weeklySales,
     topSellersToday, topSellersWeekRaw, topSellersMonthRaw,
-    recentAlerts, miscAgg,
+    recentAlerts, miscSummary,
   ] = await Promise.all([
     prisma.varianceRecord.count({ where: { resolved: false, severity: { not: 'OK' } } }),
     prisma.varianceRecord.count({ where: { resolved: false, severity: 'HIGH' } }),
     prisma.indent.count({ where: { status: 'PENDING' } }),
     prisma.sale.groupBy({
       by: ['saleDate'],
-      where: { saleDate: { gte: sevenDaysAgo, lte: today } },
+      where: { saleDate: { gte: sevenDaysAgo, lte: today }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { totalAmount: true, quantityBottles: true },
+      _count: { id: true },
       orderBy: { saleDate: 'asc' },
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: today, quantityBottles: { gt: 0 } },
+      where: { saleDate: today, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },
@@ -139,7 +140,7 @@ export async function GET() {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+      where: { saleDate: { gte: sevenDaysAgo, lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },
@@ -147,22 +148,22 @@ export async function GET() {
     }),
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 } },
+      where: { saleDate: { gte: thirtyDaysAgo, lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       _sum: { quantityBottles: true, totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { quantityBottles: 'desc' } },
       take: 8,
     }),
     prisma.varianceRecord.findMany({
-      where: { resolved: false, severity: { not: 'OK' } },
+      where: { resolved: false, severity: { not: 'OK' }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
       include: { productSize: { include: { product: true } } },
       orderBy: [{ severity: 'desc' }, { recordDate: 'desc' }],
       take: 5,
     }),
-    prisma.miscSale.aggregate({ where: { saleDate: { gte: dayStart, lt: nextDayStart } }, _sum: { totalAmount: true } }),
+    aggregateMiscSalesForScope(miscScope),
   ])
 
-  const miscSaleTotal = Number(miscAgg._sum.totalAmount ?? 0)
+  const miscSaleTotal = miscSummary.totalAmount
 
   // Resolve all three top-seller sets with a single shared productSize lookup
   const allIds = [...new Set([

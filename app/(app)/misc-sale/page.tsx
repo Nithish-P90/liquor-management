@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 
 type MiscCategory = 'CIGARETTES' | 'SNACKS' | 'CUPS'
@@ -19,11 +19,34 @@ type CartItem = {
 
 type SaleRecord = {
   id: number
+  staffId?: number
+  staffName?: string
   quantity: number
   unitPrice: number
   totalAmount: number
   saleTime: string
+  saleDate?: string
+  paymentMode?: string
   item: MiscItem
+}
+
+type CategorySummary = {
+  items: number
+  amount: number
+  entries: number
+}
+
+type MiscSalesSummary = {
+  totalAmount: number
+  items: number
+  entries: number
+  categories: Record<MiscCategory, CategorySummary>
+}
+
+type MiscSalesResponse = {
+  date: string
+  summary?: unknown
+  rows?: unknown
 }
 
 const CAT_LABEL: Record<MiscCategory, string> = {
@@ -42,6 +65,109 @@ function rupee(n: number) {
   return '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
+function asNumber(value: unknown) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function asCategory(value: unknown): MiscCategory {
+  if (value === 'CIGARETTES' || value === 'SNACKS' || value === 'CUPS') return value
+  return 'CIGARETTES'
+}
+
+function emptySummary(): MiscSalesSummary {
+  return {
+    totalAmount: 0,
+    items: 0,
+    entries: 0,
+    categories: {
+      CIGARETTES: { items: 0, amount: 0, entries: 0 },
+      SNACKS: { items: 0, amount: 0, entries: 0 },
+      CUPS: { items: 0, amount: 0, entries: 0 },
+    },
+  }
+}
+
+function normalizeSalesRows(value: unknown): SaleRecord[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+    .map(row => {
+      const itemValue = row.item
+      const itemObj = (itemValue && typeof itemValue === 'object') ? itemValue as Record<string, unknown> : null
+      return {
+        id: asNumber(row.id),
+        staffId: asNumber(row.staffId),
+        staffName: typeof row.staffName === 'string' ? row.staffName : undefined,
+        quantity: asNumber(row.quantity),
+        unitPrice: asNumber(row.unitPrice),
+        totalAmount: asNumber(row.totalAmount),
+        saleTime: typeof row.saleTime === 'string' ? row.saleTime : '',
+        saleDate: typeof row.saleDate === 'string' ? row.saleDate : undefined,
+        paymentMode: typeof row.paymentMode === 'string' ? row.paymentMode : undefined,
+        item: {
+          id: asNumber(itemObj?.id),
+          barcode: typeof itemObj?.barcode === 'string' ? itemObj.barcode : '',
+          name: typeof itemObj?.name === 'string' ? itemObj.name : 'Unknown',
+          category: asCategory(itemObj?.category),
+          price: asNumber(itemObj?.price),
+        },
+      }
+    })
+    .filter(row => row.id > 0 && row.item.id > 0)
+}
+
+function buildSummaryFromRows(rows: SaleRecord[]): MiscSalesSummary {
+  const summary = emptySummary()
+  for (const row of rows) {
+    const qty = asNumber(row.quantity)
+    const amount = asNumber(row.totalAmount)
+    summary.totalAmount += amount
+    summary.items += qty
+    summary.entries += 1
+    summary.categories[row.item.category].items += qty
+    summary.categories[row.item.category].amount += amount
+    summary.categories[row.item.category].entries += 1
+  }
+  return summary
+}
+
+function parseSummary(value: unknown, fallbackRows: SaleRecord[]): MiscSalesSummary {
+  const fallback = buildSummaryFromRows(fallbackRows)
+  if (!value || typeof value !== 'object') return fallback
+
+  const data = value as Record<string, unknown>
+  const categoryInput = (data.categories && typeof data.categories === 'object')
+    ? data.categories as Partial<Record<MiscCategory, Record<string, unknown>>>
+    : {}
+
+  const categories: Record<MiscCategory, CategorySummary> = {
+    CIGARETTES: {
+      items: asNumber(categoryInput.CIGARETTES?.items ?? fallback.categories.CIGARETTES.items),
+      amount: asNumber(categoryInput.CIGARETTES?.amount ?? fallback.categories.CIGARETTES.amount),
+      entries: asNumber(categoryInput.CIGARETTES?.entries ?? fallback.categories.CIGARETTES.entries),
+    },
+    SNACKS: {
+      items: asNumber(categoryInput.SNACKS?.items ?? fallback.categories.SNACKS.items),
+      amount: asNumber(categoryInput.SNACKS?.amount ?? fallback.categories.SNACKS.amount),
+      entries: asNumber(categoryInput.SNACKS?.entries ?? fallback.categories.SNACKS.entries),
+    },
+    CUPS: {
+      items: asNumber(categoryInput.CUPS?.items ?? fallback.categories.CUPS.items),
+      amount: asNumber(categoryInput.CUPS?.amount ?? fallback.categories.CUPS.amount),
+      entries: asNumber(categoryInput.CUPS?.entries ?? fallback.categories.CUPS.entries),
+    },
+  }
+
+  return {
+    totalAmount: asNumber(data.totalAmount ?? fallback.totalAmount),
+    items: asNumber(data.items ?? fallback.items),
+    entries: asNumber(data.entries ?? fallback.entries),
+    categories,
+  }
+}
+
 export default function MiscSalePage() {
   const { data: session, status } = useSession()
   const user = session?.user as { id?: string; role?: string } | undefined
@@ -51,8 +177,10 @@ export default function MiscSalePage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [sales, setSales] = useState<SaleRecord[]>([])
+  const [summary, setSummary] = useState<MiscSalesSummary>(() => emptySummary())
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(false)
+  const [charging, setCharging] = useState(false)
 
   // All misc items list
   const [allItems, setAllItems] = useState<MiscItem[]>([])
@@ -69,41 +197,93 @@ export default function MiscSalePage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const barcodeRef = useRef<HTMLInputElement>(null)
+  const loadSeqRef = useRef(0)
+
+  function showFlash(msg: string, type: 'ok' | 'err') {
+    setFlash({ msg, type })
+    setTimeout(() => setFlash(null), 2500)
+  }
+
+  const loadAllItems = useCallback(async () => {
+    try {
+      const res = await fetch('/api/misc-items', { cache: 'no-store' })
+      const data: unknown = await res.json().catch(() => [])
+      if (!res.ok) return
+      setAllItems(Array.isArray(data) ? data as MiscItem[] : [])
+    } catch {
+      setAllItems([])
+    }
+  }, [])
+
+  const loadSales = useCallback(async () => {
+    const run = ++loadSeqRef.current
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/misc-sales?date=${encodeURIComponent(date)}`, {
+        cache: 'no-store',
+      })
+      const data: unknown = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        if (run !== loadSeqRef.current) return
+        showFlash('Failed to load misc sales totals', 'err')
+        setSales([])
+        setSummary(emptySummary())
+        return
+      }
+
+      if (run !== loadSeqRef.current) return
+
+      if (Array.isArray(data)) {
+        const rows = normalizeSalesRows(data)
+        setSales(rows)
+        setSummary(buildSummaryFromRows(rows))
+        return
+      }
+
+      const payload = (data && typeof data === 'object') ? data as MiscSalesResponse : null
+      const rows = normalizeSalesRows(payload?.rows)
+      setSales(rows)
+      setSummary(parseSummary(payload?.summary, rows))
+    } catch {
+      if (run !== loadSeqRef.current) return
+      showFlash('Failed to load misc sales totals', 'err')
+      setSales([])
+      setSummary(emptySummary())
+    } finally {
+      if (run === loadSeqRef.current) setLoading(false)
+    }
+  }, [date])
 
   useEffect(() => {
     if (status !== 'authenticated') return
-    loadSales()
-  }, [date, status])
-  useEffect(() => { if (canManageItems) loadAllItems() }, [canManageItems])
+    void loadSales()
+  }, [date, status, loadSales])
 
-  function loadAllItems() {
-    fetch('/api/misc-items')
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setAllItems(data) })
-  }
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    const interval = setInterval(() => {
+      void loadSales()
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [status, loadSales])
+
+  useEffect(() => {
+    const handler = () => {
+      void loadSales()
+    }
+    window.addEventListener('misc-sales:updated', handler)
+    return () => window.removeEventListener('misc-sales:updated', handler)
+  }, [loadSales])
+
+  useEffect(() => {
+    if (!canManageItems) return
+    void loadAllItems()
+  }, [canManageItems, loadAllItems])
 
   function openRegisterModal(defaultBarcode = '', addToCartOnSave = false) {
     setRegisterModal({ addToCartOnSave })
     setRegForm({ barcode: defaultBarcode, name: '', category: 'CIGARETTES', price: '' })
-  }
-
-  function loadSales() {
-    setLoading(true)
-    fetch(`/api/misc-sales?date=${date}`, { cache: 'no-store' })
-      .then(async r => {
-        const data: unknown = await r.json().catch(() => [])
-        if (!r.ok) {
-          showFlash('Failed to load misc sales totals', 'err')
-          setSales([])
-          return
-        }
-        setSales(Array.isArray(data) ? data as SaleRecord[] : [])
-      })
-      .catch(() => {
-        showFlash('Failed to load misc sales totals', 'err')
-        setSales([])
-      })
-      .finally(() => setLoading(false))
   }
 
   async function handleScan() {
@@ -170,6 +350,7 @@ export default function MiscSalePage() {
       addToCart({ ...item, price: Number(item.price) })
     }
     showFlash('Item added successfully', 'ok')
+    void loadAllItems()
     barcodeRef.current?.focus()
   }
 
@@ -194,7 +375,7 @@ export default function MiscSalePage() {
     if (!res.ok) { const d = await res.json().catch(() => ({})); showFlash(d.error ?? 'Failed to save', 'err'); return }
     setEditItem(null)
     showFlash('Item updated', 'ok')
-    loadAllItems()
+    void loadAllItems()
   }
 
   async function confirmDelete(id: number) {
@@ -206,43 +387,47 @@ export default function MiscSalePage() {
     setDeleteConfirmId(null)
     if (!res.ok) { const d = await res.json().catch(() => ({})); showFlash(d.error ?? 'Failed to delete', 'err'); return }
     showFlash('Item deleted', 'ok')
-    loadAllItems()
+    void loadAllItems()
   }
 
   const cartTotal = cart.reduce((s, c) => s + c.item.price * c.quantity, 0)
 
   async function charge() {
-    if (cart.length === 0) return
-    const res = await fetch('/api/misc-sales', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        staffId: Number(user?.id ?? 0),
-        items: cart.map(c => ({
-          itemId: c.item.id,
-          quantity: c.quantity,
-          unitPrice: c.item.price,
-          totalAmount: c.item.price * c.quantity,
-        })),
-        saleDate: date,
-      }),
-    })
+    if (cart.length === 0 || charging) return
 
-    if (!res.ok) {
+    setCharging(true)
+    try {
+      const res = await fetch('/api/misc-sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: Number(user?.id ?? 0),
+          items: cart.map(c => ({
+            itemId: c.item.id,
+            quantity: c.quantity,
+            unitPrice: c.item.price,
+            totalAmount: c.item.price * c.quantity,
+          })),
+          saleDate: date,
+        }),
+      })
+
       const data = await res.json().catch(() => ({})) as { error?: string }
-      showFlash(data.error ?? 'Failed to record misc sale', 'err')
-      return
+      if (!res.ok) {
+        showFlash(data.error ?? 'Failed to record misc sale', 'err')
+        return
+      }
+
+      setCart([])
+      showFlash('Sale recorded!', 'ok')
+      await loadSales()
+      window.dispatchEvent(new Event('misc-sales:updated'))
+    } catch {
+      showFlash('Failed to record misc sale', 'err')
+    } finally {
+      setCharging(false)
+      barcodeRef.current?.focus()
     }
-
-    setCart([])
-    showFlash('Sale recorded!', 'ok')
-    loadSales()
-    barcodeRef.current?.focus()
-  }
-
-  function showFlash(msg: string, type: 'ok' | 'err') {
-    setFlash({ msg, type })
-    setTimeout(() => setFlash(null), 2500)
   }
 
   // Build tally
@@ -258,8 +443,8 @@ export default function MiscSalePage() {
 
   const catTotals = (['CIGARETTES', 'SNACKS', 'CUPS'] as MiscCategory[]).map(cat => ({
     cat,
-    qty: tally.filter(t => t.category === cat).reduce((s, t) => s + t.qty, 0),
-    amount: tally.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0),
+    qty: summary.categories[cat].items,
+    amount: summary.categories[cat].amount,
   }))
 
   return (
@@ -407,8 +592,9 @@ export default function MiscSalePage() {
               <span className="text-sm font-bold text-slate-700">Total: {rupee(cartTotal)}</span>
               <button
                 onClick={charge}
-                className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-lg text-sm hover:bg-emerald-700 transition-colors"
-              >Charge</button>
+                disabled={charging}
+                className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-lg text-sm hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >{charging ? 'Charging...' : 'Charge'}</button>
             </div>
           </div>
         </div>

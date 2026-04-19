@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     const staff = await prisma.staff.create({
       data,
-      select: { id: true, name: true, email: true, role: true, active: true, pin: true,
+      select: { id: true, name: true, email: true, role: true, active: true,
                 payrollType: true, monthlySalary: true, dailyWage: true,
                 expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
     })
@@ -108,6 +108,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const [, delAuthErr] = await requireAdmin()
+  if (delAuthErr) return delAuthErr
+
   try {
     const body = await req.json() as { id?: number }
     const { id } = body
@@ -152,6 +155,10 @@ export async function PATCH(req: NextRequest) {
   const { id, active, pin, name, role, payrollType, monthlySalary, dailyWage,
           expectedCheckIn, expectedCheckOut, lateGraceMinutes } = body
 
+  if (!id || !Number.isInteger(id) || id <= 0) {
+    return NextResponse.json({ error: 'Valid id required' }, { status: 400 })
+  }
+
   const existingStaff = await prisma.staff.findUnique({ where: { id } })
   if (!existingStaff) return NextResponse.json({ error: 'Staff not found' }, { status: 404 })
 
@@ -185,7 +192,7 @@ export async function PATCH(req: NextRequest) {
   const staff = await prisma.staff.update({
     where: { id },
     data: updateData,
-    select: { id: true, name: true, email: true, role: true, active: true, pin: true,
+    select: { id: true, name: true, email: true, role: true, active: true,
               payrollType: true, monthlySalary: true, dailyWage: true,
               expectedCheckIn: true, expectedCheckOut: true, lateGraceMinutes: true },
   })

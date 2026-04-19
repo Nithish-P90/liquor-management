@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type CashForm = {
   openingRegister: number
@@ -94,16 +94,16 @@ export default function CashPage() {
   const [bankForm, setBankForm] = useState({ txType: 'DEPOSIT', amount: '', notes: '', txDate: new Date().toISOString().slice(0, 10) })
   const [bankSaving, setBankSaving] = useState(false)
 
-  function loadBankData() {
-    fetch('/api/bank').then(r => r.json()).then(setBankData)
-  }
+  const loadBankData = useCallback(() => {
+    fetch('/api/bank', { cache: 'no-store' }).then(r => r.json()).then(setBankData)
+  }, [])
 
-  useEffect(() => {
+  const loadDayData = useCallback(async () => {
     setSaved(false)
     setErrorMsg('')
     setSummaryLoading(true)
 
-    Promise.all([
+    await Promise.all([
       fetch(`/api/cash?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
       fetch(`/api/cash/day-summary?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
     ]).then(([cashRecord, daySummary]) => {
@@ -131,9 +131,27 @@ export default function CashPage() {
         })
       }
     }).finally(() => setSummaryLoading(false))
-
-    loadBankData()
   }, [date])
+
+  useEffect(() => {
+    void loadDayData()
+    loadBankData()
+  }, [date, loadBankData, loadDayData])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadDayData()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [loadDayData])
+
+  useEffect(() => {
+    const onMiscUpdated = () => {
+      void loadDayData()
+    }
+    window.addEventListener('misc-sales:updated', onMiscUpdated)
+    return () => window.removeEventListener('misc-sales:updated', onMiscUpdated)
+  }, [loadDayData])
 
   // Computed values
   const expectedClosing = form.openingRegister + form.cashSales - form.expenses - form.cashToLocker

@@ -14,8 +14,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { toUtcNoonDate } from '@/lib/date-utils'
 import { splitStock } from '@/lib/stock-utils'
+import { resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +25,15 @@ export async function GET(req: NextRequest) {
     const dateStr = url.searchParams.get('date')
     if (!dateStr) return NextResponse.json({ error: 'date required (YYYY-MM-DD)' }, { status: 400 })
 
-    const dateOnly = toUtcNoonDate(new Date(dateStr + 'T12:00:00Z'))
-    if (isNaN(dateOnly.getTime())) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
-
-    const isToday = dateOnly.getTime() === toUtcNoonDate(new Date()).getTime()
+    let scope: ReturnType<typeof resolveMiscSalesDay>
+    try {
+      scope = resolveMiscSalesDay(dateStr)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Invalid date'
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+    const dateOnly = scope.day
+    const isToday = dateOnly.getTime() === resolveMiscSalesDay().day.getTime()
     const now     = new Date()
 
     // ── Fire all independent top-level queries in parallel ────────────────────
@@ -49,7 +54,7 @@ export async function GET(req: NextRequest) {
       voidAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
-        where:   { saleDate: dateOnly, quantityBottles: { gt: 0 } },
+        where:   { saleDate: dateOnly, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         include: {
           productSize: { include: { product: true } },
           staff:       { select: { id: true, name: true, role: true } },
@@ -57,7 +62,7 @@ export async function GET(req: NextRequest) {
         orderBy: { saleTime: 'asc' },
       }),
       prisma.miscSale.findMany({
-        where: { saleDate: dateOnly },
+        where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } },
         include: { item: true },
         orderBy: { saleTime: 'asc' },
       }),
@@ -90,7 +95,7 @@ export async function GET(req: NextRequest) {
       prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
       prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
       prisma.sale.aggregate({
-        where: { saleDate: dateOnly, paymentMode: 'VOID' },
+        where: { saleDate: dateOnly, paymentMode: 'VOID', productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true },
       }),
     ])

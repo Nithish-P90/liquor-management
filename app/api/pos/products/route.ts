@@ -10,6 +10,7 @@ export async function GET() {
   // Fire productSizes + session lookup in parallel
   const [productSizes, session] = await Promise.all([
     prisma.productSize.findMany({
+      where: { product: { category: { not: 'MISCELLANEOUS' } } },
       include: { product: true },
       orderBy: [
         { product: { category: 'asc' } },
@@ -42,7 +43,7 @@ export async function GET() {
 
     prisma.sale.groupBy({
       by: ['productSizeId'],
-      where: { saleDate: { gte: sessionStart } },
+      where: { saleDate: { gte: sessionStart }, quantityBottles: { gt: 0 } },
       _sum: { quantityBottles: true },
     }),
 
@@ -90,8 +91,8 @@ export async function GET() {
       id: ps.id,
       sizeMl: ps.sizeMl,
       bottlesPerCase: ps.bottlesPerCase,
-      mrp: ps.mrp,
-      sellingPrice: ps.sellingPrice,
+      mrp: Number(ps.mrp),
+      sellingPrice: Number(ps.sellingPrice),
       barcode: ps.barcode,
       currentStock,
       product: {

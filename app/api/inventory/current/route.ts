@@ -21,6 +21,7 @@ export async function GET() {
   const [productSizes, openingEntries, receiptItems, salesAgg, adjAgg, pendingAgg] = await Promise.all([
     // All product sizes + product info
     prisma.productSize.findMany({
+      where: { product: { category: { not: 'MISCELLANEOUS' } } },
       include: { product: true },
       orderBy: [{ product: { category: 'asc' } }, { product: { name: 'asc' } }, { sizeMl: 'desc' }],
     }),

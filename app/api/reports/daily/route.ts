@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { toUtcNoonDate } from '@/lib/date-utils'
+import { resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     // Build the last 60 days as candidate dates
-    const today = toUtcNoonDate(new Date())
+    const today = resolveMiscSalesDay().day
     const dates: Date[] = []
     for (let i = 0; i < 60; i++) {
       const d = new Date(today)
@@ -19,7 +19,7 @@ export async function GET() {
     const [salesDates, miscDates, expDates, attDates] = await Promise.all([
       prisma.sale.groupBy({
         by: ['saleDate'],
-        where: { saleDate: { gte: dates[dates.length - 1], lte: today }, quantityBottles: { gt: 0 } },
+        where: { saleDate: { gte: dates[dates.length - 1], lte: today }, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true, quantityBottles: true },
         _count: { _all: true },
       }),
@@ -90,13 +90,13 @@ export async function GET() {
       // Per-mode aggregation for this date
       const modeAgg = await prisma.sale.groupBy({
         by: ['paymentMode'],
-        where: { saleDate: date, quantityBottles: { gt: 0 } },
+        where: { saleDate: date, quantityBottles: { gt: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true, quantityBottles: true, cashAmount: true, cardAmount: true, upiAmount: true },
         _count: { _all: true },
       })
 
       const voidAgg = await prisma.sale.aggregate({
-        where: { saleDate: date, paymentMode: 'VOID' },
+        where: { saleDate: date, paymentMode: 'VOID', productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
         _sum: { totalAmount: true },
       })
 
@@ -123,8 +123,9 @@ export async function GET() {
 
       const totalExpenses = expMap.get(key) ?? 0
       const misc = miscMap.get(key) ?? { amount: 0, items: 0, entries: 0 }
-      const totalSalesWithMisc = totalSales + misc.amount
-      const netCash = salesByMode.CASH + misc.amount - totalExpenses
+      // Liquor net cash: owner collects cash from liquor sales minus expenses.
+      // Misc cash stays with cashiers — it is NOT included in owner net cash.
+      const netCash = salesByMode.CASH - totalExpenses
 
       // Count unsettled pending bills created on this date (parallel)
       const [pendingUnpaid, pendingTotal] = await Promise.all([
@@ -136,17 +137,19 @@ export async function GET() {
         date,
         isLive,
         financials: {
-          totalSales: totalSalesWithMisc,
+          // Liquor-only totals (owner revenue)
+          totalSales,
           totalExpenses,
           netCash,
           salesByMode,
-          miscSalesTotal: misc.amount,
-          miscItemsSold: misc.items,
-          miscEntries: misc.entries,
           totalBottlesSold: totalBottles,
           totalBills,
           pendingUnpaid,
           pendingUnpaidAmount: Number(pendingTotal._sum.totalAmount ?? 0),
+          // Misc totals (cashier revenue — tracked separately, never mixed with liquor)
+          miscSalesTotal: misc.amount,
+          miscItemsSold: misc.items,
+          miscEntries: misc.entries,
         },
       }
     }))

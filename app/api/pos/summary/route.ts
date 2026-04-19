@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth'
 import { StockEntryType } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { toUtcNoonDate } from '@/lib/date-utils'
 import { ensureDailyRollover } from '@/lib/rollover'
+import { aggregateMiscSalesForScope, resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,9 +40,8 @@ export async function GET() {
   const user = session.user as SessionUser
   const staffId = user.id ? parseInt(user.id) : 0
   const isStaff = user.role === 'STAFF'
-  const today = toUtcNoonDate(new Date())
-  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
-  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
+  const miscScope = resolveMiscSalesDay()
+  const today = miscScope.day
 
   const latestSession = await prisma.inventorySession.findFirst({
     include: { createdBy: { select: { name: true } } },
@@ -51,10 +50,11 @@ export async function GET() {
 
   const saleWhere = {
     saleDate: today,
+    productSize: { product: { category: { not: 'MISCELLANEOUS' } } },
     ...(isStaff && staffId ? { staffId } : {}),
   }
 
-  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, voidAgg, recentLines, openingEntries, closingEntries, miscAgg] = await Promise.all([
+  const [cashAgg, cardAgg, upiAgg, creditAgg, splitAgg, voidAgg, recentLines, openingEntries, closingEntries, miscSummary] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, paymentMode: 'CASH' },
       _sum: { totalAmount: true, quantityBottles: true },
@@ -106,11 +106,7 @@ export async function GET() {
           select: { totalBottles: true },
         })
       : Promise.resolve([]),
-    prisma.miscSale.aggregate({
-      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
-      _sum: { totalAmount: true, quantity: true },
-      _count: { _all: true },
-    }),
+    aggregateMiscSalesForScope(miscScope, isStaff && staffId ? staffId : null),
   ])
 
   const paymentTotals = {
@@ -209,9 +205,9 @@ export async function GET() {
       paymentTotals,
     },
     todayMiscSales: {
-      totalAmount: Number(miscAgg._sum.totalAmount ?? 0),
-      items: Number(miscAgg._sum.quantity ?? 0),
-      entries: miscAgg._count._all,
+      totalAmount: miscSummary.totalAmount,
+      items: miscSummary.items,
+      entries: miscSummary.entries,
     },
     recentBills: recentBills.map(bill => ({
       id: bill.id,

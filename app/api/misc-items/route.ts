@@ -50,16 +50,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
   }
 
-  const updated = await prisma.$transaction(async tx => {
-    const item = await tx.miscItem.update({ where: { id }, data: { name, category, price } })
-    // Keep linked productSize in sync
-    const ps = await tx.productSize.findUnique({ where: { barcode: existing.barcode } })
-    if (ps) {
-      await tx.productSize.update({ where: { id: ps.id }, data: { mrp: price, sellingPrice: price } })
-      await tx.product.update({ where: { id: ps.productId }, data: { name } })
-    }
-    return item
-  })
+  const updated = await prisma.miscItem.update({ where: { id }, data: { name, category, price } })
 
   return NextResponse.json(updated)
 }
@@ -78,23 +69,15 @@ export async function DELETE(req: NextRequest) {
   const existing = await prisma.miscItem.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
-  await prisma.$transaction(async tx => {
-    await tx.miscItem.delete({ where: { id } })
+  const salesCount = await prisma.miscSale.count({ where: { miscItemId: id } })
+  if (salesCount > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete an item that has existing sales records.' },
+      { status: 409 }
+    )
+  }
 
-    const linkedSize = await tx.productSize.findUnique({
-      where: { barcode: existing.barcode },
-      include: { product: true },
-    })
-
-    if (!linkedSize) return
-
-    await tx.productSize.delete({ where: { id: linkedSize.id } })
-
-    const remainingSizes = await tx.productSize.count({ where: { productId: linkedSize.productId } })
-    if (remainingSizes === 0) {
-      await tx.product.delete({ where: { id: linkedSize.productId } })
-    }
-  })
+  await prisma.miscItem.delete({ where: { id } })
 
   return NextResponse.json({ success: true })
 }
@@ -126,57 +109,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A misc item with this barcode already exists' }, { status: 409 })
   }
 
-  const item = await prisma.$transaction(async tx => {
-    const created = await tx.miscItem.create({
-      data: {
-        barcode,
-        name,
-        category,
-        price,
-      },
-    })
-
-    const existingProductSize = await tx.productSize.findUnique({
-      where: { barcode },
-      include: { product: true },
-    })
-
-    if (existingProductSize) {
-      await tx.product.update({
-        where: { id: existingProductSize.productId },
-        data: {
-          name,
-          category: Category.MISCELLANEOUS,
-        },
-      })
-      await tx.productSize.update({
-        where: { id: existingProductSize.id },
-        data: {
-          mrp: price,
-          sellingPrice: price,
-        },
-      })
-      return created
-    }
-
-    await tx.product.create({
-      data: {
-        itemCode: `MISC-${barcode}`,
-        name,
-        category: Category.MISCELLANEOUS,
-        sizes: {
-          create: {
-            sizeMl: 1,
-            bottlesPerCase: 1,
-            barcode,
-            mrp: price,
-            sellingPrice: price,
-          },
-        },
-      },
-    })
-
-    return created
+  const item = await prisma.miscItem.create({
+    data: {
+      barcode,
+      name,
+      category,
+      price,
+    },
   })
 
   return NextResponse.json(item)

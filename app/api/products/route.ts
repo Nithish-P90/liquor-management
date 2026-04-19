@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
 
   const products = await prisma.product.findMany({
     where: {
+      category: validCategory ?? { not: 'MISCELLANEOUS' },
       ...(q && { name: { contains: q, mode: 'insensitive' } }),
-      ...(validCategory && { category: validCategory }),
     },
     include: { sizes: true },
     orderBy: [{ category: 'asc' }, { name: 'asc' }],

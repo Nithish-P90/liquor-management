@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { toUtcNoonDate } from '@/lib/date-utils'
 import { StockEntryType } from '@prisma/client'
+import { aggregateMiscSalesForScope, resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,22 +10,23 @@ export async function GET(req: NextRequest) {
   const dateStr = searchParams.get('date')
   if (!dateStr) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
 
-  const date = toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
-  const dayStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0))
-  const nextDayStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1, 0, 0, 0, 0))
+  let scope: ReturnType<typeof resolveMiscSalesDay>
+  try {
+    scope = resolveMiscSalesDay(dateStr)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Invalid date'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
+  const date = scope.day
 
-  const [sales, expenses, session, miscAgg] = await Promise.all([
-    prisma.sale.findMany({ where: { saleDate: { gte: dayStart, lt: nextDayStart } } }),
+  const [sales, expenses, session, miscSummary] = await Promise.all([
+    prisma.sale.findMany({ where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } } }),
     prisma.expenditure.findMany({ where: { expDate: date } }),
     prisma.inventorySession.findFirst({
       where: { periodStart: { lte: date }, periodEnd: { gte: date } },
       orderBy: { createdAt: 'desc' }
     }),
-    prisma.miscSale.aggregate({
-      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
-      _sum: { totalAmount: true, quantity: true },
-      _count: { _all: true },
-    }),
+    aggregateMiscSalesForScope(scope),
   ])
 
   const paymentTotals = {
@@ -58,8 +59,8 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const miscSalesTotal = Number(miscAgg._sum.totalAmount ?? 0)
-  const miscItems = Number(miscAgg._sum.quantity ?? 0)
+  const miscSalesTotal = miscSummary.totalAmount
+  const miscItems = miscSummary.items
   paymentTotals.misc = miscSalesTotal
 
   const closingStock = {
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
   }
 
   const lastSale = sales.length > 0 ? await prisma.sale.findFirst({
-    where: { saleDate: { gte: dayStart, lt: nextDayStart } },
+    where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } },
     orderBy: { saleTime: 'desc' },
     include: { productSize: { include: { product: true } } }
   }) : null
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest) {
     miscSales: {
       totalAmount: miscSalesTotal,
       items: miscItems,
-      entries: miscAgg._count._all,
+      entries: miscSummary.entries,
     },
     lastSale: lastSale ? {
       id: lastSale.id,

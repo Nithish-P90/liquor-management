@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { toUtcNoonDate } from '@/lib/date-utils'
+import { resolveMiscSalesDay } from '@/lib/misc-sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,15 +12,17 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const dateStr = searchParams.get('date')
-  const today = dateStr
-    ? toUtcNoonDate(new Date(dateStr + 'T12:00:00'))
-    : toUtcNoonDate(new Date())
-  const dayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0))
-  const nextDayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 0, 0, 0, 0))
+  let scope: ReturnType<typeof resolveMiscSalesDay>
+  try {
+    scope = resolveMiscSalesDay(dateStr)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Invalid date'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
 
   const [sales, miscByStaff] = await Promise.all([
     prisma.sale.findMany({
-      where: { saleDate: today },
+      where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } },
       select: {
         id: true,
         saleTime: true,
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.miscSale.groupBy({
       by: ['staffId'],
-      where: { saleDate: { gte: dayStart, lt: nextDayStart } },
+      where: { saleDate: { gte: scope.dayStart, lt: scope.nextDayStart } },
       _sum: { totalAmount: true, quantity: true },
       _count: { _all: true },
     }),

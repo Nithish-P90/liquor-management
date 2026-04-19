@@ -58,8 +58,43 @@ export default function DashboardPage() {
   const [leaderGroupBy, setLeaderGroupBy] = useState<'product' | 'size'>('product')
 
   useEffect(() => {
-    fetch('/api/reports/dashboard').then(r => r.json()).then(setData)
-    fetch('/api/notifications').then(r => r.json()).then(setNotifications)
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const [dashboardRes, notificationsRes] = await Promise.all([
+          fetch('/api/reports/dashboard', { cache: 'no-store' }),
+          fetch('/api/notifications', { cache: 'no-store' }),
+        ])
+
+        const dashboardData: unknown = await dashboardRes.json().catch(() => null)
+        const notificationsData: unknown = await notificationsRes.json().catch(() => [])
+        if (!mounted) return
+        if (dashboardRes.ok && dashboardData) {
+          setData(dashboardData as DashboardData)
+        }
+        setNotifications(Array.isArray(notificationsData) ? notificationsData as Notification[] : [])
+      } catch {
+        if (!mounted) return
+      }
+    }
+
+    void load()
+
+    const interval = setInterval(() => {
+      void load()
+    }, 30000)
+
+    const onMiscUpdated = () => {
+      void load()
+    }
+    window.addEventListener('misc-sales:updated', onMiscUpdated)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+      window.removeEventListener('misc-sales:updated', onMiscUpdated)
+    }
   }, [])
 
   async function markRead(ids: number[]) {

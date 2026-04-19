@@ -73,6 +73,7 @@ export async function GET() {
   // Run both queries in parallel — no dependency between them
   const [allProductSizes, latestSession] = await Promise.all([
     prisma.productSize.findMany({
+      where: { product: { category: { not: 'MISCELLANEOUS' } } },
       include: { product: true },
       orderBy: [
         { product: { category: 'asc' } },
