@@ -246,8 +246,8 @@ export default function MiscLedgerPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Misc Sales Ledger</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Day-by-day cashier revenue (cigarettes, snacks, cups)</p>
+          <h1 className="text-2xl font-bold text-slate-800">Misc Sales</h1>
+          <p className="text-slate-400 text-xs mt-0.5">Cashier revenue — separate from liquor</p>
         </div>
         <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
           {days.length} days with activity

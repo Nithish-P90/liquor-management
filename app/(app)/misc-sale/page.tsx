@@ -328,8 +328,8 @@ export default function MiscSalePage() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Misc Sales</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Cashier revenue — separate from liquor</p>
+          <h1 className="text-xl font-bold text-slate-800">Misc Ledger</h1>
+          <p className="text-slate-400 text-xs mt-0.5">Day-by-day cashier revenue (cigarettes, snacks, cups)</p>
         </div>
         <div className="flex items-center gap-2">
           <input
