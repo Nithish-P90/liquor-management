@@ -51,7 +51,6 @@ export async function GET(req: NextRequest) {
       bankDeposits,
       pendingUnpaid,
       pendingTotalAgg,
-      voidAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
         where:   { saleDate: dateOnly, quantityBottles: { not: 0 }, productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
@@ -94,10 +93,6 @@ export async function GET(req: NextRequest) {
       prisma.bankTransaction.findMany({ where: { txDate: dateOnly, txType: 'DEPOSIT' }, orderBy: { createdAt: 'asc' } }),
       prisma.pendingBill.count({ where: { saleDate: dateOnly, settled: false } }),
       prisma.pendingBill.aggregate({ where: { saleDate: dateOnly, settled: false }, _sum: { totalAmount: true } }),
-      prisma.sale.aggregate({
-        where: { saleDate: dateOnly, paymentMode: 'VOID', productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
-        _sum: { totalAmount: true },
-      }),
     ])
 
     const pendingUnpaidAmount = Number(pendingTotalAgg._sum.totalAmount ?? 0)
@@ -283,6 +278,10 @@ export async function GET(req: NextRequest) {
         salesByMode.CASH += Number(s.cashAmount ?? 0)
         salesByMode.CARD += Number(s.cardAmount ?? 0)
         salesByMode.UPI  += Number(s.upiAmount  ?? 0)
+      } else if (s.paymentMode === 'VOID') {
+        salesByMode.CASH += Number(s.cashAmount ?? 0)
+        salesByMode.CARD += Number(s.cardAmount ?? 0)
+        salesByMode.UPI  += Number(s.upiAmount  ?? 0)
       } else {
         salesByMode[s.paymentMode] = (salesByMode[s.paymentMode] ?? 0) + amount
       }
@@ -292,7 +291,6 @@ export async function GET(req: NextRequest) {
     const miscSalesTotal = miscSales.reduce((sum, row) => sum + row.total, 0)
     const miscItemsSold = miscSales.reduce((sum, row) => sum + row.qty, 0)
     const miscEntries = miscSales.length
-    const voidAmount = Number(voidAgg._sum.totalAmount ?? 0)
 
     // Add misc amounts into the same payment-mode buckets
     for (const ms of miscRows) {
@@ -321,9 +319,9 @@ export async function GET(req: NextRequest) {
       isToday,
       hasSession: !!session,
       financials: {
-        totalSales: totalSales + voidAmount,
+        totalSales,
         totalExpenses,
-        netCash: salesByMode.CASH + voidAmount - totalExpenses,
+        netCash: salesByMode.CASH - totalExpenses,
         salesByMode, totalBottlesSold, totalBills,
         miscSalesTotal,
         miscItemsSold,

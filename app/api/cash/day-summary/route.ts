@@ -52,8 +52,9 @@ export async function GET(req: NextRequest) {
         paymentTotals.split += 0
         break
       case 'VOID': {
-        // Refunds are paid in cash, so VOID always reduces cash tally.
-        paymentTotals.cash += amount
+        paymentTotals.cash += Number(s.cashAmount ?? 0)
+        paymentTotals.card += Number(s.cardAmount ?? 0)
+        paymentTotals.upi += Number(s.upiAmount ?? 0)
         break
       }
     }

@@ -109,17 +109,16 @@ export async function GET() {
         _count: { _all: true },
       })
 
-      const voidAgg = await prisma.sale.aggregate({
-        where: { saleDate: date, paymentMode: 'VOID', productSize: { product: { category: { not: 'MISCELLANEOUS' } } } },
-        _sum: { totalAmount: true },
-      })
-
       const salesByMode: Record<string, number> = { CASH: 0, UPI: 0, CARD: 0, CREDIT: 0, SPLIT: 0 }
       let totalSales = 0, totalBottles = 0, totalBills = 0
 
       for (const g of modeAgg) {
         const amount = Number(g._sum.totalAmount ?? 0)
         if (g.paymentMode === 'SPLIT') {
+          salesByMode.CASH += Number(g._sum.cashAmount ?? 0)
+          salesByMode.CARD += Number(g._sum.cardAmount ?? 0)
+          salesByMode.UPI  += Number(g._sum.upiAmount  ?? 0)
+        } else if (g.paymentMode === 'VOID') {
           salesByMode.CASH += Number(g._sum.cashAmount ?? 0)
           salesByMode.CARD += Number(g._sum.cardAmount ?? 0)
           salesByMode.UPI  += Number(g._sum.upiAmount  ?? 0)
@@ -130,10 +129,6 @@ export async function GET() {
         totalBottles += g._sum.quantityBottles ?? 0
         totalBills   += g._count._all
       }
-
-      const voidAmount = Number(voidAgg._sum.totalAmount ?? 0)
-      salesByMode.CASH += voidAmount
-      totalSales += voidAmount
 
       // Add misc amounts into the same payment-mode buckets
       // (cashier collects these amounts under the same mode as the bill,

@@ -75,9 +75,11 @@ export async function GET() {
       todaySales.bottles += sale.quantityBottles
       todaySales.upi += saleAmount
     } else if (sale.paymentMode === 'VOID') {
-      // Refunds are paid in cash and stored as negative totalAmount.
       todaySales.total += saleAmount
-      todaySales.cash += saleAmount
+      todaySales.bottles += sale.quantityBottles
+      todaySales.cash += Number(sale.cashAmount ?? 0)
+      todaySales.card += Number(sale.cardAmount ?? 0)
+      todaySales.upi += Number(sale.upiAmount ?? 0)
     }
 
     const isCounter = sale.staff.role === 'CASHIER'

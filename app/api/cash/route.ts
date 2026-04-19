@@ -75,8 +75,10 @@ async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> 
         totals.upi += asMoney(sale.upiAmount)
         break
       case 'VOID': {
-        // Refunds are paid in cash, so VOID always reduces cash tally.
-        totals.cash += totalAmount
+        // Void records distribute refunds across their original payment methods (as negative values)
+        totals.cash += asMoney(sale.cashAmount)
+        totals.card += asMoney(sale.cardAmount)
+        totals.upi += asMoney(sale.upiAmount)
         break
       }
       default:

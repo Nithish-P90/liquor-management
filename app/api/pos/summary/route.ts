@@ -110,9 +110,9 @@ export async function GET() {
   ])
 
   const paymentTotals = {
-    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0) + Number(voidAgg._sum.totalAmount ?? 0),
-    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0),
-    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0),
+    CASH: Number(cashAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cashAmount ?? 0) + Number(voidAgg._sum.cashAmount ?? 0),
+    CARD: Number(cardAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.cardAmount ?? 0) + Number(voidAgg._sum.cardAmount ?? 0),
+    UPI: Number(upiAgg._sum.totalAmount ?? 0) + Number(splitAgg._sum.upiAmount ?? 0) + Number(voidAgg._sum.upiAmount ?? 0),
     CREDIT: Number(creditAgg._sum.totalAmount ?? 0),
     SPLIT: 0,
   }
