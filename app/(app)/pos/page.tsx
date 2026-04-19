@@ -99,8 +99,10 @@ type PendingBill = {
   }>
 }
 type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: number }
+type MiscItem = { id: number; barcode: string | null; name: string; category: string; unit: string; price: number }
+type MiscCartItem = { itemId: number; name: string; category: string; unit: string; price: number; qty: number }
 type PosNetworkState = 'CHECKING' | 'LIVE' | 'CONNECTED' | 'RECONNECTING' | 'OFFLINE'
-const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS']
+const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS', '__MISC__']
 
 // ── Distinct colors for category pills ──────────────────────────────────────
 const CAT_COLORS: Record<string, { active: string; inactive: string }> = {
@@ -115,6 +117,7 @@ const CAT_COLORS: Record<string, { active: string; inactive: string }> = {
   BEER:          { active: 'bg-lime-600 text-white shadow-sm',     inactive: 'bg-lime-50 text-lime-700 hover:bg-lime-100 border border-lime-200' },
   BEVERAGE:      { active: 'bg-cyan-600 text-white shadow-sm',     inactive: 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 border border-cyan-200' },
   MISCELLANEOUS: { active: 'bg-pink-600 text-white shadow-sm',     inactive: 'bg-pink-50 text-pink-600 hover:bg-pink-100 border border-pink-200' },
+  __MISC__:      { active: 'bg-cyan-600 text-white shadow-sm',     inactive: 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-300' },
 }
 
 // ── Distinct colors for size filter pills ───────────────────────────────────
@@ -176,6 +179,9 @@ export default function POSPage() {
   const [sizeFilter, setSizeFilter] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
+  const [miscItems, setMiscItems] = useState<MiscItem[]>([])
+  const [miscCart, setMiscCart] = useState<MiscCartItem[]>([])
+  const [miscCatFilter, setMiscCatFilter] = useState<string>('ALL')
   const [counterStaffId, setCounterStaffId] = useState<number | null>(null)
   const [activeClerkKey, setActiveClerkKey] = useState<string>('COUNTER')
   const [voidMode, setVoidMode] = useState(false)
@@ -221,6 +227,15 @@ export default function POSPage() {
   const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Load Data ──────────────────────────────────────────────────────────────
+  const loadMiscItems = useCallback(async () => {
+    try {
+      const res = await fetch('/api/misc-items')
+      if (!res.ok) return
+      const data: unknown = await res.json()
+      setMiscItems(Array.isArray(data) ? data as MiscItem[] : [])
+    } catch { /* ignore */ }
+  }, [])
+
   const loadProducts = useCallback(async () => {
     try {
       const res = await fetch('/api/pos/products')
@@ -365,6 +380,7 @@ export default function POSPage() {
     loadProducts()
     loadRecent()
     loadPending()
+    loadMiscItems()
     ;(async () => {
       try {
         const res = await fetch('/api/staff')
@@ -389,7 +405,7 @@ export default function POSPage() {
         setActiveClerkKey('COUNTER')
       }
     })()
-  }, [loadProducts, loadRecent, loadPending, user?.id])
+  }, [loadProducts, loadRecent, loadPending, loadMiscItems, user?.id])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -488,6 +504,25 @@ export default function POSPage() {
     })
   }
 
+  function addToMiscCart(item: MiscItem) {
+    setMiscCart(prev => {
+      const ex = prev.find(c => c.itemId === item.id)
+      if (ex) return prev.map(c => c.itemId === item.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, { itemId: item.id, name: item.name, category: item.category, unit: item.unit, price: item.price, qty: 1 }]
+    })
+    setShowPayment(true)
+    flash(`${item.name} added`, 'ok')
+  }
+
+  function setMiscQty(id: number, d: number) {
+    setMiscCart(prev => prev.flatMap(c => {
+      if (c.itemId !== id) return [c]
+      const nq = c.qty + d
+      if (nq <= 0) return []
+      return [{ ...c, qty: nq }]
+    }))
+  }
+
   function setQty(id: number, d: number) {
     setCart(prev => prev.flatMap(c => {
       if (c.productSizeId !== id) return [c]
@@ -509,12 +544,15 @@ export default function POSPage() {
 
   const cartTotal = cart.reduce((s, c) => s + c.sellingPrice * c.qty, 0)
   const cartItems = cart.reduce((s, c) => s + c.qty, 0)
+  const miscCartTotal = miscCart.reduce((s, c) => s + c.price * c.qty, 0)
+  const miscCartItems = miscCart.reduce((s, c) => s + c.qty, 0)
+  const billTotal = cartTotal + miscCartTotal  // combined — what the customer pays
   const splitCashNum = parseFloat(splitCash) || 0
-  const splitRemainder = Math.max(0, cartTotal - splitCashNum)
+  const splitRemainder = Math.max(0, billTotal - splitCashNum)
   const tenderedNum = parseFloat(tendered) || 0
-  // For CASH: if tendered is empty, treat as exact (= cartTotal). Change only shows when tendered > total.
-  const effectiveTendered = payMode === 'CASH' && tendered === '' ? cartTotal : tenderedNum
-  const change = payMode === 'CASH' && effectiveTendered > cartTotal ? effectiveTendered - cartTotal : 0
+  // For CASH: if tendered is empty, treat as exact (= billTotal). Change only shows when tendered > total.
+  const effectiveTendered = payMode === 'CASH' && tendered === '' ? billTotal : tenderedNum
+  const change = payMode === 'CASH' && effectiveTendered > billTotal ? effectiveTendered - billTotal : 0
 
   useEffect(() => {
     setBrowserOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
@@ -638,29 +676,33 @@ export default function POSPage() {
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   async function completeSale() {
-    if (!cart.length || !activeClerk) return
+    if ((!cart.length && !miscCart.length) || !activeClerk) return
 
-    // PENDING: no payment validation needed
+    // PENDING: tabs can only hold liquor items
     if (payMode === 'PENDING') {
+      if (miscCart.length > 0) {
+        flash('Misc items cannot go on a tab — charge them now', 'err'); return
+      }
       await completePendingSale()
       return
     }
 
     // CASH: empty tendered = exact payment (fine), only block if explicitly less than total
-    if (payMode === 'CASH' && tendered !== '' && tenderedNum < cartTotal) {
+    if (payMode === 'CASH' && tendered !== '' && tenderedNum < billTotal) {
       flash('Amount received is less than total', 'err'); return
     }
     if (payMode === 'SPLIT' && splitCashNum <= 0) { flash('Enter cash amount', 'err'); return }
-    if (payMode === 'SPLIT' && splitCashNum >= cartTotal) { flash('Split cash must be less than total', 'err'); return }
+    if (payMode === 'SPLIT' && splitCashNum >= billTotal) { flash('Split cash must be less than total', 'err'); return }
 
     setProcessing(true)
 
     const savedCart = [...cart]
+    const savedMiscCart = [...miscCart]
     const savedClerkKey = activeClerkKey
     const savedPayMode = payMode
     const savedSplitCash = splitCash
     const savedCustomerName = customerName
-    const total = cartTotal
+    const total = billTotal  // what the customer pays (liquor + misc)
     const splitCashSaved = parseFloat(savedSplitCash) || 0
     const splitRemainderSaved = Math.max(0, total - splitCashSaved)
 
@@ -735,6 +777,22 @@ export default function POSPage() {
       }
 
       if (results.some((r: unknown) => r && typeof r === 'object' && 'error' in r)) throw new Error('One or more items failed')
+
+      // ── Post misc items (cashier revenue, separate tally) ─────────────────
+      if (savedMiscCart.length > 0) {
+        const d = new Date()
+        const saleDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const miscRes = await fetch('/api/misc-sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            saleDate: saleDateStr,
+            staffId: activeClerk.staffId,
+            items: savedMiscCart.map(c => ({ itemId: c.itemId, quantity: c.qty })),
+          }),
+        })
+        if (!miscRes.ok) { const e = await miscRes.json(); throw new Error(e.error || 'Misc sale failed') }
+      }
 
       // ── All good — clear from journal ─────────────────────────────────────
       journalClear(txId)
@@ -877,7 +935,7 @@ export default function POSPage() {
   }
 
   function resetSale() {
-    setCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
+    setCart([]); setMiscCart([]); setPayMode('CASH'); setTendered(''); setSplitCash('')
     setCustomerName(''); setShowPayment(false); setActiveClerkKey('COUNTER')
     setSelectedTabId(null); setNewTabName('')
   }
@@ -1176,17 +1234,18 @@ export default function POSPage() {
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 flex overflow-x-auto px-4 py-2.5 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
           {CATS.map(cat => {
             const colors = CAT_COLORS[cat] ?? CAT_COLORS.ALL
+            const label = cat === '__MISC__' ? 'Misc Items' : cat
             return (
               <button key={cat} onClick={() => { setCategory(cat); setSizeFilter(null) }}
                 className={`px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap rounded-full transition-all ${
                   category === cat ? colors.active : colors.inactive
-                }`}>{cat}</button>
+                }`}>{label}</button>
             )
           })}
         </div>
 
         {/* ── Size Filter Pills ───────────────── */}
-        {availableSizes.length > 1 && (
+        {category !== '__MISC__' && availableSizes.length > 1 && (
           <div className="bg-white border-b border-slate-100 flex overflow-x-auto px-4 py-2 gap-1.5 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
             <button onClick={() => setSizeFilter(null)}
               className={`px-3 py-1 text-[10px] font-bold whitespace-nowrap rounded-full transition-all ${
@@ -1208,7 +1267,55 @@ export default function POSPage() {
 
         {/* ── Product Grid ─────────────────── */}
         <div className="flex-1 overflow-y-auto p-4" style={{ scrollbarWidth: 'none' }}>
-          {loading ? (
+          {category === '__MISC__' ? (
+            /* ── Misc Items Grid ── */
+            <div>
+              {/* Sub-category filter */}
+              <div className="flex gap-1.5 mb-4 flex-wrap">
+                {['ALL', 'CIGARETTES', 'SNACKS', 'CUPS'].map(fc => (
+                  <button key={fc} onClick={() => setMiscCatFilter(fc)}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all ${
+                      miscCatFilter === fc ? 'bg-cyan-600 text-white shadow-sm' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200'
+                    }`}>{fc === 'ALL' ? 'All' : fc.charAt(0) + fc.slice(1).toLowerCase()}</button>
+                ))}
+              </div>
+              {(() => {
+                const filtered2 = miscItems.filter(item => miscCatFilter === 'ALL' || item.category === miscCatFilter)
+                if (filtered2.length === 0) return <div className="text-center py-16 text-gray-500 text-sm">No misc items — add them via the Misc Sales page</div>
+                return (
+                  <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5">
+                    {filtered2.map(item => {
+                      const inCart = miscCart.find(c => c.itemId === item.id)
+                      return (
+                        <button key={item.id} onClick={() => addToMiscCart(item)}
+                          className={`relative text-left rounded-xl overflow-hidden transition-all duration-200 flex flex-col ${
+                            inCart ? 'bg-white ring-2 ring-cyan-500 shadow-lg shadow-cyan-200/50 scale-[1.02]'
+                            : 'bg-white hover:shadow-md hover:shadow-slate-200/60 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer border border-slate-200/60'
+                          }`}>
+                          <div className="h-1.5 w-full bg-cyan-400 flex-shrink-0" />
+                          <div className="p-3.5 flex flex-col flex-1">
+                            {inCart && (
+                              <span className="absolute top-2 right-2 min-w-[20px] h-5 bg-cyan-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold px-1 shadow">
+                                {inCart.qty}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">{item.category}</span>
+                            <div className="text-[12px] font-bold text-slate-800 leading-snug line-clamp-2 flex-1 mb-2">{item.name}</div>
+                            <div className="mb-2">
+                              <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200">per {item.unit}</span>
+                            </div>
+                            <div className="mt-auto">
+                              <span className="text-sm font-black text-slate-900">{fmt(item.price)}</span>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          ) : loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             </div>
@@ -1278,8 +1385,8 @@ export default function POSPage() {
             <p className="text-slate-900 font-black text-base tracking-tight leading-none">Current Bill</p>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">{activeClerk?.label ?? 'No clerk'}</p>
           </div>
-          {cart.length > 0 && (
-            <button onClick={() => { setCart([]); setShowPayment(false) }}
+          {(cart.length > 0 || miscCart.length > 0) && (
+            <button onClick={() => { setCart([]); setMiscCart([]); setShowPayment(false) }}
               className="text-[10px] text-red-400 hover:text-red-600 font-bold uppercase tracking-widest px-2.5 py-1 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100">
               Clear
             </button>
@@ -1388,7 +1495,7 @@ export default function POSPage() {
             </div>
           )}
 
-          {cart.length === 0 ? (
+          {cart.length === 0 && miscCart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 px-8">
               <svg className="w-12 h-12 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -1397,6 +1504,7 @@ export default function POSPage() {
             </div>
           ) : (
             <div className="divide-y divide-slate-50">
+              {/* ── Liquor items ── */}
               {cart.map((item, idx) => (
                 <div key={item.productSizeId} className="px-5 py-3.5 hover:bg-slate-50/60 transition-colors group">
                   <div className="flex items-start gap-2.5">
@@ -1418,12 +1526,43 @@ export default function POSPage() {
                   </div>
                 </div>
               ))}
+
+              {/* ── Misc items divider + rows ── */}
+              {miscCart.length > 0 && (
+                <>
+                  <div className="px-5 py-2 bg-cyan-50 flex items-center justify-between">
+                    <p className="text-[9px] font-bold text-cyan-700 uppercase tracking-widest">Misc — Cashier Float</p>
+                    <span className="text-[9px] text-cyan-500 font-semibold">{fmt(miscCartTotal)}</span>
+                  </div>
+                  {miscCart.map((item, idx) => (
+                    <div key={item.itemId} className="px-5 py-3 hover:bg-cyan-50/30 transition-colors group">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-[10px] text-cyan-300 font-bold mt-0.5 w-4 flex-shrink-0">{cart.length + idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800 leading-snug">{item.name}</p>
+                          <p className="text-[11px] text-cyan-600 mt-0.5">per {item.unit} · {fmt(item.price)}</p>
+                        </div>
+                        <button onClick={() => setMiscCart(prev => prev.filter(c => c.itemId !== item.itemId))}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all flex-shrink-0 text-xl leading-none mt-0.5">×</button>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 pl-6">
+                        <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
+                          <button onClick={() => setMiscQty(item.itemId, -1)} className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">−</button>
+                          <span className="w-8 text-center text-xs font-bold text-slate-800">{item.qty}</span>
+                          <button onClick={() => setMiscQty(item.itemId, +1)} className="w-7 h-7 text-slate-500 hover:text-slate-900 hover:bg-slate-200 font-bold flex items-center justify-center transition text-base">+</button>
+                        </div>
+                        <span className="text-sm font-black text-cyan-700">{fmt(item.price * item.qty)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
 
         {/* ── Last Sales Ticker ─────────────── */}
-        {cart.length === 0 && recentBills.length > 0 && (
+        {cart.length === 0 && miscCart.length === 0 && recentBills.length > 0 && (
           <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
             {todayMiscSales.totalAmount > 0 && (
               <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5">
@@ -1457,18 +1596,31 @@ export default function POSPage() {
         )}
 
         {/* ── Payment Footer ──────────────── */}
-        {cart.length > 0 && (
+        {(cart.length > 0 || miscCart.length > 0) && (
           <div className="border-t border-slate-100 bg-white flex-shrink-0">
 
             {/* Receipt-style totals */}
             <div className="px-5 pt-4 pb-3 space-y-1.5">
-              <div className="flex justify-between text-xs text-slate-400">
-                <span>Subtotal ({cartItems} {cartItems === 1 ? 'bottle' : 'bottles'})</span>
-                <span className="font-semibold text-slate-600">{fmt(cartTotal)}</span>
-              </div>
+              {cartTotal > 0 && miscCartTotal > 0 ? (
+                <>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Liquor ({cartItems} {cartItems === 1 ? 'bottle' : 'bottles'})</span>
+                    <span className="font-semibold text-slate-600">{fmt(cartTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-cyan-600">
+                    <span>Misc ({miscCartItems} {miscCartItems === 1 ? 'item' : 'items'}) · cashier keeps</span>
+                    <span className="font-semibold">{fmt(miscCartTotal)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Subtotal ({cartItems + miscCartItems} {(cartItems + miscCartItems) === 1 ? 'item' : 'items'})</span>
+                  <span className="font-semibold text-slate-600">{fmt(billTotal)}</span>
+                </div>
+              )}
               <div className="border-t border-dashed border-slate-200 pt-2 flex justify-between items-center">
                 <span className="text-sm font-bold text-slate-700">Total</span>
-                <span className="text-2xl font-black text-slate-900 tracking-tight">{fmt(cartTotal)}</span>
+                <span className="text-2xl font-black text-slate-900 tracking-tight">{fmt(billTotal)}</span>
               </div>
             </div>
 
@@ -1488,7 +1640,7 @@ export default function POSPage() {
                     className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
                     {voidMode ? (voidProcessing ? 'Processing...' : 'Process Return') : 'Clear Bill'}
                   </button>
-                  <button onClick={() => setShowPayment(true)}
+                  <button onClick={() => { setShowPayment(true); setPayMode('CASH') }}
                     className="py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all active:scale-[0.98] shadow-md shadow-blue-100 flex items-center justify-center gap-2">
                     Pay
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1525,7 +1677,7 @@ export default function POSPage() {
                         type="number"
                         value={tendered}
                         onChange={e => setTendered(e.target.value)}
-                        placeholder={cartTotal.toString()}
+                        placeholder={billTotal.toString()}
                         autoFocus
                         className="flex-1 w-full min-w-0 text-base px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg text-right font-black outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                       />
@@ -1538,10 +1690,10 @@ export default function POSPage() {
                       <span className={`text-lg font-black ${
                         tendered === '' ? 'text-slate-400' :
                         change > 0 ? 'text-emerald-600' :
-                        tenderedNum < cartTotal ? 'text-red-500' :
+                        tenderedNum < billTotal ? 'text-red-500' :
                         'text-slate-400'
                       }`}>
-                        {tendered === '' ? fmt(cartTotal) : change > 0 ? fmt(change) : tenderedNum < cartTotal ? fmt(cartTotal - tenderedNum) : '✓ Exact'}
+                        {tendered === '' ? fmt(billTotal) : change > 0 ? fmt(change) : tenderedNum < billTotal ? fmt(billTotal - tenderedNum) : '✓ Exact'}
                       </span>
                     </div>
                   </div>
@@ -1649,7 +1801,7 @@ export default function POSPage() {
                     className="py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-red-100">
                     {voidMode ? (voidProcessing ? 'Processing...' : 'Process Return') : 'Clear Bill'}
                   </button>
-                  <button onClick={completeSale} disabled={processing || voidProcessing}
+                  <button onClick={() => completeSale()} disabled={processing || voidProcessing}
                     className={`py-3.5 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
                       payMode === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/60' :
                       payMode === 'CARD' ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/60' :
@@ -1680,7 +1832,7 @@ export default function POSPage() {
         )}
 
         {/* Empty footer */}
-        {cart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && ( // keep for true-empty state
+        {cart.length === 0 && miscCart.length === 0 && recentBills.length === 0 && pendingBills.length === 0 && ( // keep for true-empty state
           <div className="border-t border-[#252836] px-4 py-3 text-center">
             <p className="text-[10px] text-gray-600">{activeClerk ? `${activeClerk.label} selected` : 'Select a supplier'}{lastTxErrorAt ? ' · recent transaction issue detected' : ''}</p>
           </div>
