@@ -12,8 +12,8 @@ const adminNav = [
     items: [
       { href: '/dashboard', label: 'Dashboard' },
       { href: '/pos', label: 'Point of Sale' },
-      { href: '/misc-sale', label: 'Misc Sale' },
-      { href: '/misc-sale/ledger', label: 'Misc Ledger' },
+      { href: '/misc-sale', label: 'Misc Ledger' },
+      { href: '/misc-sale/ledger', label: 'Misc Sale' },
       { href: '/clerks', label: 'Clerk Billing' },
       { href: '/sales', label: 'Sales History' },
     ],
@@ -52,8 +52,8 @@ const staffNav = [
     group: 'Counter',
     items: [
       { href: '/pos', label: 'Point of Sale' },
-      { href: '/misc-sale', label: 'Misc Sale' },
-      { href: '/misc-sale/ledger', label: 'Misc Ledger' },
+      { href: '/misc-sale', label: 'Misc Ledger' },
+      { href: '/misc-sale/ledger', label: 'Misc Sale' },
       { href: '/clerks', label: 'Clerk Billing' },
       { href: '/sales', label: 'Bill History' },
       { href: '/attendance', label: 'Face Attendance' },
@@ -139,6 +139,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     ? pathname === '/inventory'
                     : item.href === '/reports'
                     ? pathname === '/reports'
+                    : item.href === '/misc-sale'
+                    ? pathname === '/misc-sale'
                     : pathname.startsWith(item.href)
                   return (
                     <Link
