@@ -92,16 +92,48 @@ async function getSystemPaymentTotals(recordDate: Date): Promise<PaymentTotals> 
   }
 }
 
+async function getPreviousClosing(recordDate: Date): Promise<number> {
+  // Use start-of-day (midnight) for comparisons so same-day records are excluded.
+  // recordDate is noon UTC, but recordDate/saleDate are @db.Date columns — PostgreSQL
+  // casts DATE to midnight for comparison, so "lt: noon" would match the same day.
+  const dayStart = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate(), 0, 0, 0, 0))
+
+  // Check for a saved cashRecord strictly before this calendar day
+  const previous = await prisma.cashRecord.findFirst({
+    where: { recordDate: { lt: dayStart } },
+    orderBy: { recordDate: 'desc' },
+    select: { closingRegister: true },
+  })
+  if (previous) return asMoney(previous.closingRegister)
+
+  // No saved record exists — dynamically compute closing for the most recent day with sales
+  const mostRecentSale = await prisma.sale.findFirst({
+    where: { saleDate: { lt: dayStart } },
+    orderBy: { saleDate: 'desc' },
+    select: { saleDate: true },
+  })
+  if (!mostRecentSale) return 0
+
+  // Compute that day's cash totals and expenses
+  const prevDate = toUtcNoonDate(mostRecentSale.saleDate)
+  const [prevPayments, prevExpenses] = await Promise.all([
+    getSystemPaymentTotals(prevDate),
+    prisma.expenditure.aggregate({
+      where: { expDate: prevDate },
+      _sum: { amount: true },
+    }),
+  ])
+
+  // closing = cashSales - expenses (opening is 0 since no earlier record, no locker transfer)
+  return round2(Math.max(0, prevPayments.cash - asMoney(prevExpenses._sum.amount)))
+}
+
 async function computeLedgerState(
   recordDate: Date,
   input: { requestedCashToLocker: number; requestedCreditCollected: number; strict: boolean }
 ): Promise<LedgerState> {
-  const [previous, paymentTotals, expenseAgg] = await Promise.all([
-    prisma.cashRecord.findFirst({
-      where: { recordDate: { lt: recordDate } },
-      orderBy: { recordDate: 'desc' },
-      select: { closingRegister: true },
-    }),
+  const [previousClosing, paymentTotals, expenseAgg] = await Promise.all([
+    getPreviousClosing(recordDate),
     getSystemPaymentTotals(recordDate),
     prisma.expenditure.aggregate({
       where: { expDate: recordDate },
@@ -109,7 +141,7 @@ async function computeLedgerState(
     }),
   ])
 
-  const openingRegister = round2(asMoney(previous?.closingRegister))
+  const openingRegister = round2(previousClosing)
   const expenses = round2(asMoney(expenseAgg._sum.amount))
   const cashSales = round2(paymentTotals.cash)
   const cardSales = round2(paymentTotals.card)
@@ -162,43 +194,39 @@ export async function GET(req: NextRequest) {
       strict: false,
     })
 
-    if (existing) {
-      const opening = asMoney(existing.openingRegister)
-      const cashSales = asMoney(existing.cashSales)
-      const expenses = asMoney(existing.expenses)
-      const cashToLocker = asMoney(existing.cashToLocker)
-      const closing = asMoney(existing.closingRegister)
-      const card = asMoney(existing.cardSales)
-      const upi = asMoney(existing.upiSales)
-      const credit = asMoney(existing.creditSales)
-      const creditCollected = asMoney(existing.creditCollected)
+    // Auto-upsert: always persist the computed record so future days find it
+    const ledgerData = {
+      openingRegister: ledger.openingRegister,
+      cashSales: ledger.cashSales,
+      expenses: ledger.expenses,
+      cashToLocker: ledger.cashToLocker,
+      closingRegister: ledger.closingRegister,
+      cardSales: ledger.cardSales,
+      upiSales: ledger.upiSales,
+      creditSales: ledger.creditSales,
+      creditCollected: ledger.creditCollected,
+    }
 
-      if (
-        hasDiff(opening, ledger.openingRegister) ||
-        hasDiff(cashSales, ledger.cashSales) ||
-        hasDiff(expenses, ledger.expenses) ||
-        hasDiff(cashToLocker, ledger.cashToLocker) ||
-        hasDiff(closing, ledger.closingRegister) ||
-        hasDiff(card, ledger.cardSales) ||
-        hasDiff(upi, ledger.upiSales) ||
-        hasDiff(credit, ledger.creditSales) ||
-        hasDiff(creditCollected, ledger.creditCollected)
-      ) {
-        await prisma.cashRecord.update({
-          where: { id: existing.id },
-          data: {
-            openingRegister: ledger.openingRegister,
-            cashSales: ledger.cashSales,
-            expenses: ledger.expenses,
-            cashToLocker: ledger.cashToLocker,
-            closingRegister: ledger.closingRegister,
-            cardSales: ledger.cardSales,
-            upiSales: ledger.upiSales,
-            creditSales: ledger.creditSales,
-            creditCollected: ledger.creditCollected,
-          },
-        })
+    if (existing) {
+      const needsUpdate =
+        hasDiff(asMoney(existing.openingRegister), ledger.openingRegister) ||
+        hasDiff(asMoney(existing.cashSales), ledger.cashSales) ||
+        hasDiff(asMoney(existing.expenses), ledger.expenses) ||
+        hasDiff(asMoney(existing.cashToLocker), ledger.cashToLocker) ||
+        hasDiff(asMoney(existing.closingRegister), ledger.closingRegister) ||
+        hasDiff(asMoney(existing.cardSales), ledger.cardSales) ||
+        hasDiff(asMoney(existing.upiSales), ledger.upiSales) ||
+        hasDiff(asMoney(existing.creditSales), ledger.creditSales) ||
+        hasDiff(asMoney(existing.creditCollected), ledger.creditCollected)
+
+      if (needsUpdate) {
+        await prisma.cashRecord.update({ where: { id: existing.id }, data: ledgerData })
       }
+    } else {
+      // Auto-create the record so the chain of closing → opening is maintained
+      await prisma.cashRecord.create({
+        data: { recordDate, ...ledgerData, notes: '' },
+      })
     }
 
     return NextResponse.json({

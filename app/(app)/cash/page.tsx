@@ -111,7 +111,7 @@ export default function CashPage() {
       setSummary(daySummary)
 
       if (hasSavedRecord) {
-        setForm({
+        setForm(prev => ({
           openingRegister: +cashRecord.openingRegister || 0,
           cashSales: +cashRecord.cashSales || 0,
           expenses: +cashRecord.expenses || 0,
@@ -119,16 +119,17 @@ export default function CashPage() {
           closingRegister: +cashRecord.closingRegister || 0,
           cardSales: +cashRecord.cardSales || 0,
           upiSales: +cashRecord.upiSales || 0,
-          notes: cashRecord.notes || '',
-        })
+          notes: prev.notes || cashRecord.notes || '',
+        }))
       } else {
-        setForm({
+        setForm(prev => ({
           ...emptyForm(+cashRecord.openingRegister || 0),
           cashSales: daySummary.sales.paymentTotals.cash,
           cardSales: daySummary.sales.paymentTotals.card,
           upiSales: daySummary.sales.paymentTotals.upi,
           expenses: daySummary.expenses.total,
-        })
+          notes: prev.notes,
+        }))
       }
     }).finally(() => setSummaryLoading(false))
   }, [date])
