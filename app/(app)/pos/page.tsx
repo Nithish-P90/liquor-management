@@ -102,7 +102,7 @@ type VoidItem = { productSizeId: number; name: string; sizeMl: number; qty: numb
 type MiscItem = { id: number; barcode: string | null; name: string; category: string; unit: string; price: number }
 type MiscCartItem = { itemId: number; name: string; category: string; unit: string; price: number; qty: number }
 type PosNetworkState = 'CHECKING' | 'LIVE' | 'CONNECTED' | 'RECONNECTING' | 'OFFLINE'
-const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', 'MISCELLANEOUS', '__MISC__']
+const CATS = ['ALL', 'BRANDY', 'WHISKY', 'RUM', 'VODKA', 'GIN', 'WINE', 'PREMIX', 'BEER', 'BEVERAGE', '__MISC__']
 
 // ── Distinct colors for category pills ──────────────────────────────────────
 const CAT_COLORS: Record<string, { active: string; inactive: string }> = {
@@ -116,7 +116,6 @@ const CAT_COLORS: Record<string, { active: string; inactive: string }> = {
   PREMIX:        { active: 'bg-violet-600 text-white shadow-sm',   inactive: 'bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-200' },
   BEER:          { active: 'bg-lime-600 text-white shadow-sm',     inactive: 'bg-lime-50 text-lime-700 hover:bg-lime-100 border border-lime-200' },
   BEVERAGE:      { active: 'bg-cyan-600 text-white shadow-sm',     inactive: 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 border border-cyan-200' },
-  MISCELLANEOUS: { active: 'bg-pink-600 text-white shadow-sm',     inactive: 'bg-pink-50 text-pink-600 hover:bg-pink-100 border border-pink-200' },
   __MISC__:      { active: 'bg-cyan-600 text-white shadow-sm',     inactive: 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-300' },
 }
 
