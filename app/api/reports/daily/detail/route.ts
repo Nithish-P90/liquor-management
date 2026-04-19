@@ -123,6 +123,7 @@ export async function GET(req: NextRequest) {
       time: s.saleTime,
       itemName: s.item.name,
       category: s.item.category,
+      unit: s.item.unit,
       qty: s.quantity,
       unitPrice: Number(s.unitPrice),
       total: Number(s.totalAmount),

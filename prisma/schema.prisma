@@ -438,9 +438,10 @@ enum MiscCategory {
 
 model MiscItem {
   id        Int          @id @default(autoincrement())
-  barcode   String       @unique
+  barcode   String?      @unique          // optional — items without barcodes are click-to-add only
   name      String
   category  MiscCategory
+  unit      String       @default("pcs") // pcs / pack / box / strip
   price     Decimal      @db.Decimal(10, 2)
   sales     MiscSale[]
   createdAt DateTime     @default(now())
