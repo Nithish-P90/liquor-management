@@ -16,8 +16,6 @@ type MiscItem = {
   price: number
 }
 
-type CartItem = { item: MiscItem; quantity: number }
-
 type SaleRecord = {
   id: number
   staffName?: string
@@ -152,13 +150,10 @@ export default function MiscSalePage() {
 
   // Core state
   const [allItems, setAllItems] = useState<MiscItem[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
   const [sales, setSales] = useState<SaleRecord[]>([])
   const [summary, setSummary] = useState<MiscSalesSummary>(emptySummary)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [catFilter, setCatFilter] = useState<MiscCategory | 'ALL'>('ALL')
   const [loading, setLoading] = useState(false)
-  const [charging, setCharging] = useState(false)
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
   // Date-range summary
@@ -170,9 +165,6 @@ export default function MiscSalePage() {
   const [rangeSummary, setRangeSummary] = useState<RangeSummary | null>(null)
   const [rangeLoading, setRangeLoading] = useState(false)
 
-  // Barcode scan
-  const [barcode, setBarcode] = useState('')
-  const barcodeRef = useRef<HTMLInputElement>(null)
   const loadSeqRef = useRef(0)
 
   // Item management
@@ -249,73 +241,6 @@ export default function MiscSalePage() {
     if (showRange && status === 'authenticated') void loadRangeSummary()
   }, [showRange, rangeFrom, rangeTo, status, loadRangeSummary])
 
-  // ── Cart ────────────────────────────────────────────────────────────────────
-
-  function addToCart(item: MiscItem) {
-    setCart(prev => {
-      const idx = prev.findIndex(c => c.item.id === item.id)
-      if (idx >= 0) return prev.map((c, i) => i === idx ? { ...c, quantity: c.quantity + 1 } : c)
-      return [...prev, { item, quantity: 1 }]
-    })
-  }
-
-  function setQty(idx: number, qty: number) {
-    if (qty <= 0) setCart(prev => prev.filter((_, i) => i !== idx))
-    else setCart(prev => prev.map((c, i) => i === idx ? { ...c, quantity: qty } : c))
-  }
-
-  const cartTotal = cart.reduce((s, c) => s + c.item.price * c.quantity, 0)
-  const cartQty = cart.reduce((s, c) => s + c.quantity, 0)
-  const cartInCart = (id: number) => cart.find(c => c.item.id === id)?.quantity ?? 0
-
-  // ── Barcode scan ────────────────────────────────────────────────────────────
-
-  async function handleScan() {
-    const bc = barcode.trim()
-    if (!bc) return
-    setBarcode('')
-
-    // First check locally (already loaded)
-    const local = allItems.find(i => i.barcode === bc)
-    if (local) { addToCart(local); barcodeRef.current?.focus(); return }
-
-    // Fallback: API lookup
-    const res = await fetch(`/api/misc-items?barcode=${encodeURIComponent(bc)}`)
-    const item: MiscItem | null = await res.json().catch(() => null)
-    if (!item) {
-      showFlash('Item not found. Add it from the catalogue below.', 'err')
-      barcodeRef.current?.focus()
-      return
-    }
-    addToCart({ ...item, price: Number(item.price) })
-    barcodeRef.current?.focus()
-  }
-
-  // ── Charge ──────────────────────────────────────────────────────────────────
-
-  async function charge() {
-    if (cart.length === 0 || charging) return
-    setCharging(true)
-    try {
-      const res = await fetch('/api/misc-sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staffId: Number(user?.id ?? 0),
-          saleDate: date,
-          items: cart.map(c => ({ itemId: c.item.id, quantity: c.quantity })),
-        }),
-      })
-      const data = await res.json().catch(() => ({})) as { error?: string }
-      if (!res.ok) { showFlash(data.error ?? 'Failed to record sale', 'err'); return }
-      setCart([])
-      showFlash(`Sale recorded — ${rupee(cartTotal)}`, 'ok')
-      await loadSales()
-      window.dispatchEvent(new Event('misc-sales:updated'))
-    } catch { showFlash('Failed to record sale', 'err') }
-    finally { setCharging(false); barcodeRef.current?.focus() }
-  }
-
   // ── Item CRUD ────────────────────────────────────────────────────────────────
 
   async function saveNewItem() {
@@ -363,11 +288,6 @@ export default function MiscSalePage() {
     setSavingItem(false)
     const data = await res.json().catch(() => ({})) as { error?: string }
     if (!res.ok) { showFlash(data.error ?? 'Failed to save', 'err'); return }
-
-    // Update cart if this item is in it
-    setCart(prev => prev.map(c => c.item.id === editItem.id
-      ? { ...c, item: { ...c.item, name: editForm.name.trim(), category: editForm.category, unit: editForm.unit, price } }
-      : c))
     setEditItem(null)
     showFlash('Item updated', 'ok')
     await loadItems()
@@ -382,14 +302,11 @@ export default function MiscSalePage() {
     setDeleteConfirmId(null)
     const data = await res.json().catch(() => ({})) as { error?: string }
     if (!res.ok) { showFlash(data.error ?? 'Failed to delete', 'err'); return }
-    setCart(prev => prev.filter(c => c.item.id !== id))
     showFlash('Item deleted', 'ok')
     await loadItems()
   }
 
   // ── Derived data ─────────────────────────────────────────────────────────────
-
-  const filteredItems = catFilter === 'ALL' ? allItems : allItems.filter(i => i.category === catFilter)
 
   const tally = Object.values(
     sales.reduce<Record<string, { name: string; category: MiscCategory; unit: MiscUnit; qty: number; amount: number }>>(
@@ -645,169 +562,6 @@ export default function MiscSalePage() {
           )}
         </div>
       )}
-
-      {/* ── Main grid: products + cart ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* ── Left: product selector ─────────────────────────────────────────── */}
-        <div className="lg:col-span-2 space-y-3">
-
-          {/* Barcode scan */}
-          <div className="flex gap-2">
-            <input
-              ref={barcodeRef}
-              value={barcode}
-              onChange={e => setBarcode(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleScan()}
-              placeholder="Scan barcode and press Enter…"
-              className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-white"
-              autoFocus
-            />
-            <button onClick={handleScan}
-              className="px-4 py-2.5 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors">
-              Scan
-            </button>
-          </div>
-
-          {/* Category filter tabs */}
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-            {(['ALL', ...CATEGORIES] as const).map(c => (
-              <button
-                key={c}
-                onClick={() => setCatFilter(c)}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
-                  catFilter === c ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {c === 'ALL' ? 'All' : CAT_LABEL[c]}
-                {c !== 'ALL' && (
-                  <span className="ml-1 text-[10px] text-slate-400">
-                    ({allItems.filter(i => i.category === c).length})
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Product grid */}
-          {allItems.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
-              No misc items yet.
-              {canManage && (
-                <button onClick={() => setShowManage(true)} className="block mx-auto mt-2 text-blue-600 font-semibold hover:underline">
-                  Add items from Manage Items
-                </button>
-              )}
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
-              No {catFilter !== 'ALL' ? CAT_LABEL[catFilter] : ''} items yet.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {filteredItems.map(item => {
-                const inCart = cartInCart(item.id)
-                const colors = CAT_COLORS[item.category]
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => addToCart(item)}
-                    className={`relative text-left p-4 rounded-xl border-2 transition-all hover:shadow-md active:scale-95 ${
-                      inCart > 0
-                        ? `${colors.bg} ${colors.border} shadow-sm`
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    {inCart > 0 && (
-                      <span className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${colors.badge}`}>
-                        {inCart}
-                      </span>
-                    )}
-                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${inCart > 0 ? colors.text : 'text-slate-400'}`}>
-                      {CAT_LABEL[item.category]}
-                    </p>
-                    <p className="font-bold text-slate-800 text-sm leading-snug">{item.name}</p>
-                    <div className="flex items-end justify-between mt-2">
-                      <span className="text-xs text-slate-400">per {item.unit ?? 'pcs'}</span>
-                      <span className="text-base font-black text-slate-900">{rupee(item.price)}</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Right: cart ───────────────────────────────────────────────────── */}
-        <div className="space-y-3">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-700">Current Bill</h2>
-              {cart.length > 0 && (
-                <button onClick={() => setCart([])} className="text-xs text-red-400 hover:text-red-600 font-semibold">
-                  Clear all
-                </button>
-              )}
-            </div>
-
-            {cart.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-400">
-                Tap an item to add it
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {cart.map((c, i) => (
-                  <div key={i} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{c.item.name}</p>
-                        <p className="text-xs text-slate-400">{rupee(c.item.price)} / {c.item.unit ?? 'pcs'}</p>
-                      </div>
-                      <button onClick={() => setQty(i, 0)} className="text-slate-300 hover:text-red-500 text-lg leading-none mt-0.5">×</button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setQty(i, c.quantity - 1)}
-                          className="w-7 h-7 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold flex items-center justify-center">−</button>
-                        <input
-                          type="number" min={1}
-                          value={c.quantity}
-                          onChange={e => setQty(i, Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-10 text-center text-sm font-bold border border-slate-200 rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-400"
-                        />
-                        <button onClick={() => setQty(i, c.quantity + 1)}
-                          className="w-7 h-7 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold flex items-center justify-center">+</button>
-                      </div>
-                      <span className="font-black text-slate-900">{rupee(c.item.price * c.quantity)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {cart.length > 0 && (
-              <div className="px-4 py-4 bg-emerald-50 border-t border-emerald-100">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-emerald-700 font-semibold">{cartQty} {cartQty === 1 ? 'item' : 'items'}</span>
-                  <span className="text-lg font-black text-emerald-800">{rupee(cartTotal)}</span>
-                </div>
-                <button
-                  onClick={charge} disabled={charging}
-                  className="w-full py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 disabled:opacity-60 transition-colors"
-                >
-                  {charging ? 'Recording…' : `Charge ${rupee(cartTotal)}`}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Cashier note */}
-          <div className="px-4 py-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-700 text-center">
-            Misc revenue — cashier float only<br />
-            <span className="text-cyan-500">Not included in owner liquor totals</span>
-          </div>
-        </div>
-      </div>
 
       {/* ── Category summary cards ───────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
