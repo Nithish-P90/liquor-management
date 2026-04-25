@@ -1,0 +1,811 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Category {
+  BRANDY
+  WHISKY
+  RUM
+  VODKA
+  GIN
+  WINE
+  PREMIX
+  BEER
+  BEVERAGE
+  MISCELLANEOUS
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+  SUPPLIER
+  HELPER
+  LOADER
+  COLLECTOR
+  CLEANER
+  WATCHMAN
+  OTHER
+}
+
+enum PayrollType {
+  SALARY
+  DAILY
+}
+
+enum StockEntryType {
+  OPENING
+  CLOSING
+}
+
+enum IndentStatus {
+  PENDING
+  PARTIAL
+  FULLY_RECEIVED
+  STOCK_ADDED
+}
+
+enum PaymentMode {
+  CASH
+  CARD
+  UPI
+  CREDIT
+  SPLIT
+  PENDING
+}
+
+enum ScanMethod {
+  BARCODE_USB
+  BARCODE_CAMERA
+  MANUAL
+}
+
+enum AdjustmentType {
+  BREAKAGE
+  RETURN
+  THEFT_WRITEOFF
+  CORRECTION
+}
+
+enum Severity {
+  OK
+  LOW
+  HIGH
+}
+
+enum MiscCategory {
+  CIGARETTES
+  SNACKS
+  CUPS
+}
+
+enum BankTxType {
+  DEPOSIT
+  KSBCL_PAYMENT
+}
+
+enum BillStatus {
+  OPEN
+  COMMITTED
+  VOIDED
+  TAB_OPEN
+  TAB_SETTLED
+  TAB_FORCE_SETTLED
+}
+
+enum BillEntityType {
+  OWNER
+  CASHIER
+}
+
+enum BillSourceType {
+  LIQUOR
+  MISC
+}
+
+enum SettlementStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+enum AttributionType {
+  COUNTER
+  CLERK
+}
+
+enum ClearanceStatus {
+  ACTIVE
+  EXHAUSTED
+  CANCELLED
+}
+
+model Product {
+  id          Int           @id @default(autoincrement())
+  itemCode    String        @unique
+  name        String
+  category    Category
+  sizes       ProductSize[]
+  indentItems IndentItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ProductSize {
+  id                 Int               @id @default(autoincrement())
+  product            Product           @relation(fields: [productId], references: [id])
+  productId          Int
+  sizeMl             Int
+  bottlesPerCase     Int
+  barcode            String?           @unique
+  alternateBarcodes  String[]          @default([])
+  ksbclItemCode      String?           @unique
+  mrp                Decimal           @db.Decimal(10, 2)
+  sellingPrice       Decimal           @db.Decimal(10, 2)
+  stockEntries       StockEntry[]
+  receiptItems       ReceiptItem[]
+  adjustments        StockAdjustment[]
+  variances          VarianceRecord[]
+  indentItems        IndentItem[]
+  billLines          BillLine[]
+  clearanceBatches   ClearanceBatch[]
+  physicalCountItems PhysicalCountItem[]
+  createdAt          DateTime          @default(now())
+
+  @@unique([productId, sizeMl])
+}
+
+model Staff {
+  id               Int                @id @default(autoincrement())
+  name             String
+  email            String?            @unique
+  passwordHash     String?
+  pin              String?            @unique
+  role             Role
+  payrollType      PayrollType        @default(SALARY)
+  monthlySalary    Decimal?           @db.Decimal(12, 2)
+  dailyWage        Decimal?           @db.Decimal(10, 2)
+  expectedCheckIn  String?
+  expectedCheckOut String?
+  lateGraceMinutes Int                @default(15)
+  active           Boolean            @default(true)
+  faceProfile      FaceProfile?
+  adjustments      StockAdjustment[]  @relation("CreatedBy")
+  approvals        StockAdjustment[]  @relation("ApprovedBy")
+  sessions         InventorySession[]
+  receipts         Receipt[]
+  attendanceLogs   AttendanceLog[]
+  billsOperated    Bill[]             @relation("BillOperator")
+  billsVoided      Bill[]             @relation("BillVoider")
+  cashierSettlements CashierSettlement[] @relation("CashierSettlementCashier")
+  settlementsPaid  CashierSettlement[] @relation("CashierSettlementPaidBy")
+  auditEvents              AuditEvent[]
+  clearanceBatchesCreated   ClearanceBatch[]  @relation("ClearanceCreatedBy")
+  clearanceBatchesCancelled ClearanceBatch[]  @relation("ClearanceCancelledBy")
+  expenditures              Expenditure[]
+  physicalCountSessions     PhysicalCountSession[]
+  attendanceEvents          AttendanceEvent[]
+  shiftTemplates            ShiftTemplate[]
+  createdAt                 DateTime          @default(now())
+}
+
+model FaceProfile {
+  id            Int          @id @default(autoincrement())
+  staff         Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId       Int          @unique
+  threshold     Float        @default(0.48)
+  sampleCount   Int          @default(0)
+  descriptor    Json?
+  enrolledAt    DateTime?
+  lastMatchedAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  samples       FaceSample[]
+}
+
+model FaceSample {
+  id             Int         @id @default(autoincrement())
+  profile        FaceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId      Int
+  descriptor     Json
+  detectionScore Float
+  qualityScore   Float
+  createdAt      DateTime    @default(now())
+
+  @@index([profileId])
+}
+
+model AttendanceLog {
+  id        Int       @id @default(autoincrement())
+  staff     Staff     @relation(fields: [staffId], references: [id])
+  staffId   Int
+  date      DateTime  @db.Date
+  checkIn   DateTime
+  checkOut  DateTime?
+  status    String    @default("PRESENT")
+  createdAt DateTime  @default(now())
+
+  @@unique([staffId, date])
+}
+
+model InventorySession {
+  id           Int          @id @default(autoincrement())
+  periodStart  DateTime     @db.Date
+  periodEnd    DateTime     @db.Date
+  createdBy    Staff        @relation(fields: [staffId], references: [id])
+  staffId      Int
+  locked       Boolean      @default(false)
+  stockEntries StockEntry[]
+  createdAt    DateTime     @default(now())
+}
+
+model StockEntry {
+  id            Int              @id @default(autoincrement())
+  session       InventorySession @relation(fields: [sessionId], references: [id])
+  sessionId     Int
+  productSize   ProductSize      @relation(fields: [productSizeId], references: [id])
+  productSizeId Int
+  entryType     StockEntryType
+  cases         Int              @default(0)
+  bottles       Int              @default(0)
+  totalBottles  Int
+
+  @@unique([sessionId, productSizeId, entryType])
+}
+
+model StockAdjustment {
+  id              Int            @id @default(autoincrement())
+  adjustmentDate  DateTime       @db.Date
+  productSize     ProductSize    @relation(fields: [productSizeId], references: [id])
+  productSizeId   Int
+  adjustmentType  AdjustmentType
+  quantityBottles Int
+  reason          String
+  createdBy       Staff          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById     Int
+  approvedBy      Staff?         @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedById    Int?
+  approved        Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+}
+
+model VarianceRecord {
+  id              Int         @id @default(autoincrement())
+  recordDate      DateTime    @db.Date
+  productSize     ProductSize @relation(fields: [productSizeId], references: [id])
+  productSizeId   Int
+  expectedBottles Int
+  actualBottles   Int
+  variance        Int
+  severity        Severity
+  resolved        Boolean     @default(false)
+  resolvedNote    String?
+  createdAt       DateTime    @default(now())
+
+  @@unique([recordDate, productSizeId])
+}
+
+model Indent {
+  id                  Int          @id @default(autoincrement())
+  indentNumber        String       @unique
+  invoiceNumber       String
+  retailerId          String
+  retailerName        String
+  indentDate          DateTime     @db.Date
+  pdfPath             String
+  rawText             String?
+  parseWarnings       Json?
+  totalIndentValue    Decimal?     @db.Decimal(12, 2)
+  totalConfirmedValue Decimal?     @db.Decimal(12, 2)
+  status              IndentStatus @default(PENDING)
+  items               IndentItem[]
+  receipts            Receipt[]
+  createdAt           DateTime     @default(now())
+}
+
+model IndentItem {
+  id                Int         @id @default(autoincrement())
+  indent            Indent      @relation(fields: [indentId], references: [id])
+  indentId          Int
+  product           Product     @relation(fields: [productId], references: [id])
+  productId         Int
+  productSize       ProductSize @relation(fields: [productSizeId], references: [id])
+  productSizeId     Int
+  ratePerCase     Decimal     @db.Decimal(10, 2)
+  isRationed      Boolean     @default(false)
+  indentCases     Int
+  indentBottles   Int
+  ksbclItemCode     String?
+  rawItemName       String?
+  parseConfidence   Float?
+  mappingConfidence Float?
+  isNewItem         Boolean     @default(false)
+  indentAmount      Decimal     @db.Decimal(10, 2)
+  cnfCases          Int
+  cnfBottles        Int
+  cnfAmount         Decimal     @db.Decimal(10, 2)
+  receivedCases     Int         @default(0)
+  receivedBottles   Int         @default(0)
+}
+
+model Receipt {
+  id           Int           @id @default(autoincrement())
+  indent       Indent        @relation(fields: [indentId], references: [id])
+  indentId     Int
+  receivedDate DateTime      @db.Date
+  receivedBy   Staff         @relation(fields: [staffId], references: [id])
+  staffId      Int
+  notes        String?
+  items        ReceiptItem[]
+  createdAt    DateTime      @default(now())
+}
+
+model ReceiptItem {
+  id              Int         @id @default(autoincrement())
+  receipt         Receipt     @relation(fields: [receiptId], references: [id])
+  receiptId       Int
+  productSize     ProductSize @relation(fields: [productSizeId], references: [id])
+  productSizeId   Int
+  casesReceived   Int
+  bottlesReceived Int
+  totalBottles    Int
+}
+
+model CashRecord {
+  id              Int      @id @default(autoincrement())
+  recordDate      DateTime @unique @db.Date
+  openingRegister Decimal  @default(0) @db.Decimal(12, 2)
+  cashSales       Decimal  @default(0) @db.Decimal(12, 2)
+  expenses        Decimal  @default(0) @db.Decimal(12, 2)
+  cashToLocker    Decimal  @default(0) @db.Decimal(12, 2)
+  closingRegister Decimal  @default(0) @db.Decimal(12, 2)
+  cardSales       Decimal  @default(0) @db.Decimal(12, 2)
+  upiSales        Decimal  @default(0) @db.Decimal(12, 2)
+  creditSales     Decimal  @default(0) @db.Decimal(12, 2)
+  creditCollected Decimal  @default(0) @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model BankTransaction {
+  id        Int        @id @default(autoincrement())
+  txDate    DateTime   @db.Date
+  txType    BankTxType
+  amount    Decimal    @db.Decimal(12, 2)
+  notes     String?
+  createdAt DateTime   @default(now())
+}
+
+model ExpenseCategory {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  description  String?
+  isActive     Boolean       @default(true)
+  expenditures Expenditure[]
+  createdAt    DateTime      @default(now())
+}
+
+model Expenditure {
+  id          Int              @id @default(autoincrement())
+  expDate     DateTime         @db.Date
+  particulars String
+  category    String           @default("OTHER")
+  categoryRef ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  categoryId  Int?
+  amount      Decimal          @db.Decimal(10, 2)
+  recordedBy  Staff?           @relation(fields: [recordedById], references: [id])
+  recordedById Int?
+  createdAt   DateTime         @default(now())
+}
+
+model MiscItem {
+  id        Int          @id @default(autoincrement())
+  barcode   String?      @unique
+  name      String
+  category  MiscCategory
+  unit      String       @default("pcs")
+  price     Decimal      @db.Decimal(10, 2)
+  active    Boolean      @default(true)
+  billLines BillLine[]
+  createdAt DateTime     @default(now())
+}
+
+model Notification {
+  id            Int       @id @default(autoincrement())
+  type          String
+  title         String
+  body          String
+  severity      String    @default("INFO")
+  refEntity     String?
+  refEntityId   Int?
+  read          Boolean   @default(false)
+  dismissedAt   DateTime?
+  dismissedById Int?
+  createdAt     DateTime  @default(now())
+
+  @@index([type])
+  @@index([dismissedAt])
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
+
+model Bill {
+  id              Int                 @id @default(autoincrement())
+  billNumber      String              @unique
+  businessDate    DateTime            @db.Date
+  billedAt        DateTime            @default(now())
+  operator        Staff               @relation("BillOperator", fields: [operatorId], references: [id])
+  operatorId      Int
+  attributionType AttributionType     @default(COUNTER)
+  clerk           Clerk?              @relation(fields: [clerkId], references: [id])
+  clerkId         Int?
+  status          BillStatus          @default(OPEN)
+  customerName    String?
+  customerPhone   String?
+  grossTotal     Decimal             @default(0) @db.Decimal(12, 2)
+  ownerTotal     Decimal             @default(0) @db.Decimal(12, 2)
+  cashierTotal   Decimal             @default(0) @db.Decimal(12, 2)
+  discountTotal  Decimal             @default(0) @db.Decimal(12, 2)
+  discountReason String?
+  netCollectible Decimal             @default(0) @db.Decimal(12, 2)
+  voidedAt       DateTime?
+  voidedBy       Staff?              @relation("BillVoider", fields: [voidedById], references: [id])
+  voidedById     Int?
+  voidReason     String?
+  notes          String?
+  lines          BillLine[]
+  payments       PaymentAllocation[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([businessDate])
+  @@index([status])
+  @@index([operatorId, businessDate])
+  @@index([clerkId, businessDate])
+}
+
+model BillLine {
+  id               Int            @id @default(autoincrement())
+  bill             Bill           @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId           Int
+  lineNo           Int
+  entityType       BillEntityType
+  sourceType       BillSourceType
+  productSize      ProductSize?   @relation(fields: [productSizeId], references: [id])
+  productSizeId    Int?
+  miscItem         MiscItem?      @relation(fields: [miscItemId], references: [id])
+  miscItemId       Int?
+  barcodeSnapshot  String?
+  itemNameSnapshot String
+  quantity         Int
+  unitPrice        Decimal        @db.Decimal(10, 2)
+  lineTotal        Decimal        @db.Decimal(12, 2)
+  scanMethod       ScanMethod     @default(MANUAL)
+  isManualOverride Boolean        @default(false)
+  overrideReason   String?
+  isVoidedLine     Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+
+  @@unique([billId, lineNo])
+  @@index([productSizeId])
+  @@index([miscItemId])
+  @@index([entityType])
+}
+
+model PaymentAllocation {
+  id        Int         @id @default(autoincrement())
+  bill      Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId    Int
+  mode      PaymentMode
+  amount    Decimal     @db.Decimal(12, 2)
+  reference String?
+  createdAt DateTime    @default(now())
+
+  @@index([billId])
+  @@index([mode])
+}
+
+model CashierSettlement {
+  id                     Int              @id @default(autoincrement())
+  cashier                Staff            @relation("CashierSettlementCashier", fields: [cashierId], references: [id])
+  cashierId              Int
+  periodStart            DateTime         @db.Date
+  periodEnd              DateTime         @db.Date
+  approvedMiscSalesTotal Decimal          @default(0) @db.Decimal(12, 2)
+  deductions             Decimal          @default(0) @db.Decimal(12, 2)
+  reimbursableAmount     Decimal          @default(0) @db.Decimal(12, 2)
+  paidAmount             Decimal          @default(0) @db.Decimal(12, 2)
+  paidAt                 DateTime?
+  paidBy                 Staff?           @relation("CashierSettlementPaidBy", fields: [paidById], references: [id])
+  paidById               Int?
+  status                 SettlementStatus @default(DRAFT)
+  notes                  String?
+  shortageDeductions     CashierShortageDeduction[]
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  @@unique([cashierId, periodStart, periodEnd])
+  @@index([status])
+}
+
+model AuditEvent {
+  id             BigInt   @id @default(autoincrement())
+  actor          Staff?   @relation(fields: [actorId], references: [id])
+  actorId        Int?
+  eventType      String
+  entity         String
+  entityId       Int
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  reason         String?
+  ipAddress      String?
+  occurredAt     DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([occurredAt])
+  @@index([eventType])
+}
+
+model Clerk {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isActive  Boolean  @default(true)
+  bills     Bill[]
+  createdAt DateTime @default(now())
+
+  @@index([isActive])
+}
+
+model ClearanceBatch {
+  id             Int             @id @default(autoincrement())
+  productSize    ProductSize     @relation(fields: [productSizeId], references: [id])
+  productSizeId  Int
+  originalRate   Decimal         @db.Decimal(10, 2)
+  clearanceRate  Decimal         @db.Decimal(10, 2)
+  totalQuantity  Int
+  soldQuantity   Int             @default(0)
+  status         ClearanceStatus @default(ACTIVE)
+  reason         String?
+  createdBy      Staff           @relation("ClearanceCreatedBy", fields: [createdById], references: [id])
+  createdById    Int
+  cancelledBy    Staff?          @relation("ClearanceCancelledBy", fields: [cancelledById], references: [id])
+  cancelledById  Int?
+  createdAt      DateTime        @default(now())
+  exhaustedAt    DateTime?
+  cancelledAt    DateTime?
+  updatedAt      DateTime        @updatedAt
+
+  @@index([productSizeId, status])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Slice 5 — Galla / Locker / End-of-Day
+// ---------------------------------------------------------------------------
+
+enum GallaEventType {
+  SALE_CASH
+  SALE_CARD
+  SALE_UPI
+  REFUND_CASH
+  EXPENSE
+  TRANSFER_TO_LOCKER
+  OPENING_BALANCE
+}
+
+enum LockerEventType {
+  TRANSFER_IN
+  TRANSFER_OUT
+  DEPOSIT_TO_BANK
+}
+
+model GallaDay {
+  id              Int          @id @default(autoincrement())
+  businessDate    DateTime     @unique @db.Date
+  openingBalance  Decimal      @default(0) @db.Decimal(12, 2)
+  closingBalance  Decimal      @default(0) @db.Decimal(12, 2)
+  countedAmount   Decimal?     @db.Decimal(12, 2)
+  variance        Decimal?     @db.Decimal(12, 2)
+  isClosed        Boolean      @default(false)
+  closedAt        DateTime?
+  closedById      Int?
+  events          GallaEvent[]
+  snapshots       DailySnapshot[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([businessDate])
+  @@index([isClosed])
+}
+
+model GallaEvent {
+  id           Int            @id @default(autoincrement())
+  gallaDay     GallaDay       @relation(fields: [gallaDayId], references: [id])
+  gallaDayId   Int
+  eventType    GallaEventType
+  amount       Decimal        @db.Decimal(12, 2)
+  reference    String?
+  billId       Int?
+  expenditureId Int?
+  occurredAt   DateTime       @default(now())
+
+  @@index([gallaDayId])
+  @@index([eventType])
+}
+
+model LockerRecord {
+  id           Int           @id @default(autoincrement())
+  balance      Decimal       @default(0) @db.Decimal(12, 2)
+  events       LockerEvent[]
+  updatedAt    DateTime      @updatedAt
+}
+
+model LockerEvent {
+  id             Int             @id @default(autoincrement())
+  locker         LockerRecord    @relation(fields: [lockerId], references: [id])
+  lockerId       Int
+  eventType      LockerEventType
+  amount         Decimal         @db.Decimal(12, 2)
+  reference      String?
+  occurredAt     DateTime        @default(now())
+
+  @@index([lockerId])
+}
+
+model DailySnapshot {
+  id            Int      @id @default(autoincrement())
+  gallaDay      GallaDay @relation(fields: [gallaDayId], references: [id])
+  gallaDayId    Int      @unique
+  stockMap      Json
+  cashSales     Decimal  @db.Decimal(12, 2)
+  cardSales     Decimal  @db.Decimal(12, 2)
+  upiSales      Decimal  @db.Decimal(12, 2)
+  creditSales   Decimal  @db.Decimal(12, 2)
+  totalExpenses Decimal  @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+}
+
+model PaymentReconciliation {
+  id             Int      @id @default(autoincrement())
+  businessDate   DateTime @unique @db.Date
+  systemCash     Decimal  @db.Decimal(12, 2)
+  systemCard     Decimal  @db.Decimal(12, 2)
+  systemUpi      Decimal  @db.Decimal(12, 2)
+  actualCash     Decimal? @db.Decimal(12, 2)
+  actualCard     Decimal? @db.Decimal(12, 2)
+  actualUpi      Decimal? @db.Decimal(12, 2)
+  cashVariance   Decimal? @db.Decimal(12, 2)
+  cardVariance   Decimal? @db.Decimal(12, 2)
+  upiVariance    Decimal? @db.Decimal(12, 2)
+  notes          String?
+  reconciledById Int?
+  reconciledAt   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([businessDate])
+}
+
+// ---------------------------------------------------------------------------
+// Slice 10 — Physical count + cashier shortage deduction
+// ---------------------------------------------------------------------------
+
+enum CountStatus {
+  DRAFT
+  IN_PROGRESS
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum DeductionStatus {
+  PENDING
+  APPLIED
+  REVERSED
+}
+
+model PhysicalCountSession {
+  id           Int                  @id @default(autoincrement())
+  sessionDate  DateTime             @db.Date
+  status       CountStatus          @default(DRAFT)
+  conductedBy  Staff                @relation(fields: [conductedById], references: [id])
+  conductedById Int
+  approvedById Int?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  rejectionReason String?
+  items        PhysicalCountItem[]
+  deductions   CashierShortageDeduction[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([status])
+  @@index([sessionDate])
+}
+
+model PhysicalCountItem {
+  id              Int                  @id @default(autoincrement())
+  session         PhysicalCountSession @relation(fields: [sessionId], references: [id])
+  sessionId       Int
+  productSize     ProductSize          @relation(fields: [productSizeId], references: [id])
+  productSizeId   Int
+  systemBottles   Int
+  countedBottles  Int
+  variance        Int
+  sellingPrice    Decimal              @db.Decimal(10, 2)
+  shortageValue   Decimal              @default(0) @db.Decimal(12, 2)
+
+  @@unique([sessionId, productSizeId])
+}
+
+model CashierShortageDeduction {
+  id              Int                  @id @default(autoincrement())
+  session         PhysicalCountSession @relation(fields: [sessionId], references: [id])
+  sessionId       Int
+  cashier         CashierSettlement    @relation(fields: [settlementId], references: [id])
+  settlementId    Int
+  amount          Decimal              @db.Decimal(12, 2)
+  status          DeductionStatus      @default(PENDING)
+  appliedAt       DateTime?
+  createdAt       DateTime             @default(now())
+
+  @@index([sessionId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Slice 11 — Attendance events + shift templates
+// ---------------------------------------------------------------------------
+
+enum AttendanceEventType {
+  CLOCK_IN
+  CLOCK_OUT
+}
+
+enum AttendanceMethod {
+  FACE
+  PIN
+  MANUAL_OVERRIDE
+}
+
+model AttendanceEvent {
+  id               Int                 @id @default(autoincrement())
+  staff            Staff               @relation(fields: [staffId], references: [id])
+  staffId          Int
+  eventType        AttendanceEventType
+  method           AttendanceMethod
+  occurredAt       DateTime            @default(now())
+  confidenceScore  Float?
+  isLate           Boolean             @default(false)
+  isEarlyDeparture Boolean             @default(false)
+  shiftStart       DateTime?
+  shiftEnd         DateTime?
+  overrideReason   String?
+
+  @@index([staffId])
+  @@index([occurredAt])
+}
+
+model ShiftTemplate {
+  id        Int      @id @default(autoincrement())
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  staffId   Int
+  startTime String
+  endTime   String
+  activeDays Int[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+}

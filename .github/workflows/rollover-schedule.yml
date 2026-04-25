@@ -1,0 +1,25 @@
+name: Daily Rollover
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  rollover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger rollover endpoint
+        env:
+          ROLLOVER_URL: ${{ secrets.ROLLOVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$ROLLOVER_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing ROLLOVER_URL or CRON_SECRET secret"
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            -X POST "$ROLLOVER_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json"

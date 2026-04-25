@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Liquor Management (Web-Only)
 
-## Getting Started
+Production-oriented rewrite for a single-outlet liquor operations system.
 
-First, run the development server:
+## Business Verification
+
+The current repo has been verified against the bar's all-in-one operating model:
+
+- liquor inventory and reconciliation
+- cashier-owned misc goods
+- combined billing with split owner vs cashier tallies
+- cashier reimbursement controls
+- POS barcode workflow
+- facial attendance
+- accounting and audit requirements
+
+Read the full verification here:
+
+- `docs/requirements-verification.md`
+
+Current status:
+
+- foundation and schema: strong
+- live POS for mixed billing: not complete
+- cashier reimbursement engine: not complete
+- attendance recognition flow: not complete
+- production readiness for the exact business rules: not yet ready
+
+## Stack
+
+- Next.js 14 (App Router)
+- TypeScript strict mode
+- PostgreSQL (Neon) + Prisma
+- NextAuth PIN login
+- Tailwind + Radix UI
+- Zod validation
+
+## Local Setup
+
+1. Copy env template:
+
+```bash
+cp .env.example .env
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Generate Prisma client and migrate:
+
+```bash
+npm run prisma:generate
+npm run prisma:push
+```
+
+4. Seed baseline users and optionally import workbook products:
+
+```bash
+npm run seed
+```
+
+If you want to force a specific workbook path:
+
+```bash
+npm run seed -- --excel "../MV PHYSICAL STOCK SHEET-29-03-2026 To 06-03-2026.xlsx"
+```
+
+5. Start app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Excel Product Import
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- API route: POST /api/admin/products/import (multipart form with field name file)
+- UI page: /products import action
+- Supports:
+  - Structured workbook columns: itemCode, name, category, sizeMl, bottlesPerCase, mrp, sellingPrice, barcode
+  - Current stock sheet format (uses SALES & RATE tab)
+- If item code is missing, importer generates placeholder values like KSBCL-PENDING-0001.
+- You can edit these later to real KSBCL item codes.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Render Deployment (Minimal Effort)
 
-## Learn More
+This repo includes render.yaml and scripts/migrate-deploy-with-retry.sh.
 
-To learn more about Next.js, take a look at the following resources:
+1. Push this repository.
+2. In Render, create Web Service from repo.
+3. Render auto-detects render.yaml.
+4. Set env vars from .env.example.
+5. Deploy.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Build flow on Render:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- npm ci
+- prisma migrate deploy (with retry)
+- prisma generate
+- next build
+- next start
 
-## Deploy on Vercel
+## CI and Scheduled Rollover
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- CI workflow: .github/workflows/ci-and-deploy.yml
+- Daily rollover trigger workflow: .github/workflows/rollover-schedule.yml
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For rollover workflow, set repository secrets:
+
+- ROLLOVER_URL (example: https://your-app.onrender.com/api/cron/rollover)
+- CRON_SECRET
+
+## Current Scope in This Commit
+
+- Full Prisma schema and enums
+- Core libraries for dates, auth, stock, reconciliation, rollover
+- NextAuth credentials PIN login and login page
+- Product CRUD API foundation
+- Excel import pipeline with placeholder KSBCL item codes
+- Protected app layout and all page route scaffolding
+- Build/lint verified clean
