@@ -2,7 +2,7 @@ import { Role } from "@prisma/client"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { type NextAuthOptions } from "next-auth"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/platform/prisma"
 
 const ALLOWED_PIN_ROLES: Role[] = ["ADMIN", "CASHIER"]
 

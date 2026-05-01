@@ -1,7 +1,7 @@
 import { Category, Prisma } from "@prisma/client"
 import * as XLSX from "xlsx"
 
-import { inferCategory } from "@/lib/infer-category"
+import { inferCategory } from "@/lib/domains/catalog/infer-category"
 
 export type ProductImportRow = {
   itemCode: string

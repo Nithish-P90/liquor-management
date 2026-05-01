@@ -9,6 +9,7 @@ The app is early enough that a larger refactor is still affordable. The goal is 
 - API routes are indexed in `lib/api/routes.ts`.
 - Behavior modules are indexed in `lib/domain-modules.ts`.
 - Human-readable rules live in `AGENTS.md`.
+- Repeatable feature recipes live in `docs/development-playbook.md`.
 - File purpose and architecture guidance live in `docs/file-index.md` and `docs/development-architecture.md`.
 
 ## Canonical Module Layout

@@ -1,8 +1,8 @@
 import { CountStatus, DeductionStatus, Prisma } from "@prisma/client"
 
-import { PrismaTransactionClient } from "@/lib/stock"
-import { calculateStock } from "@/lib/stock"
-import { todayDateString } from "@/lib/dates"
+import { PrismaTransactionClient } from "@/lib/domains/inventory/stock"
+import { calculateStock } from "@/lib/domains/inventory/stock"
+import { todayDateString } from "@/lib/platform/dates"
 
 export async function startCountSession(
   tx: PrismaTransactionClient,

@@ -1,8 +1,8 @@
 import { BillStatus, Prisma } from "@prisma/client"
 
-import { parseDateParam } from "@/lib/dates"
-import { prisma } from "@/lib/prisma"
-import { DateString } from "@/lib/types"
+import { parseDateParam } from "@/lib/platform/dates"
+import { prisma } from "@/lib/platform/prisma"
+import { DateString } from "@/lib/platform/types"
 
 export type DateRange = { from: DateString; to: DateString }
 

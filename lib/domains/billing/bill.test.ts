@@ -2,32 +2,32 @@
 import { BillStatus, PaymentMode, Prisma } from "@prisma/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/dates", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/dates")>("@/lib/dates")
+vi.mock("@/lib/platform/dates", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/platform/dates")>("@/lib/platform/dates")
   return {
     ...actual,
     todayDateString: vi.fn(() => "2026-04-25"),
   }
 })
 
-vi.mock("@/lib/stock", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/stock")>("@/lib/stock")
+vi.mock("@/lib/domains/inventory/stock", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domains/inventory/stock")>("@/lib/domains/inventory/stock")
   return {
     ...actual,
     getAvailableStock: vi.fn(),
   }
 })
 
-vi.mock("@/lib/clearance", () => ({
+vi.mock("@/lib/domains/inventory/clearance", () => ({
   resolveRate: vi.fn(),
   applyClearanceSegments: vi.fn(),
   reverseClearanceSegments: vi.fn(),
 }))
 
-import { nextBillNumber, commitBill, settleTab, voidBill } from "@/lib/bill"
-import { todayDateString } from "@/lib/dates"
-import { getAvailableStock } from "@/lib/stock"
-import { applyClearanceSegments, resolveRate, reverseClearanceSegments } from "@/lib/clearance"
+import { nextBillNumber, commitBill, settleTab, voidBill } from "@/lib/domains/billing/bill"
+import { todayDateString } from "@/lib/platform/dates"
+import { getAvailableStock } from "@/lib/domains/inventory/stock"
+import { applyClearanceSegments, resolveRate, reverseClearanceSegments } from "@/lib/domains/inventory/clearance"
 
 type CounterBackedTx = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,24 +1,24 @@
 import { BillStatus, PaymentMode, Prisma } from "@prisma/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/dates", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/dates")>("@/lib/dates")
+vi.mock("@/lib/platform/dates", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/platform/dates")>("@/lib/platform/dates")
   return {
     ...actual,
     todayDateString: vi.fn(() => "2026-04-25"),
   }
 })
 
-vi.mock("@/lib/stock", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/stock")>("@/lib/stock")
+vi.mock("@/lib/domains/inventory/stock", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domains/inventory/stock")>("@/lib/domains/inventory/stock")
   return {
     ...actual,
     getAvailableStock: vi.fn(),
   }
 })
 
-import { commitBill, openTab, settleTab, voidBill } from "@/lib/bill"
-import { getAvailableStock, type PrismaTransactionClient } from "@/lib/stock"
+import { commitBill, openTab, settleTab, voidBill } from "@/lib/domains/billing/bill"
+import { getAvailableStock, type PrismaTransactionClient } from "@/lib/domains/inventory/stock"
 
 type FakeState = {
   settings: Map<string, string>

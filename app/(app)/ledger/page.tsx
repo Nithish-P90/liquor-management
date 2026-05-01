@@ -32,7 +32,10 @@ export default function LedgerPage(): JSX.Element {
     }
   }, [])
 
-  useEffect(() => { fetch_(view, from, to) }, [view, from, to, fetch_])
+  useEffect(() => {
+    setData(null)
+    fetch_(view, from, to)
+  }, [view, from, to, fetch_])
 
   const VIEWS: { key: View; label: string }[] = [
     { key: "summary", label: "Summary" },
@@ -92,15 +95,15 @@ function LedgerView({ view, data }: { view: View; data: unknown }): JSX.Element 
   if (!data) return <p className="text-sm text-slate-400">No data.</p>
 
   if (view === "summary") {
-    const d = data as { billCount: number; grossTotal: string; discountTotal: string; netCollectible: string; byMode: Record<string, string> }
+    const d = data as { billCount: number; grossTotal: string; discountTotal: string; netCollectible: string; byMode?: Record<string, string> }
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
-          { label: "Bills", value: String(d.billCount) },
-          { label: "Gross Total", value: fmt(d.grossTotal) },
-          { label: "Discounts", value: fmt(d.discountTotal) },
-          { label: "Net Collected", value: fmt(d.netCollectible) },
-          ...Object.entries(d.byMode).map(([mode, amount]) => ({ label: mode, value: fmt(amount) })),
+          { label: "Bills", value: String(d.billCount ?? 0) },
+          { label: "Gross Total", value: fmt(d.grossTotal ?? 0) },
+          { label: "Discounts", value: fmt(d.discountTotal ?? 0) },
+          { label: "Net Collected", value: fmt(d.netCollectible ?? 0) },
+          ...Object.entries(d.byMode ?? {}).map(([mode, amount]) => ({ label: mode, value: fmt(amount) })),
         ].map((card) => (
           <div key={card.label} className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs text-slate-400">{card.label}</p>

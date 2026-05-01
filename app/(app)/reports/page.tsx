@@ -97,6 +97,7 @@ export default function ReportsPage(): JSX.Element {
   async function runReport(): Promise<void> {
     setLoading(true)
     setError("")
+    setRows([])
     try {
       const res = await fetch(report.apiPath(from, to))
       const data = await res.json()

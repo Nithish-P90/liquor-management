@@ -35,6 +35,7 @@ The machine-readable ownership map lives in `lib/domain-modules.ts`.
 ## API Ownership
 
 The API registry lives in `lib/api/routes.ts`, and the readable route map lives in `docs/api-routes.md`.
+Shared API handler helpers live in `lib/api/handler.ts`.
 
 Every route must document:
 
@@ -54,6 +55,8 @@ Use staged refactors:
 3. Change one route or action to call that function.
 4. Update route and file indexes.
 5. Run focused checks.
+
+For exact recipes, use `docs/development-playbook.md`.
 
 Avoid changing UI, API contracts, Prisma schema, and domain behavior in the same patch unless the feature cannot work otherwise.
 
@@ -77,9 +80,10 @@ Treat these as high-risk and test them carefully:
 Before coding:
 
 1. Read `AGENTS.md`.
-2. Read the relevant docs for the touched area.
-3. Search for the existing pattern with `rg`.
-4. Identify whether the change is UI, route, domain behavior, or schema.
+2. Read `AGENT.md` or `agent.md` if your runtime resolves those names.
+3. Read the relevant docs for the touched area.
+4. Search for the existing pattern with `rg`.
+5. Identify whether the change is UI, route, domain behavior, or schema.
 
 Before finishing:
 

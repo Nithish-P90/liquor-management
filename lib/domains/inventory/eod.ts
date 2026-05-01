@@ -1,10 +1,10 @@
 import { BillStatus, GallaEventType, PaymentMode, Prisma } from "@prisma/client"
 
-import { parseDateParam, todayDateString } from "@/lib/dates"
-import { getOrCreateGallaDay } from "@/lib/galla"
-import { prisma } from "@/lib/prisma"
-import { calculateStock } from "@/lib/stock"
-import { DateString } from "@/lib/types"
+import { parseDateParam, todayDateString } from "@/lib/platform/dates"
+import { getOrCreateGallaDay } from "@/lib/domains/cash/galla"
+import { prisma } from "@/lib/platform/prisma"
+import { calculateStock } from "@/lib/domains/inventory/stock"
+import { DateString } from "@/lib/platform/types"
 
 export async function runEndOfDay(businessDate: DateString = todayDateString()): Promise<{
   forcedTabs: number

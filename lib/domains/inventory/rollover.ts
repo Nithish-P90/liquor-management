@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma"
-import { calculateStock, splitStock } from "@/lib/stock"
-import { addDays, parseDateParam, subtractDays, todayDateString } from "@/lib/dates"
+import { prisma } from "@/lib/platform/prisma"
+import { calculateStock, splitStock } from "@/lib/domains/inventory/stock"
+import { addDays, parseDateParam, subtractDays, todayDateString } from "@/lib/platform/dates"
 
 export type RolloverStatus = "up_to_date" | "rolled_over" | "no_history"
 

@@ -47,15 +47,21 @@ const zTab = z.object({
 
 type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string }
 
-async function getOperatorId(): Promise<number | null> {
+async function getOperatorId(): Promise<number | null | "fallback"> {
   const session = await getServerSession(authOptions)
-  return session?.user?.id ? parseInt(session.user.id, 10) : null
+  if (!session?.user?.id) return null
+  if (session.user.id === "fallback-admin") return "fallback"
+  const id = parseInt(session.user.id, 10)
+  return isNaN(id) ? null : id
 }
 
 export async function posCommit(
   raw: unknown,
 ): Promise<ActionResult<{ billId: number; billNumber: string }>> {
   const operatorId = await getOperatorId()
+  if (operatorId === "fallback") {
+    return { ok: false, error: "Emergency Admin cannot bill. Please log in with a real Staff PIN." }
+  }
   if (!operatorId) return { ok: false, error: "Unauthorized" }
 
   const parsed = zCommit.safeParse(raw)
@@ -79,6 +85,9 @@ export async function posOpenTab(
   raw: unknown,
 ): Promise<ActionResult<{ billId: number; billNumber: string }>> {
   const operatorId = await getOperatorId()
+  if (operatorId === "fallback") {
+    return { ok: false, error: "Emergency Admin cannot bill. Please log in with a real Staff PIN." }
+  }
   if (!operatorId) return { ok: false, error: "Unauthorized" }
 
   const parsed = zTab.safeParse(raw)
@@ -103,6 +112,9 @@ export async function posSettleTab(
   payments: Array<{ mode: string; amount: number; reference?: string }>,
 ): Promise<ActionResult> {
   const operatorId = await getOperatorId()
+  if (operatorId === "fallback") {
+    return { ok: false, error: "Emergency Admin cannot bill. Please log in with a real Staff PIN." }
+  }
   if (!operatorId) return { ok: false, error: "Unauthorized" }
 
   const parsed = z.array(zPayment).safeParse(payments)
@@ -120,6 +132,9 @@ export async function posSettleTab(
 
 export async function posVoid(billId: number, reason: string): Promise<ActionResult> {
   const operatorId = await getOperatorId()
+  if (operatorId === "fallback") {
+    return { ok: false, error: "Emergency Admin cannot bill. Please log in with a real Staff PIN." }
+  }
   if (!operatorId) return { ok: false, error: "Unauthorized" }
 
   if (!reason.trim()) return { ok: false, error: "Void reason required" }

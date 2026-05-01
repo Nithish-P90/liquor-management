@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { DateString, isDateString } from "@/lib/types"
+import { DateString, isDateString } from "@/lib/platform/types"
 
 export const zDateString: z.ZodType<DateString, z.ZodTypeDef, string> = z
   .string()

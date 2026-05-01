@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma"
-import { calculateStock } from "@/lib/stock"
-import { parseDateParam } from "@/lib/dates"
-import { DateString } from "@/lib/types"
+import { prisma } from "@/lib/platform/prisma"
+import { calculateStock } from "@/lib/domains/inventory/stock"
+import { parseDateParam } from "@/lib/platform/dates"
+import { DateString } from "@/lib/platform/types"
 
 export type ReconciliationResult = {
   productSizeId: number

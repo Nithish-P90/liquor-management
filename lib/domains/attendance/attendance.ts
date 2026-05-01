@@ -1,6 +1,6 @@
 import { AttendanceEventType, AttendanceMethod } from "@prisma/client"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/platform/prisma"
 
 export type PunchResult = {
   eventType: AttendanceEventType

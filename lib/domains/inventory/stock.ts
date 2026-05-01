@@ -1,7 +1,7 @@
 import { AdjustmentType, Prisma } from "@prisma/client"
 
-import { parseDateParam } from "@/lib/dates"
-import { DateString } from "@/lib/types"
+import { parseDateParam } from "@/lib/platform/dates"
+import { DateString } from "@/lib/platform/types"
 
 export type PrismaTransactionClient = Prisma.TransactionClient
 

@@ -7,6 +7,9 @@ This index is a development reliability tool. Keep it current when files are add
 | File | Purpose |
 | --- | --- |
 | `AGENTS.md` | Mandatory house rules for agents and contributors. |
+| `AGENT.md` | Alias entry-point for agent runtimes that look for singular naming. |
+| `agent.md` | Lowercase alias entry-point for agent runtimes with case-sensitive conventions. |
+| `COLLAB_TASKS.md` | Shared task-claim board for multi-contributor conflict avoidance. |
 | `README.md` | Project overview, setup, deployment, and links to verification docs. |
 | `package.json` | Scripts, dependencies, Node engine, and Prisma seed command. |
 | `package-lock.json` | Locked npm dependency graph. |
@@ -72,11 +75,17 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 
 | File | Purpose |
 | --- | --- |
+| `.github/workflows/ci-and-deploy.yml` | CI gate for install, Prisma generation, lint, typecheck, tests, and build. |
+| `.github/workflows/rollover-schedule.yml` | Scheduled workflow that triggers the production rollover endpoint. |
+| `.github/pull_request_template.md` | PR contract checklist for ownership, writable paths, validation, and rollback. |
+| `lib/api/handler.ts` | Shared API helpers for auth policy checks, query/body parsing, success responses, and error boundaries. |
 | `lib/api/routes.ts` | API route registry and route metadata source of truth. |
 | `lib/domain-modules.ts` | Domain behavior ownership map and facade index. |
 | `lib/domains/auth/auth.ts` | NextAuth credentials provider and session configuration. |
 | `lib/domains/auth/api-auth.ts` | API route authorization helpers. |
+| `lib/domains/auth/types.ts` | Auth domain type exports. |
 | `lib/domains/billing/bill.ts` | Bill creation, settlement, void, split accounting, and stock deduction behavior. |
+| `lib/domains/billing/types.ts` | Billing domain type exports. |
 | `lib/domains/inventory/stock.ts` | Stock movement and lot behavior. |
 | `lib/domains/inventory/reconciliation.ts` | Inventory reconciliation behavior. |
 | `lib/domains/inventory/rollover.ts` | Daily stock rollover behavior. |
@@ -88,11 +97,17 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | `lib/domains/inventory/alerts.ts` | Alert creation and notification behavior. |
 | `lib/domains/inventory/clearance.ts` | Clearance batch behavior. |
 | `lib/domains/inventory/physical-count.ts` | Physical count session and approval behavior. |
+| `lib/domains/inventory/types.ts` | Inventory domain type exports. |
 | `lib/domains/indents/ksbcl-parser.ts` | KSBCL file parsing behavior. |
 | `lib/domains/indents/ksbcl-match.ts` | KSBCL item matching behavior. |
 | `lib/domains/indents/receipts.ts` | Supplier receipt posting behavior. |
+| `lib/domains/indents/types.ts` | Indent domain type exports. |
 | `lib/domains/catalog/product-import.ts` | Product workbook import behavior. |
 | `lib/domains/catalog/infer-category.ts` | Product category inference helper. |
+| `lib/domains/catalog/types.ts` | Catalog domain type exports. |
+| `lib/domains/cash/types.ts` | Cash and ledger domain type exports. |
+| `lib/domains/attendance/types.ts` | Attendance domain type exports. |
+| `lib/platform/index.ts` | Shared platform barrel for dates, Prisma, types, and validation exports. |
 | `lib/platform/dates.ts` | Date parsing and business date helpers. |
 | `lib/platform/prisma.ts` | Shared Prisma client. |
 | `lib/platform/types.ts` | Shared branded and domain types. |
@@ -104,6 +119,7 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | File | Purpose |
 | --- | --- |
 | `lib/api/routes.test.ts` | Ensures every API route file and HTTP method is registered. |
+| `lib/api/handler.test.ts` | Unit coverage for shared API handler helpers. |
 | `lib/domain-modules.test.ts` | Ensures every production `lib` module has one domain owner. |
 | `lib/domains/billing/bill.test.ts` | Unit coverage for billing behavior. |
 | `lib/domains/billing/bill.e2e.test.ts` | End-to-end style billing behavior coverage with mocked persistence. |
@@ -119,12 +135,15 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | `prisma/migrations/20260501000000_init/migration.sql` | Initial database migration. |
 | `scripts/migrate-deploy-with-retry.sh` | Render migration retry helper. |
 | `scripts/setup-face-models.ts` | Face model setup helper. |
+| `scripts/collab-check.ts` | Guardrail script that fails risky cross-domain or facade edits in a single change. |
 
 ## Docs
 
 | File | Purpose |
 | --- | --- |
 | `docs/development-architecture.md` | Development architecture, dependency direction, and behavior ownership rules. |
+| `docs/development-playbook.md` | Step-by-step recipes for adding routes, domain behavior, pages, Prisma changes, and high-risk changes. |
+| `docs/collaboration-protocol.md` | Team workflow for branch scope, task claims, write boundaries, and merge gates. |
 | `docs/api-routes.md` | Human-readable API route map. |
 | `docs/architecture-checkpoint.md` | Foundation refactor rationale and baseline contract. |
 | `docs/file-index.md` | This file index. |

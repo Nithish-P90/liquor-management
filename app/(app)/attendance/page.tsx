@@ -84,7 +84,8 @@ export default function AttendancePage(): JSX.Element {
   async function fetchEvents(): Promise<void> {
     try {
       const res = await fetch("/api/attendance")
-      setEvents(await res.json())
+      const data = await res.json()
+      if (Array.isArray(data)) setEvents(data)
     } catch { /* silent */ }
   }
 

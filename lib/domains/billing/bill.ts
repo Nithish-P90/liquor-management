@@ -1,8 +1,8 @@
 import { AttributionType, BillStatus, PaymentMode, Prisma, ScanMethod } from "@prisma/client"
 
-import { parseDateParam, todayDateString } from "@/lib/dates"
-import { PrismaTransactionClient, getAvailableStock } from "@/lib/stock"
-import { applyClearanceSegments, reverseClearanceSegments, resolveRate } from "@/lib/clearance"
+import { parseDateParam, todayDateString } from "@/lib/platform/dates"
+import { PrismaTransactionClient, getAvailableStock } from "@/lib/domains/inventory/stock"
+import { applyClearanceSegments, reverseClearanceSegments, resolveRate } from "@/lib/domains/inventory/clearance"
 
 // ---------------------------------------------------------------------------
 // Types

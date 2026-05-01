@@ -1,5 +1,5 @@
-import { type ParsedIndentItem } from "@/lib/ksbcl-parser"
-import { prisma } from "@/lib/prisma"
+import { type ParsedIndentItem } from "@/lib/domains/indents/ksbcl-parser"
+import { prisma } from "@/lib/platform/prisma"
 
 export type MatchResult = {
   parsedItem: ParsedIndentItem

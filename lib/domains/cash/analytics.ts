@@ -1,6 +1,6 @@
 import { BillStatus, Prisma } from "@prisma/client"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/platform/prisma"
 
 const settledBillStatuses = [BillStatus.COMMITTED, BillStatus.TAB_SETTLED, BillStatus.TAB_FORCE_SETTLED]
 

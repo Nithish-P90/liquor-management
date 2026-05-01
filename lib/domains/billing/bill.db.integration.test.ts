@@ -1,7 +1,7 @@
 import { BillStatus, PaymentMode, Prisma, PrismaClient } from "@prisma/client"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { commitBill, nextBillNumber, openTab, settleTab, voidBill } from "@/lib/bill"
+import { commitBill, nextBillNumber, openTab, settleTab, voidBill } from "@/lib/domains/billing/bill"
 
 // This suite intentionally requires explicit opt-in:
 //   RUN_DB_TESTS=true npm test -- lib/bill.db.integration.test.ts

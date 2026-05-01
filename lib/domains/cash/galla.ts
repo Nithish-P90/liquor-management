@@ -1,6 +1,6 @@
 import { GallaEventType, Prisma } from "@prisma/client"
 
-import { PrismaTransactionClient } from "@/lib/stock"
+import { PrismaTransactionClient } from "@/lib/domains/inventory/stock"
 
 export async function getOrCreateGallaDay(
   tx: PrismaTransactionClient,

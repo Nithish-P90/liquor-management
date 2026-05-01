@@ -19,6 +19,8 @@ Read the full verification here:
 - `docs/requirements-verification.md`
 - `docs/api-routes.md`
 - `docs/development-architecture.md`
+- `docs/development-playbook.md`
+- `docs/collaboration-protocol.md`
 - `docs/file-index.md`
 - `docs/architecture-checkpoint.md`
 

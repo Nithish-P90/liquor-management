@@ -40,7 +40,8 @@ export default function ClearancePage(): JSX.Element {
     setLoading(true)
     try {
       const res = await fetch("/api/clearance")
-      setBatches(await res.json())
+      const data = await res.json()
+      if (Array.isArray(data)) setBatches(data)
     } finally {
       setLoading(false)
     }

@@ -1,6 +1,6 @@
 import { ClearanceStatus, Prisma } from "@prisma/client"
 
-import { PrismaTransactionClient } from "@/lib/stock"
+import { PrismaTransactionClient } from "@/lib/domains/inventory/stock"
 
 export type RateSegment = {
   rate: Prisma.Decimal

@@ -9,12 +9,36 @@ export async function GET(): Promise<Response> {
   if (authResult instanceof Response) return authResult
 
   try {
+    // Sync: Ensure all active staff suppliers have a clerk record
+    const [activeSuppliers, existingClerks] = await Promise.all([
+      prisma.staff.findMany({
+        where: { role: "SUPPLIER", active: true },
+        select: { name: true },
+      }),
+      prisma.clerk.findMany({
+        where: { isActive: true },
+        select: { name: true },
+      }),
+    ])
+
+    const existingNames = new Set(existingClerks.map((c) => c.name.toLowerCase()))
+    const missing = activeSuppliers.filter((s) => !existingNames.has(s.name.toLowerCase()))
+
+    if (missing.length > 0) {
+      // Use createMany if possible, but manual check is safer for duplicates without unique constraint
+      // However, we already filtered 'missing' above.
+      await prisma.clerk.createMany({
+        data: missing.map((s) => ({ name: s.name })),
+      })
+    }
+
     const clerks = await prisma.clerk.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     })
     return Response.json(clerks)
-  } catch {
+  } catch (err) {
+    console.error("Clerks sync error:", err)
     return apiError("Database error", 500)
   }
 }

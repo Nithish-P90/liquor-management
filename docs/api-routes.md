@@ -5,8 +5,9 @@ This project uses [lib/api/routes.ts](/Users/nithishp/Mahavishnu%20liquor%20mana
 When adding or changing an API route:
 
 1. Update the route handler in `app/api/**/route.ts`.
-2. Update the matching entry in `lib/api/routes.ts`.
-3. Run `npm test -- lib/api/routes.test.ts`.
+2. Use `lib/api/handler.ts` helpers for auth, query/body parsing, and error boundaries when practical.
+3. Update the matching entry in `lib/api/routes.ts`.
+4. Run `npm test -- lib/api/routes.test.ts`.
 
 The registry test fails when a route file, path, or HTTP method drifts from the documented contract.
 
@@ -30,6 +31,7 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/pos/map-barcode` | `POST` | `session` | `pos` | high | Maps an unknown barcode to an existing liquor size or misc item. |
 | `/api/pos/open-tabs` | `GET` | `session` | `pos` | medium | Lists pending open customer tabs that can be resumed or settled. |
 | `/api/pos/recent-bills` | `GET` | `session` | `pos` | medium | Lists recent bills for reprint, review, or void workflows. |
+| `/api/settings` | `GET`, `POST` | `session` | `pos` | medium | Returns or updates global system settings and operational thresholds. |
 | `/api/indents` | `GET` | `admin` | `indents` | medium | Lists recent supplier indents with items and receipt references. |
 | `/api/indents/[id]` | `GET` | `admin` | `indents` | medium | Returns one indent with parsed items, mappings, and receipt details. |
 | `/api/indents/parse` | `POST` | `admin` | `indents` | high | Parses an uploaded KSBCL indent file into an indent and line items. |
@@ -44,7 +46,7 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/attendance/punch` | `POST` | `session` | `attendance` | high | Records staff check-in or check-out events from manual or face-matched flows. |
 | `/api/face/enroll` | `POST` | `admin` | `attendance` | high | Stores face descriptor samples for a staff member. |
 | `/api/face/profiles` | `GET` | `session` | `attendance` | high | Returns enrolled face descriptors for local browser-side matching. |
-| `/api/staff` | `GET` | `session` | `staff` | medium | Lists active staff with role and face enrollment status. |
+| `/api/staff` | `GET`, `POST` | `session` | `staff` | medium | Lists active staff with role and face enrollment status, or creates a new staff member. |
 | `/api/clerks` | `GET`, `POST` | `session` | `staff` | medium | Lists active clerks or creates a new clerk for POS attribution. |
 | `/api/notifications` | `GET` | `session` | `notifications` | medium | Lists active user-visible notifications and operational alerts. |
 | `/api/notifications/[id]/dismiss` | `POST` | `session` | `notifications` | low | Dismisses a notification for the current workflow. |
@@ -54,6 +56,6 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 ## Reliability Rules
 
 - High-risk routes touch money, stock, authentication, biometric data, or day-close state. Add or update focused tests before changing them.
-- Keep route handlers thin. Validation can live in the route, but business behavior should live in `lib/*` domain modules.
+- Keep route handlers thin. Validation can live in the route, but business behavior should live in `lib/domains/*` modules.
 - Every API response shape used by UI pages should be represented by a named type near the consuming module or in a shared domain file.
 - Any new route must have an owner, risk level, auth policy, reads list, writes list, and summary in the registry.
