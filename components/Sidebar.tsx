@@ -4,8 +4,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 
-import { Button } from "@/components/ui/Button"
-
 type AppRole = "ADMIN" | "CASHIER"
 
 type SidebarProps = {
@@ -43,21 +41,23 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
   const items = NAV_ITEMS.filter((item) => (item.adminOnly ? role === "ADMIN" : true))
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-slate-800 bg-slate-950">
-      <div className="border-b border-slate-800 px-5 py-4">
-        <p className="text-sm text-slate-400">Mahavishnu Liquor Manager</p>
-        <h1 className="text-lg font-semibold text-slate-100">Operations Console</h1>
+    <aside id="app-sidebar" className="flex h-screen w-64 flex-col border-r border-slate-200 bg-white">
+      <div className="px-6 py-10">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Operations Console</p>
+        <h1 className="mt-1 text-xl font-black tracking-tight text-slate-900 border-b-2 border-slate-900 pb-2 inline-block">MAHAVISHNU</h1>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`block rounded-md px-3 py-2 text-sm transition ${
-                active ? "bg-emerald-500/20 text-emerald-300" : "text-slate-300 hover:bg-slate-900 hover:text-slate-100"
+              className={`flex items-center rounded-lg px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition ${
+                active 
+                ? "bg-slate-900 text-white" 
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               {item.label}
@@ -66,14 +66,23 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
         })}
       </nav>
 
-      <div className="border-t border-slate-800 p-4">
-        <div className="rounded-md border border-slate-800 bg-slate-900 p-3">
-          <p className="text-sm text-slate-200">{name}</p>
-          <p className="text-xs uppercase tracking-wide text-amber-400">{role}</p>
+      <div className="border-t border-slate-100 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-900">
+            {name.charAt(0)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-bold text-slate-900 uppercase">{name}</p>
+            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{role}</p>
+          </div>
         </div>
-        <Button type="button" variant="secondary" className="mt-3 w-full" onClick={() => signOut({ callbackUrl: "/login" })}>
+        <button 
+          type="button" 
+          className="w-full rounded-lg border border-slate-200 bg-white py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 transition hover:border-slate-900 hover:text-slate-900 active:scale-95"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+        >
           Sign Out
-        </Button>
+        </button>
       </div>
     </aside>
   )

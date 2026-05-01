@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BillStatus, PaymentMode, Prisma } from "@prisma/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -29,6 +30,7 @@ import { getAvailableStock } from "@/lib/stock"
 import { applyClearanceSegments, resolveRate, reverseClearanceSegments } from "@/lib/clearance"
 
 type CounterBackedTx = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any
   counters: Map<string, number>
 }
@@ -75,6 +77,7 @@ function createCounterBackedTx(initialCounters: Record<string, number> = {}): Co
 }
 
 function createCommitTx(counterStart = 0): {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any
   createdLines: Array<Record<string, unknown>>
   billCreate: ReturnType<typeof vi.fn>

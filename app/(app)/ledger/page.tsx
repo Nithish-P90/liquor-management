@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
 
 type View = "summary" | "bills" | "voids" | "expenses" | "top-sellers" | "clerks" | "audit"

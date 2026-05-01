@@ -113,7 +113,7 @@ export default function CashClosePage(): JSX.Element {
             {/* Events */}
             <div className="rounded-lg border border-slate-800 bg-slate-900/60">
               <div className="border-b border-slate-800 px-4 py-3">
-                <h3 className="text-sm font-semibold text-slate-200">Today's Events</h3>
+                <h3 className="text-sm font-semibold text-slate-200">Today&apos;s Events</h3>
               </div>
               {gallaDay.events.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-slate-500">No events recorded yet.</p>

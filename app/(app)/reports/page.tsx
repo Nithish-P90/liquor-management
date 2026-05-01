@@ -1,14 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
 
 function today(): string { return new Date().toISOString().slice(0, 10) }
 function sevenDaysAgo(): string { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10) }
-function monthStart(): string { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10) }
 
 type ReportConfig = {
   title: string
@@ -192,7 +190,7 @@ export default function ReportsPage(): JSX.Element {
           </table>
         </div>
       ) : (
-        <p className="text-sm text-slate-500">Select a report and click "Run Report".</p>
+        <p className="text-sm text-slate-500">Select a report and click &quot;Run Report&quot;.</p>
       )}
     </PageShell>
   )

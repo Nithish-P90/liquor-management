@@ -2,7 +2,7 @@ import { requireSession } from "@/lib/api-auth"
 import { listActiveAlerts } from "@/lib/alerts"
 import { apiError } from "@/lib/zod-schemas"
 
-export async function GET(_req: Request): Promise<Response> {
+export async function GET(): Promise<Response> {
   const authResult = await requireSession()
   if (authResult instanceof Response) return authResult
 

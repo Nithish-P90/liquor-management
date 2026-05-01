@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
@@ -32,7 +32,7 @@ export default function ExpensesPage(): JSX.Element {
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function fetchAll(): Promise<void> {
+  const fetchAll = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const [expRes, catRes] = await Promise.all([
@@ -44,9 +44,9 @@ export default function ExpensesPage(): JSX.Element {
     } finally {
       setLoading(false)
     }
-  }
+  }, [from, to])
 
-  useEffect(() => { fetchAll() }, [from, to])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
   async function handleAdd(): Promise<void> {
     const res = await fetch("/api/expenses", {

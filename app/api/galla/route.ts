@@ -1,9 +1,9 @@
 import { requireSession } from "@/lib/api-auth"
 import { prisma } from "@/lib/prisma"
 import { computeGallaBalance } from "@/lib/galla"
-import { todayDateString } from "@/lib/dates"
-import { parseDateParam } from "@/lib/dates"
+import { todayDateString, parseDateParam } from "@/lib/dates"
 import { apiError } from "@/lib/zod-schemas"
+import type { PrismaTransactionClient } from "@/lib/stock"
 
 export async function GET(req: Request): Promise<Response> {
   const authResult = await requireSession()
@@ -23,7 +23,7 @@ export async function GET(req: Request): Promise<Response> {
       return Response.json({ date: dateStr, balance: "0.00", events: [], isClosed: false })
     }
 
-    const balance = await computeGallaBalance(prisma as any, day.id)
+    const balance = await computeGallaBalance(prisma as unknown as PrismaTransactionClient, day.id)
     return Response.json({ ...day, balance: balance.toString() })
   } catch {
     return apiError("Database error", 500)

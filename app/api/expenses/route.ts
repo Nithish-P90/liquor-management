@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { requireAdmin, requireSession } from "@/lib/api-auth"
+import { requireSession } from "@/lib/api-auth"
 import { prisma } from "@/lib/prisma"
 import { apiError, zDateString } from "@/lib/zod-schemas"
 import { parseDateParam } from "@/lib/dates"

@@ -20,7 +20,7 @@ export default async function AppLayout({ children }: AppLayoutProps): Promise<J
   void ensureDailyRollover().catch(() => undefined)
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[#f8fafc]">
       <Sidebar name={session.user.name ?? "Staff"} role={session.user.role} />
       <div className="flex-1 overflow-x-hidden">{children}</div>
     </div>

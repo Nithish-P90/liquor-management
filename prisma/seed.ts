@@ -56,12 +56,24 @@ async function importFromWorkbook(workbookPath: string): Promise<void> {
     return
   }
 
-  const result = await prisma.$transaction((tx) => upsertProductRows(tx, rows))
-  console.log(`Imported products. Created size rows: ${result.created}, Updated size rows: ${result.updated}, Errors: ${result.errors.length}`)
+  const batchSize = 200
+  let created = 0
+  let updated = 0
+  const errors: Array<{ row: number; error: string }> = []
 
-  if (result.errors.length > 0) {
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize)
+    const result = await upsertProductRows(prisma, batch)
+    created += result.created
+    updated += result.updated
+    errors.push(...result.errors.map((err) => ({ row: err.row + i, error: err.error })))
+  }
+
+  console.log(`Imported products. Created size rows: ${created}, Updated size rows: ${updated}, Errors: ${errors.length}`)
+
+  if (errors.length > 0) {
     console.log("First 10 import errors:")
-    for (const err of result.errors.slice(0, 10)) {
+    for (const err of errors.slice(0, 10)) {
       console.log(`  row ${err.row}: ${err.error}`)
     }
   }

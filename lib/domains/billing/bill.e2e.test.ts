@@ -18,7 +18,7 @@ vi.mock("@/lib/stock", async () => {
 })
 
 import { commitBill, openTab, settleTab, voidBill } from "@/lib/bill"
-import { getAvailableStock } from "@/lib/stock"
+import { getAvailableStock, type PrismaTransactionClient } from "@/lib/stock"
 
 type FakeState = {
   settings: Map<string, string>
@@ -37,7 +37,7 @@ function sqlKey(sqlArg: unknown): string {
   return String(values[0])
 }
 
-function createFakeTx(): { tx: any; state: FakeState } {
+function createFakeTx() {
   const state: FakeState = {
     settings: new Map<string, string>(),
     bills: [],
@@ -240,7 +240,7 @@ function createFakeTx(): { tx: any; state: FakeState } {
     },
   }
 
-  return { tx, state }
+  return { tx: tx as unknown as PrismaTransactionClient, state }
 }
 
 beforeEach(() => {

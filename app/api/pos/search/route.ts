@@ -20,7 +20,11 @@ export async function GET(req: Request): Promise<Response> {
   const { q, limit } = parsed.data
 
   try {
-    const sizes = await prisma.productSize.findMany({
+    const sizeLimit = Math.min(limit, 20)
+    const miscLimit = Math.min(limit, 20)
+
+    const [sizes, miscItems] = await Promise.all([
+      prisma.productSize.findMany({
       where: {
         OR: [
           { product: { name: { contains: q, mode: "insensitive" } } },
@@ -32,11 +36,29 @@ export async function GET(req: Request): Promise<Response> {
       include: {
         product: { select: { name: true, category: true, itemCode: true } },
       },
-      take: limit,
+      take: sizeLimit,
       orderBy: [{ product: { name: "asc" } }, { sizeMl: "desc" }],
-    })
+    }),
+      prisma.miscItem.findMany({
+        where: {
+          active: true,
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { barcode: { contains: q } },
+          ],
+        },
+        select: { id: true, name: true, unit: true, price: true, category: true, barcode: true },
+        take: miscLimit,
+        orderBy: [{ name: "asc" }],
+      }),
+    ])
 
-    return Response.json(sizes)
+    const combined = [
+      ...sizes.map((s) => ({ kind: "LIQUOR" as const, item: s })),
+      ...miscItems.map((m) => ({ kind: "MISC" as const, item: m })),
+    ]
+
+    return Response.json(combined.slice(0, limit))
   } catch {
     return apiError("Database error", 500)
   }

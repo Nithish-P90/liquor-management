@@ -786,12 +786,16 @@ model AttendanceEvent {
   eventType        AttendanceEventType
   method           AttendanceMethod
   occurredAt       DateTime            @default(now())
+  requestId        String?             @unique
   confidenceScore  Float?
   isLate           Boolean             @default(false)
   isEarlyDeparture Boolean             @default(false)
   shiftStart       DateTime?
   shiftEnd         DateTime?
   overrideReason   String?
+  deviceLabel      String?
+  ipAddress        String?
+  userAgent        String?
 
   @@index([staffId])
   @@index([occurredAt])

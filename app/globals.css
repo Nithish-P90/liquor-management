@@ -3,16 +3,19 @@
 @tailwind utilities;
 
 :root {
-  --background: #020617;
-  --foreground: #e2e8f0;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
 }
 
 body {
-  background: radial-gradient(circle at 10% 10%, #0f172a 0%, #020617 60%);
+  background: radial-gradient(circle at 10% 10%, #ffffff 0%, #f8fafc 55%, #eef2ff 100%);
   color: var(--foreground);
   font-family: var(--font-source-sans), sans-serif;
 }
 
 * {
-  border-color: rgb(51 65 85 / 1);
+  border-color: var(--border);
 }

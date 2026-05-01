@@ -17,6 +17,10 @@ The current repo has been verified against the bar's all-in-one operating model:
 Read the full verification here:
 
 - `docs/requirements-verification.md`
+- `docs/api-routes.md`
+- `docs/development-architecture.md`
+- `docs/file-index.md`
+- `docs/architecture-checkpoint.md`
 
 Current status:
 

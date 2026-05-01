@@ -21,7 +21,7 @@ export default function RootLayout({
 }>): JSX.Element {
   return (
     <html lang="en">
-      <body className={`${sourceSans.variable} bg-slate-950 text-slate-100 antialiased`}>{children}</body>
+      <body className={`${sourceSans.variable} bg-slate-50 text-slate-900 antialiased`}>{children}</body>
     </html>
   )
 }
