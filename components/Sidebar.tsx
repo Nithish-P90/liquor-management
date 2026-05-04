@@ -79,7 +79,7 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
         </div>
       </div>
 
-      <nav className={`flex-1 space-y-2 overflow-y-auto px-4 py-4 no-scrollbar`}>
+      <nav className={`flex-1 space-y-0.5 overflow-y-auto px-2 py-2 no-scrollbar`}>
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
           return (
