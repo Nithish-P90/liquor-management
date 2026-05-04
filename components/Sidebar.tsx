@@ -62,40 +62,44 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
   const items = NAV_ITEMS.filter((item) => (item.adminOnly ? role === "ADMIN" : true))
 
   return (
-    <aside 
-      id="app-sidebar" 
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`relative flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "w-18" : "w-60 shadow-2xl z-[100]"}`}
-    >
-      <div className={`px-4 py-6 transition-all duration-500 ${collapsed ? "items-center px-2" : ""}`}>
-        <div className={`flex flex-col ${collapsed ? "items-center" : ""}`}>
-          <p className={`text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 transition-all duration-500 ${collapsed ? "opacity-0 -translate-y-2 h-0" : "opacity-100 mb-2 translate-y-0"}`}>
-            Operations Console
-          </p>
-          <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-700 ${collapsed ? "text-sm pb-1" : "text-2xl pb-1.5"}`}>
-            {collapsed ? "MV" : "MAHAVISHNU"}
-          </h1>
+    <>
+      {/* Spacer to prevent content shift */}
+      <div className="w-24 shrink-0" />
+      
+      <aside 
+        id="app-sidebar" 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`fixed left-0 top-0 z-[100] flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${collapsed ? "w-24" : "w-80 shadow-[0_0_50px_rgba(0,0,0,0.1)]"}`}
+      >
+        <div className={`px-6 py-12 transition-all duration-500 ${collapsed ? "flex justify-center px-0" : ""}`}>
+          <div className={`flex flex-col ${collapsed ? "items-center" : ""}`}>
+            <p className={`text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 transition-all duration-500 ${collapsed ? "opacity-0 -translate-y-2 h-0" : "opacity-100 mb-2 translate-y-0"}`}>
+              Operations Console
+            </p>
+            <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-700 ${collapsed ? "text-sm pb-1" : "text-3xl pb-2"}`}>
+              {collapsed ? "MV" : "MAHAVISHNU"}
+            </h1>
+          </div>
         </div>
-      </div>
 
       <nav className={`flex-1 space-y-1 overflow-y-auto px-2 py-2 no-scrollbar`}>
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+          const active = pathname === item.href
           return (
             <Link
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : ""}
-              className={`group flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all duration-300 active:scale-95 ${
-                active
-                ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
+              className={`group flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all duration-300 active:scale-95 ${
+                active 
+                ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20" 
                 : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-              } ${collapsed ? "justify-center px-0" : ""}`}
+              } ${collapsed ? "justify-center" : ""}`}
             >
-              <item.icon size={18} className={`shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-slate-400 group-hover:text-slate-900"}`} />
+              <item.icon size={22} className={`shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-slate-400 group-hover:text-slate-900"}`} />
               {!collapsed && (
-                <span className="text-xs font-black uppercase tracking-[0.22em] whitespace-nowrap overflow-hidden">
+                <span className="text-[11px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden animate-in fade-in slide-in-from-left-2">
                   {item.label}
                 </span>
               )}
@@ -127,5 +131,6 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
         </button>
       </div>
     </aside>
+    </>
   )
 }
