@@ -248,106 +248,130 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             <table className="w-full min-w-[1100px] text-sm">
               <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
                 <tr>
-                  <th className="px-6 py-5 text-left">Article Profile</th>
-                  <th className="px-6 py-5 text-left">Identity Codes</th>
-                  <th className="px-6 py-5 text-right">MAGNITUDE</th>
-                  <th className="px-6 py-5 text-right">Audit Metrics</th>
-                  <th className="px-6 py-5 text-right">Live Inventory</th>
-                  {isAdmin && <th className="px-6 py-5 text-center">Manage</th>}
+                  <th className="px-10 py-5 text-left">Article Profile</th>
+                  <th className="px-10 py-5 text-left">Identity Codes</th>
+                  <th className="px-10 py-5 text-right">MAGNITUDE</th>
+                  <th className="px-10 py-5 text-right">Audit Metrics</th>
+                  <th className="px-10 py-5 text-right">Live Inventory</th>
+                  {isAdmin && <th className="px-10 py-5 text-center">Manage</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => {
-                  const isEditing = editRow?.productSizeId === row.productSizeId
-                  const isLow = row.totalBottles < row.bottlesPerCase && row.totalBottles >= 0
-                  const isOut = row.totalBottles <= 0
-
-                  return (
-                    <tr key={row.productSizeId} className={`group transition-colors border-b-2 border-slate-50 ${isOut ? "bg-rose-50/30" : isLow ? "bg-amber-50/30" : "hover:bg-slate-50"}`}>
-                      <td className="px-6 py-5">
-                        <p className="font-black text-slate-900 text-base tracking-tight">{row.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500 uppercase">{row.category}</span>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.sizeMl}ML</span>
+                {Object.entries(
+                  rows.reduce((acc, row) => {
+                    const cat = row.category || "UNCLASSIFIED"
+                    if (!acc[cat]) acc[cat] = []
+                    acc[cat].push(row)
+                    return acc
+                  }, {} as Record<string, StockRow[]>)
+                )
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([cat, catRows]) => (
+                  <React.Fragment key={cat}>
+                    <tr className="bg-slate-900 border-y-2 border-slate-900">
+                      <td colSpan={isAdmin ? 6 : 5} className="px-10 py-4">
+                        <div className="flex items-center gap-3">
+                          <Package size={14} className="text-emerald-400" />
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-white">
+                            {cat} <span className="ml-4 text-slate-500 font-bold opacity-50">— {catRows.length} ARTICLES</span>
+                          </h4>
                         </div>
                       </td>
-                      <td className="px-6 py-5">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KSBCL / UPC</p>
-                        <div className="flex flex-col gap-1">
-                          <code className="text-xs font-black text-slate-700">{row.ksbclItemCode ?? row.itemCode ?? "—"}</code>
-                          <code className="text-[10px] font-bold text-slate-400">{row.barcode ?? "—"}</code>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">MRP / PRICE</p>
-                        <p className="text-xs text-slate-400 line-through font-bold">{fmt(row.mrp)}</p>
-                        <p className="text-base font-black text-slate-900">{fmt(row.sellingPrice)}</p>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">OPEN / SOLD</p>
-                        <p className="text-sm font-black text-slate-700 tabular-nums">{row.openingBottles} <span className="text-slate-300 mx-1">/</span> <span className="text-rose-500">{row.soldBottles}</span></p>
-                      </td>
-
-                      {isEditing ? (
-                        <>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[8px] font-black text-slate-400 uppercase">Cases</label>
-                                <input
-                                  type="number" min="0" value={editCases}
-                                  onChange={(e) => setEditCases(e.target.value)}
-                                  className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
-                                  autoFocus
-                                />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[8px] font-black text-slate-400 uppercase">Btls</label>
-                                <input
-                                  type="number" min="0" value={editBottles}
-                                  onChange={(e) => setEditBottles(e.target.value)}
-                                  className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
-                                />
-                              </div>
-                              <div className="flex gap-1 ml-2">
-                                <button onClick={saveEdit} disabled={saving} className="rounded-xl bg-emerald-600 p-3 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-90 transition-all">
-                                  <Check size={18} />
-                                </button>
-                                <button onClick={() => setEditRow(null)} className="rounded-xl bg-slate-100 p-3 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all">
-                                  <X size={18} />
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-6 py-5 text-right">
-                            <div className="flex items-center justify-end gap-4">
-                              <div className="text-right">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CASES / EXTRA</p>
-                                <p className="text-sm font-black text-slate-700 tabular-nums">{row.cases}c <span className="text-slate-300">+</span> {row.bottles}b</p>
-                              </div>
-                              <div className="bg-slate-50 rounded-2xl px-6 py-4 border-2 border-slate-100 min-w-[120px]">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">TOTAL VOLUME</p>
-                                <p className={`text-2xl font-black text-center tabular-nums ${isOut ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-900"}`}>
-                                  {row.totalBottles}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          {isAdmin && (
-                            <td className="px-6 py-5 text-center">
-                              <button onClick={() => startEdit(row)} className="rounded-2xl border-2 border-slate-100 p-3.5 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm active:scale-95">
-                                <Pencil size={18} />
-                              </button>
-                            </td>
-                          )}
-                        </>
-                      )}
                     </tr>
-                  )
-                })}
+                    {catRows
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((row) => {
+                        const isEditing = editRow?.productSizeId === row.productSizeId
+                        const isLow = row.totalBottles < row.bottlesPerCase && row.totalBottles >= 0
+                        const isOut = row.totalBottles <= 0
+
+                        return (
+                          <tr key={row.productSizeId} className={`group transition-colors border-b-2 border-slate-50 ${isOut ? "bg-rose-50/30" : isLow ? "bg-amber-50/30" : "hover:bg-slate-50"}`}>
+                            <td className="px-10 py-6">
+                              <p className="font-black text-slate-900 text-base tracking-tight">{row.name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.sizeMl}ML</span>
+                              </div>
+                            </td>
+                            <td className="px-10 py-6">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KSBCL / UPC</p>
+                              <div className="flex flex-col gap-1">
+                                <code className="text-xs font-black text-slate-700">{row.ksbclItemCode ?? row.itemCode ?? "—"}</code>
+                                <code className="text-[10px] font-bold text-slate-400">{row.barcode ?? "—"}</code>
+                              </div>
+                            </td>
+                            <td className="px-10 py-6 text-right">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">MRP / PRICE</p>
+                              <p className="text-xs text-slate-400 line-through font-bold">{fmt(row.mrp)}</p>
+                              <p className="text-base font-black text-slate-900">{fmt(row.sellingPrice)}</p>
+                            </td>
+                            <td className="px-10 py-6 text-right">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">OPEN / SOLD</p>
+                              <p className="text-sm font-black text-slate-700 tabular-nums">{row.openingBottles} <span className="text-slate-300 mx-1">/</span> <span className="text-rose-500">{row.soldBottles}</span></p>
+                            </td>
+
+                            {isEditing ? (
+                              <>
+                                <td className="px-10 py-6">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[8px] font-black text-slate-400 uppercase">Cases</label>
+                                      <input
+                                        type="number" min="0" value={editCases}
+                                        onChange={(e) => setEditCases(e.target.value)}
+                                        className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
+                                        autoFocus
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[8px] font-black text-slate-400 uppercase">Btls</label>
+                                      <input
+                                        type="number" min="0" value={editBottles}
+                                        onChange={(e) => setEditBottles(e.target.value)}
+                                        className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
+                                      />
+                                    </div>
+                                    <div className="flex gap-1 ml-2">
+                                      <button onClick={saveEdit} disabled={saving} className="rounded-xl bg-emerald-600 p-3 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-90 transition-all">
+                                        <Check size={18} />
+                                      </button>
+                                      <button onClick={() => setEditRow(null)} className="rounded-xl bg-slate-100 p-3 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all">
+                                        <X size={18} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-10 py-6 text-right">
+                                  <div className="flex items-center justify-end gap-6">
+                                    <div className="text-right">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CASES / EXTRA</p>
+                                      <p className="text-sm font-black text-slate-700 tabular-nums">{row.cases}c <span className="text-slate-300">+</span> {row.bottles}b</p>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-2xl px-6 py-4 border-2 border-slate-100 min-w-[120px]">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">TOTAL VOLUME</p>
+                                      <p className={`text-2xl font-black text-center tabular-nums ${isOut ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-900"}`}>
+                                        {row.totalBottles}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                {isAdmin && (
+                                  <td className="px-10 py-6 text-center">
+                                    <button onClick={() => startEdit(row)} className="rounded-2xl border-2 border-slate-100 p-3.5 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm active:scale-95">
+                                      <Pencil size={18} />
+                                    </button>
+                                  </td>
+                                )}
+                              </>
+                            )}
+                          </tr>
+                        )
+                      })}
+                  </React.Fragment>
+                ))}
                 {!loading && rows.length === 0 && (
                   <tr>
                     <td colSpan={isAdmin ? 11 : 10} className="px-5 py-12 text-center text-sm text-slate-400">
