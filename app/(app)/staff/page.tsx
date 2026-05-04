@@ -286,7 +286,7 @@ export default function StaffPage(): JSX.Element {
             </tbody>
           </table>
         </div>
-      ) : null}
+      )}
 
       {editingId !== null && editForm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -433,7 +433,5 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 block px-1">{label}</label>
       {children}
     </div>
-  )
-}
   )
 }

@@ -242,8 +242,6 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     if (!summary) return <div>No data for this period.</div>
 
     return (
-      <div className="space-y-6">
-    return (
       <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
         {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -481,12 +479,13 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
 }
 
 function MetricCard({ title, value, icon: Icon, color = "text-slate-900", bg = "bg-white", accent = "slate" }: { title: string, value: string | number, icon: any, color?: string, bg?: string, accent?: string }) {
-  const accentColor = {
+  const accentMap = {
     emerald: "text-emerald-500",
     indigo: "text-indigo-500",
     red: "text-rose-500",
     slate: "text-slate-400",
-  }[accent as any] || "text-slate-400"
+  }
+  const accentColor = accentMap[accent as keyof typeof accentMap] || "text-slate-400"
 
   return (
     <div className={`rounded-3xl border-2 border-slate-50 ${bg} p-8 shadow-sm flex flex-col justify-between h-40 transition-all hover:shadow-xl hover:-translate-y-1`}>

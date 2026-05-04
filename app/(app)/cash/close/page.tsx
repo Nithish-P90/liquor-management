@@ -461,7 +461,7 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
       </div>
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Disbursement Magnitude</p>
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Disbursement Magnitude</label>
           <input
             type="number"
             min="0"
@@ -473,7 +473,7 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
           />
         </div>
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Audit Reference (Optional)</p>
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Audit Reference (Optional)</label>
           <input
             type="text"
             placeholder="Define identity..."
