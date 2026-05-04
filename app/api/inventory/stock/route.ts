@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import { prisma } from "@/lib/platform/prisma"
 import { requireApiAuth, parseQuery, jsonOk, apiError } from "@/lib/api/handler"
-import { calculateStock, splitStock, getStockSnapshot } from "@/lib/domains/inventory/stock"
+import { splitStock, getStockSnapshot } from "@/lib/domains/inventory/stock"
 
 const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(500).default(500),

@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { requireApiAuth, parseJsonBody, jsonOk, apiError, withApiError } from "@/lib/api/handler"
+import { requireApiAuth, parseJsonBody, jsonOk, withApiError } from "@/lib/api/handler"
 import { prisma } from "@/lib/platform/prisma"
 import { voidBill } from "@/lib/domains/billing/bill"
 

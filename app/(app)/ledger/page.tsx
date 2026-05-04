@@ -1,7 +1,8 @@
 "use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useCallback, useEffect, useState, useMemo } from "react"
-import { BarChart3, Calendar, Download, Receipt, TrendingUp, Users, Package, AlertCircle, FileText, ArrowUpRight, ArrowDownRight, CreditCard, Activity, Vault, ChevronDown, ChevronUp } from "lucide-react"
+import React, { useCallback, useEffect, useState, useMemo } from "react"
+import { BarChart3, Calendar, Download, Receipt, TrendingUp, Users, Package, AlertCircle, FileText, ArrowUpRight, Activity, Vault, ChevronDown, ChevronUp } from "lucide-react"
 
 type View = "overview" | "bills" | "voids" | "expenses" | "top-sellers" | "clerks" | "audit"
 
@@ -22,7 +23,7 @@ function fmt(v: string | number): string {
 
 function generateDateRange(start: string, end: string): string[] {
   const arr = []
-  let current = new Date(start)
+  const current = new Date(start)
   const last = new Date(end)
   // Prevent infinite loop if dates are backwards
   if (current > last) return []
@@ -226,6 +227,8 @@ function DailyAccordion({ date }: { date: string }) {
   )
 }
 
+type Row = any
+
 function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
   if (!data) return <div className="h-64 rounded-2xl border border-slate-200 bg-slate-50"></div>
 
@@ -269,7 +272,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><Users size={16}/> Clerk Performance</h3>
               <div className="space-y-4">
-                {clerks?.length > 0 ? clerks.map((c: any, i: number) => (
+                {clerks?.length > 0 ? clerks.map((c: Row, i: number) => (
                   <div key={i} className="flex justify-between items-center">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-slate-800">{c.clerkId ? `Clerk #${c.clerkId}` : "Counter"}</span>
@@ -288,7 +291,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col h-[300px]">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Package size={16}/> Top Sellers</h3>
                 <div className="overflow-y-auto flex-1 no-scrollbar pr-2">
-                  {sellers?.length > 0 ? sellers.map((s: any, i: number) => (
+                  {sellers?.length > 0 ? sellers.map((s: Row, i: number) => (
                     <div key={i} className="flex justify-between items-center mb-4 last:mb-0">
                       <div>
                         <p className="text-sm font-bold text-slate-800 line-clamp-1">{s.productSize?.product.name ?? "Unknown"}</p>
@@ -303,7 +306,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col h-[300px]">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><TrendingUp size={16}/> Top Expenses</h3>
                 <div className="overflow-y-auto flex-1 no-scrollbar pr-2">
-                  {expenses?.expenses?.length > 0 ? expenses.expenses.map((e: any) => (
+                  {expenses?.expenses?.length > 0 ? expenses.expenses.map((e: Row) => (
                     <div key={e.id} className="flex justify-between items-center mb-4 last:mb-0">
                       <div>
                         <p className="text-sm font-bold text-slate-800 line-clamp-1">{e.particulars}</p>
@@ -331,7 +334,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
-                     {bills?.map((b: any) => (
+                     {bills?.map((b: Row) => (
                        <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
                          <td className="px-6 py-4 text-xs font-bold text-slate-500">{new Date(b.billedAt).toLocaleTimeString("en-IN", {hour: '2-digit', minute:'2-digit'})}</td>
                          <td className="px-6 py-4 text-sm font-mono font-bold text-slate-800">{b.billNumber}</td>
@@ -358,7 +361,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     return (
       <DataTable 
         headers={["Bill No", "Time", "Operator", "Items", "Amount"]}
-        data={data as any[]}
+        data={data}
         renderRow={(b) => (
           <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
             <td className="px-6 py-4 text-sm font-mono font-bold text-slate-800">{b.billNumber}</td>
@@ -376,7 +379,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     return (
       <DataTable 
         headers={["Product", "Category", "Qty Sold", "Revenue"]}
-        data={data as any[]}
+        data={data}
         renderRow={(s, i) => (
           <tr key={i} className="hover:bg-slate-50/50 transition-colors">
             <td className="px-6 py-4">
@@ -399,7 +402,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-1">Total Expenses</p>
           <p className="text-3xl font-black text-red-600">{fmt(data.total)}</p>
         </div>
-        <DataTable 
+        <DataTable
           headers={["Date", "Particulars", "Category", "Amount"]}
           data={data.expenses}
           renderRow={(e) => (
@@ -419,7 +422,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     return (
       <DataTable 
         headers={["Time", "Actor", "Event", "Entity", "Reason"]}
-        data={data as any[]}
+        data={data}
         renderRow={(e) => (
           <tr key={String(e.id)} className="hover:bg-slate-50/50 transition-colors">
             <td className="px-6 py-4 text-xs font-bold text-slate-500 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString("en-IN")}</td>
@@ -437,7 +440,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     return (
       <DataTable 
         headers={["Bill No", "Operator", "Voided By", "Reason", "Amount"]}
-        data={data as any[]}
+        data={data}
         renderRow={(b) => (
           <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
             <td className="px-6 py-4 text-sm font-mono font-bold text-slate-800">{b.billNumber}</td>
@@ -455,7 +458,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     return (
       <DataTable 
         headers={["Clerk", "Bills Handled", "Net Revenue"]}
-        data={data as any[]}
+        data={data}
         renderRow={(c, i) => (
           <tr key={i} className="hover:bg-slate-50/50 transition-colors">
             <td className="px-6 py-4 text-sm font-bold text-slate-800">{c.clerkId ? `Clerk #${c.clerkId}` : "Counter"}</td>

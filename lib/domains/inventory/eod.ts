@@ -1,4 +1,4 @@
-import { BillStatus, GallaEventType, PaymentMode, Prisma } from "@prisma/client"
+import { BillStatus, PaymentMode, Prisma } from "@prisma/client"
 
 import { parseDateParam, todayDateString } from "@/lib/platform/dates"
 import { getOrCreateGallaDay } from "@/lib/domains/cash/galla"

@@ -13,7 +13,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
   const today = todayDateString()
   const todayObj = parseDateParam(today)
 
-  const [summary, alerts, openTabs, activeBatches, topItems, gallaBalance] = await Promise.all([
+  const [summary, alerts, openTabs, , topItems, gallaBalance] = await Promise.all([
     getSalesSummary({ from: today, to: today }).catch(() => null),
     listActiveAlerts(10).catch(() => []),
     prisma.bill.count({ where: { status: "TAB_OPEN" } }).catch(() => 0),
