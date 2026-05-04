@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 
-import { splitStock, normalizeStockEntry } from "./stock"
+import { getStockSnapshot, normalizeStockEntry, splitStock } from "./stock"
 
 describe("splitStock", () => {
   it("splits total bottles into full cases plus a loose remainder", () => {
@@ -86,5 +86,96 @@ describe("total-bottles invariant (deduction math — preview of Slice 1)", () =
     // calling into stock math. If the clamp ever activates in production,
     // that's a missed guard, not a correct behavior.
     expect(deduct(0, 7, 12, 8)).toEqual({ cases: 0, bottles: 0 })
+  })
+})
+
+describe("getStockSnapshot", () => {
+  it("aggregates opening, receipts, sold, pending, and adjustments", async () => {
+    const tx = {
+      inventorySession: {
+        findFirst: vi.fn(async () => ({
+          id: 1,
+          periodStart: new Date("2026-05-01T00:00:00.000Z"),
+          periodEnd: new Date("2026-05-02T00:00:00.000Z"),
+        })),
+      },
+      stockEntry: {
+        findMany: vi.fn(async () => [{ productSizeId: 11, totalBottles: 20 }]),
+      },
+      receiptItem: {
+        groupBy: vi.fn(async () => [{ productSizeId: 11, _sum: { totalBottles: 10 } }]),
+      },
+      billLine: {
+        groupBy: vi.fn(async ({ where }: { where: { bill?: { status?: string } } }) => {
+          if (where.bill?.status === "TAB_OPEN") {
+            return [{ productSizeId: 11, _sum: { quantity: 2 } }]
+          }
+          return [{ productSizeId: 11, _sum: { quantity: 8 } }]
+        }),
+      },
+      stockAdjustment: {
+        groupBy: vi.fn(async ({ where }: { where: { adjustmentType?: { not?: string; in?: string[] } } }) => {
+          if (where.adjustmentType?.in) {
+            return [{ productSizeId: 11, _sum: { quantityBottles: 1 } }]
+          }
+          return [{ productSizeId: 11, _sum: { quantityBottles: 4 } }]
+        }),
+      },
+    }
+
+    const snapshot = await getStockSnapshot(tx as unknown as Parameters<typeof getStockSnapshot>[0], { productSizeIds: [11] })
+    const row = snapshot.get(11)
+
+    expect(row).toEqual({
+      openingBottles: 20,
+      receiptBottles: 10,
+      soldBottles: 8,
+      adjustmentBottles: 3,
+      pendingBottles: 2,
+      totalBottles: 23,
+    })
+  })
+
+  it("prefers the active session for today over the newest session", async () => {
+    const tx = {
+      inventorySession: {
+        findFirst: vi.fn(async ({ where }: { where?: { periodStart?: { lte?: Date }; periodEnd?: { gte?: Date }; locked?: boolean } }) => {
+          if (where?.locked === false && where?.periodStart?.lte && where?.periodEnd?.gte) {
+            return {
+              id: 1,
+              periodStart: new Date("2026-05-01T00:00:00.000Z"),
+              periodEnd: new Date("2026-05-02T00:00:00.000Z"),
+            }
+          }
+
+          return {
+            id: 2,
+            periodStart: new Date("2026-05-03T00:00:00.000Z"),
+            periodEnd: new Date("2026-05-04T00:00:00.000Z"),
+          }
+        }),
+      },
+      stockEntry: {
+        findMany: vi.fn(async ({ where }: { where: { sessionId: number } }) => {
+          if (where.sessionId === 1) {
+            return [{ productSizeId: 11, totalBottles: 41 }]
+          }
+          return [{ productSizeId: 11, totalBottles: 5 }]
+        }),
+      },
+      receiptItem: {
+        groupBy: vi.fn(async () => []),
+      },
+      billLine: {
+        groupBy: vi.fn(async () => []),
+      },
+      stockAdjustment: {
+        groupBy: vi.fn(async () => []),
+      },
+    }
+
+    const snapshot = await getStockSnapshot(tx as unknown as Parameters<typeof getStockSnapshot>[0], { productSizeIds: [11] })
+
+    expect(snapshot.get(11)?.openingBottles).toBe(41)
   })
 })

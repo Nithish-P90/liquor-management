@@ -1,0 +1,16 @@
+@startuml
+participant Browser
+participant API
+participant Domain
+participant Galla
+participant DB
+Browser -> API: POST /api/pos/bills/void { billId }
+API -> Domain: voidBill(billId)
+Domain -> DB: mark bill voided
+DB --> Domain: voided bill
+Domain -> Galla: emit REFUND_CASH(amount)
+Galla -> DB: insert GallaEvent
+DB --> Galla: persisted
+Domain --> API: void result
+API --> Browser: 200 OK
+@enduml

@@ -1,0 +1,15 @@
+%% Sequence diagram: POS append-to-tab (UI -> open-tab API -> openTab domain -> DB)
+sequenceDiagram
+  participant Browser
+  participant API as /api/pos/bills/open-tab
+  participant Domain as lib/domains/billing/openTab()
+  participant DB as Postgres/Prisma
+
+  Browser->>API: POST { existingBillId, lines[] }
+  API->>Domain: validate body, requireSession -> openTab(params)
+  Domain->>DB: load bill (existingBillId)
+  DB-->>Domain: bill + existing lines
+  Domain->>DB: insert new BillLine rows, update totals
+  DB-->>Domain: updated bill
+  Domain-->>API: updated bill
+  API-->>Browser: 200 OK, updated tab

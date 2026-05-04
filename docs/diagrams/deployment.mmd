@@ -1,0 +1,20 @@
+%% Deployment diagram: Browser, Next.js server, Prisma/Postgres, face model storage
+flowchart TB
+  Browser[Browser / Kiosk Devices]
+  subgraph Server
+    Next[Next.js App Server]
+    API[API Routes app/api/*]
+    Domains[lib/domains/*]
+  end
+  DB[(Postgres via Prisma Client)]
+  Models[Face Models (static files / S3 / storage)]
+
+  Browser -->|HTTPS| Next
+  Next --> API
+  API --> Domains
+  Domains --> DB
+  Browser -. uses .-> Models
+  Next -. serves static .-> Models
+
+  click Next "app/" "Next.js app router pages"
+  click Domains "lib/domains" "Domain modules"

@@ -13,7 +13,7 @@ import {
 const querySchema = z.object({
   category: zCategory.optional(),
   search: z.string().trim().min(1).optional(),
-  limit: zCoercePositiveInt.max(200).optional(),
+  limit: zCoercePositiveInt.max(500).optional(),
 })
 
 const sizeSchema = z.object({

@@ -1,0 +1,15 @@
+%% Sequence diagram: Indent -> Receipt -> Stock (receipt of indent items)
+sequenceDiagram
+  participant Operator
+  participant API as /api/indents/:id/receive
+  participant Domain as lib/domains/indents/receive()
+  participant DB as Postgres/Prisma
+
+  Operator->>API: POST { indentId, itemsReceived }
+  API->>Domain: validate session -> receiveIndent(params)
+  Domain->>DB: mark indent items received, create Receipt and ReceiptItems
+  DB-->>Domain: created receipt
+  Domain->>DB: update stock entries for productSizes
+  DB-->>Domain: updated stock
+  Domain-->>API: receipt created
+  API-->>Operator: 200 OK, receipt

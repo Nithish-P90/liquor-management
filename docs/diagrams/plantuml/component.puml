@@ -1,0 +1,13 @@
+@startuml
+package Client {
+  [Browser UI]
+}
+package Server {
+  [Next.js App Server]
+  [API Routes]
+  [Domain Modules]
+}
+database "Postgres (Prisma)" as DB
+Client --> Server
+Server --> DB
+@enduml

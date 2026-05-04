@@ -24,10 +24,15 @@ vi.mock("@/lib/domains/inventory/clearance", () => ({
   reverseClearanceSegments: vi.fn(),
 }))
 
-import { nextBillNumber, commitBill, settleTab, voidBill } from "@/lib/domains/billing/bill"
+vi.mock("@/lib/domains/cash/galla", () => ({
+  emitGallaEvent: vi.fn(),
+}))
+
+import { nextBillNumber, commitBill, commitReturn, settleTab, voidBill } from "@/lib/domains/billing/bill"
 import { todayDateString } from "@/lib/platform/dates"
 import { getAvailableStock } from "@/lib/domains/inventory/stock"
 import { applyClearanceSegments, resolveRate, reverseClearanceSegments } from "@/lib/domains/inventory/clearance"
+import { emitGallaEvent } from "@/lib/domains/cash/galla"
 
 type CounterBackedTx = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,6 +134,7 @@ beforeEach(() => {
   ])
   vi.mocked(applyClearanceSegments).mockResolvedValue(undefined)
   vi.mocked(reverseClearanceSegments).mockResolvedValue(undefined)
+  vi.mocked(emitGallaEvent).mockResolvedValue(undefined)
 })
 
 describe("nextBillNumber", () => {
@@ -378,7 +384,10 @@ describe("voidBill", () => {
     const tx = {
       bill: {
         findUniqueOrThrow: vi.fn(async () => ({
+          id: 55,
           status: BillStatus.COMMITTED,
+          billNumber: "MV/2026-27/00077",
+          payments: [{ mode: PaymentMode.CASH, amount: new Prisma.Decimal("240") }],
           lines: [
             {
               sourceType: "LIQUOR",
@@ -397,6 +406,9 @@ describe("voidBill", () => {
           ],
         })),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data),
+      },
+      billLine: {
+        updateMany: vi.fn(async () => ({ count: 0 })),
       },
       productSize: {
         findUniqueOrThrow: vi.fn(async () => ({ sellingPrice: new Prisma.Decimal("120") })),
@@ -433,6 +445,53 @@ describe("voidBill", () => {
         clearanceBatchId: 901,
       },
     ])
+
+    const refundEvent = vi.mocked(emitGallaEvent).mock.calls[0]?.[1]
+    expect(refundEvent).toEqual(
+      expect.objectContaining({
+        eventType: "REFUND_CASH",
+        reference: "VOID MV/2026-27/00077",
+        billId: 55,
+      }),
+    )
+    expect(new Prisma.Decimal(refundEvent.amount.toString()).toString()).toBe("240")
+  })
+
+  it("does not emit a refund event for non-cash voids", async () => {
+    const tx = {
+      bill: {
+        findUniqueOrThrow: vi.fn(async () => ({
+          status: BillStatus.COMMITTED,
+          billNumber: "MV/2026-27/00078",
+          payments: [{ mode: PaymentMode.CARD, amount: new Prisma.Decimal("240") }],
+          lines: [],
+        })),
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data),
+      },
+      billLine: {
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      productSize: {
+        findUniqueOrThrow: vi.fn(async () => ({ sellingPrice: new Prisma.Decimal("120") })),
+      },
+      clearanceBatch: {
+        findFirst: vi.fn(async () => null),
+      },
+      auditEvent: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data),
+      },
+    }
+
+    await voidBill(tx as any, {
+      billId: 57,
+      actorId: 8,
+      reason: "Card void",
+    })
+
+    expect(emitGallaEvent).not.toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ eventType: "REFUND_CASH" }),
+    )
   })
 
   it("rejects voiding non-COMMITTED bill", async () => {
@@ -459,5 +518,175 @@ describe("voidBill", () => {
 
     expect(tx.bill.update).not.toHaveBeenCalled()
     expect(reverseClearanceSegments).not.toHaveBeenCalled()
+  })
+})
+
+describe("commitReturn", () => {
+  function createReturnTx(
+    opts: {
+      soldQty?: number
+      returnedQty?: number
+      soldByClerkQty?: number
+      returnedByClerkQty?: number
+    } = {},
+  ) {
+    const {
+      soldQty = 10,
+      returnedQty = 0,
+      soldByClerkQty = soldQty,
+      returnedByClerkQty = returnedQty,
+    } = opts
+    const { tx: counterTx } = createCounterBackedTx({ bill_counter_2026_27: 50 })
+    const createdLines: Array<Record<string, unknown>> = []
+    const aggregateQueue = [
+      { _sum: { quantity: soldByClerkQty } },
+      { _sum: { quantity: -Math.abs(returnedByClerkQty) } },
+      { _sum: { quantity: soldQty } },
+      { _sum: { quantity: -Math.abs(returnedQty) } },
+    ]
+
+    const tx = {
+      ...counterTx,
+      billLine: {
+        aggregate: vi.fn(async () => aggregateQueue.shift() ?? { _sum: { quantity: 0 } }),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          createdLines.push(data)
+          return { id: createdLines.length, ...data }
+        }),
+      },
+      bill: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 601,
+          businessDate: data.businessDate,
+          ...data,
+        })),
+      },
+      auditEvent: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data),
+      },
+    }
+    return { tx, createdLines }
+  }
+
+  it("creates a VOIDED bill with negative totals", async () => {
+    const { tx } = createReturnTx({ soldQty: 10 })
+
+    const result = await commitReturn(tx as any, {
+      operatorId: 1,
+      clerkId: 5,
+      reason: "Customer dissatisfied",
+      lines: [
+        { productSizeId: 11, itemNameSnapshot: "Brand A 750", quantity: 2, unitPrice: 120 },
+      ],
+    })
+
+    expect(result.billNumber).toMatch(/-RET$/)
+
+    const billData = (tx.bill.create as any).mock.calls[0][0].data
+    expect(billData.status).toBe(BillStatus.VOIDED)
+    expect(billData.grossTotal.toString()).toBe("-240")
+    expect(billData.netCollectible.toString()).toBe("-240")
+    expect(billData.voidReason).toBe("Customer dissatisfied")
+  })
+
+  it("creates a negative bill line for each return item", async () => {
+    const { tx, createdLines } = createReturnTx({ soldQty: 10 })
+
+    await commitReturn(tx as any, {
+      operatorId: 1,
+      clerkId: 5,
+      reason: "Return",
+      lines: [
+        { productSizeId: 11, itemNameSnapshot: "Brand A 750", quantity: 3, unitPrice: 120 },
+      ],
+    })
+
+    expect(createdLines).toHaveLength(1)
+    expect(createdLines[0].quantity).toBe(-3)
+    expect(createdLines[0].isVoidedLine).toBe(false)
+  })
+
+  it("emits GallaEvent REFUND_CASH for the refund amount", async () => {
+    const { tx } = createReturnTx({ soldQty: 10 })
+
+    await commitReturn(tx as any, {
+      operatorId: 1,
+      clerkId: 5,
+      reason: "Return",
+      lines: [
+        { productSizeId: 11, itemNameSnapshot: "Brand A 750", quantity: 2, unitPrice: 100 },
+      ],
+    })
+
+    expect(emitGallaEvent).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        eventType: "REFUND_CASH",
+        amount: expect.objectContaining({ toString: expect.any(Function) }),
+      }),
+    )
+
+    const gallaArgs = vi.mocked(emitGallaEvent).mock.calls[0][1]
+    expect(gallaArgs.amount.toString()).toBe("200")
+  })
+
+  it("rejects return when net returnable quantity is insufficient", async () => {
+    const { tx } = createReturnTx({ soldQty: 5, returnedQty: 4 })
+
+    await expect(
+      commitReturn(tx as any, {
+        operatorId: 1,
+        clerkId: 5,
+        reason: "Return",
+        lines: [
+          { productSizeId: 11, itemNameSnapshot: "Brand A 750", quantity: 3, unitPrice: 120 },
+        ],
+      }),
+    ).rejects.toThrow(/only 1 eligible for return/)
+  })
+
+  it("rejects return with empty lines", async () => {
+    const { tx } = createReturnTx()
+
+    await expect(
+      commitReturn(tx as any, {
+        operatorId: 1,
+        clerkId: 5,
+        reason: "Return",
+        lines: [],
+      }),
+    ).rejects.toThrow("Return must contain at least one item")
+  })
+
+  it("rejects return when clerk did not bill the item", async () => {
+    const { tx } = createReturnTx({ soldQty: 7, soldByClerkQty: 0 })
+
+    await expect(
+      commitReturn(tx as any, {
+        operatorId: 1,
+        clerkId: 5,
+        reason: "Return",
+        lines: [
+          { productSizeId: 11, itemNameSnapshot: "Brand A 750", quantity: 1, unitPrice: 120 },
+        ],
+      }),
+    ).rejects.toThrow("Return denied")
+  })
+
+  it("creates bill lines for misc item returns", async () => {
+    const { tx, createdLines } = createReturnTx()
+
+    await commitReturn(tx as any, {
+      operatorId: 1,
+      clerkId: 5,
+      reason: "Return",
+      lines: [
+        { miscItemId: 301, itemNameSnapshot: "Cigarette Pack", quantity: 1, unitPrice: 20 },
+      ],
+    })
+
+    expect(createdLines).toHaveLength(1)
+    expect(createdLines[0].sourceType).toBe("MISC")
+    expect(createdLines[0].quantity).toBe(-1)
   })
 })

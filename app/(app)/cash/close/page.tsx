@@ -1,9 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { Vault, Building2 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
+
+type GallaEvent = {
+  id: number
+  eventType: string
+  amount: string
+  reference: string | null
+  occurredAt: string
+}
 
 type GallaDay = {
   id: number
@@ -14,6 +23,12 @@ type GallaDay = {
   countedAmount?: string
   variance?: string
   balance: string
+  events: GallaEvent[]
+}
+
+type LockerData = {
+  id: number
+  balance: string
   events: Array<{
     id: number
     eventType: string
@@ -23,111 +38,255 @@ type GallaDay = {
   }>
 }
 
-const EVENT_COLORS: Record<string, string> = {
-  SALE_CASH: "text-emerald-400",
-  SALE_CARD: "text-blue-400",
-  SALE_UPI: "text-purple-400",
-  REFUND_CASH: "text-red-400",
-  EXPENSE: "text-amber-400",
-  TRANSFER_TO_LOCKER: "text-slate-400",
+type TransferKind = "LOCKER" | "BANK"
+
+type TransferCardConfig = {
+  kind: TransferKind
+  title: string
+  icon: JSX.Element
+  amountValue: string
+  onAmountChange: (value: string) => void
+  refValue: string
+  onRefChange: (value: string) => void
+  accentColor: "blue" | "purple"
 }
 
-export default function CashClosePage(): JSX.Element {
-  const [gallaDay, setGallaDay] = useState<GallaDay | null>(null)
+const EVENT_LABEL: Record<string, string> = {
+  SALE_CASH: "Cash Sale",
+  REFUND_CASH: "Refund",
+  EXPENSE: "Expense",
+  TRANSFER_TO_LOCKER: "→ Locker",
+  TRANSFER_TO_BANK: "→ Bank",
+  OPENING_BALANCE: "Opening",
+}
+
+const EVENT_COLOR: Record<string, string> = {
+  SALE_CASH: "text-emerald-600",
+  REFUND_CASH: "text-red-500",
+  EXPENSE: "text-amber-500",
+  TRANSFER_TO_LOCKER: "text-blue-500",
+  TRANSFER_TO_BANK: "text-purple-500",
+  OPENING_BALANCE: "text-slate-400",
+}
+
+const LOCKER_EVENT_LABEL: Record<string, string> = {
+  TRANSFER_IN: "From Register",
+  TRANSFER_OUT: "Transfer Out",
+  DEPOSIT_TO_BANK: "→ Bank",
+}
+
+function fmt(v: string | number): string {
+  return "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2 })
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function summarizeCashEvents(events: GallaEvent[] | undefined): { cashIn: number; cashOut: number } {
+  let cashIn = 0
+  let cashOut = 0
+
+  for (const event of events ?? []) {
+    const amount = Number(event.amount)
+
+    if (event.eventType === "SALE_CASH") {
+      cashIn += amount
+      continue
+    }
+
+    if (["REFUND_CASH", "EXPENSE", "TRANSFER_TO_LOCKER", "TRANSFER_TO_BANK"].includes(event.eventType)) {
+      cashOut += amount
+    }
+  }
+
+  return { cashIn, cashOut }
+}
+
+function normalizeGallaDay(gallaData: GallaDay | { date: string; balance: string; events: GallaEvent[]; isClosed: boolean }): GallaDay {
+  if ("id" in gallaData) {
+    return gallaData
+  }
+
+  return {
+    id: 0,
+    businessDate: today(),
+    openingBalance: "0",
+    isClosed: false,
+    balance: gallaData.balance,
+    events: gallaData.events ?? [],
+  }
+}
+
+export default function CashManagementPage(): JSX.Element {
+  const [galla, setGalla] = useState<GallaDay | null>(null)
+  const [locker, setLocker] = useState<LockerData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [countedAmount, setCountedAmount] = useState("")
-  const [closing, setClosing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // transfer state
+  const [toLockerAmt, setToLockerAmt] = useState("")
+  const [toLockerRef, setToLockerRef] = useState("")
+  const [toBankAmt, setToBankAmt] = useState("")
+  const [toBankRef, setToBankRef] = useState("")
+  const [lockerDepositAmt, setLockerDepositAmt] = useState("")
+  const [lockerDepositRef, setLockerDepositRef] = useState("")
+
+  const [busy, setBusy] = useState(false)
 
   function showToast(msg: string, ok: boolean): void {
     setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3500)
+    setTimeout(() => setToast(null), 4000)
   }
 
-  async function fetchGalla(): Promise<void> {
+  const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/galla")
-      setGallaDay(await res.json())
+      const [gallaRes, lockerRes] = await Promise.all([
+        fetch(`/api/galla?date=${today()}`, { cache: "no-store" }),
+        fetch("/api/locker", { cache: "no-store" }),
+      ])
+      const gallaData = await gallaRes.json() as GallaDay | { date: string; balance: string; events: GallaEvent[]; isClosed: boolean }
+      setGalla(normalizeGallaDay(gallaData))
+      if (lockerRes.ok) setLocker(await lockerRes.json() as LockerData)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchGalla() }, [])
+  useEffect(() => { void refresh() }, [refresh])
 
-  async function handleClose(): Promise<void> {
-    if (!countedAmount) { showToast("Enter counted amount", false); return }
-    setClosing(true)
-    const res = await fetch("/api/galla/close", {
+  async function transfer(type: "LOCKER" | "BANK", amount: string, reference: string): Promise<void> {
+    if (!amount || Number(amount) <= 0) { showToast("Enter a valid amount", false); return }
+    setBusy(true)
+    const res = await fetch("/api/galla/transfer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ countedAmount: parseFloat(countedAmount) }),
+      body: JSON.stringify({ type, amount: parseFloat(amount), reference: reference || undefined }),
     })
-    setClosing(false)
-
+    setBusy(false)
     if (res.ok) {
-      const data = await res.json()
-      const v = parseFloat(data.variance)
-      showToast(`Day closed. Variance: ₹${v.toFixed(2)}`, v === 0)
-      fetchGalla()
+      showToast(type === "LOCKER" ? "Transferred to locker" : "Transferred to bank", true)
+      if (type === "LOCKER") { setToLockerAmt(""); setToLockerRef("") }
+      else { setToBankAmt(""); setToBankRef("") }
+      void refresh()
     } else {
-      const err = await res.json()
-      showToast(err.error ?? "Close failed", false)
+      const err = await res.json() as { error?: string }
+      showToast(err.error ?? "Transfer failed", false)
     }
   }
 
+  async function depositLocker(): Promise<void> {
+    if (!lockerDepositAmt || Number(lockerDepositAmt) <= 0) { showToast("Enter a valid amount", false); return }
+    setBusy(true)
+    const res = await fetch("/api/locker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: parseFloat(lockerDepositAmt), reference: lockerDepositRef || undefined }),
+    })
+    setBusy(false)
+    if (res.ok) {
+      showToast("Deposited to bank", true)
+      setLockerDepositAmt(""); setLockerDepositRef("")
+      void refresh()
+    } else {
+      const err = await res.json() as { error?: string }
+      showToast(err.error ?? "Deposit failed", false)
+    }
+  }
+
+  // Compute summary figures from events
+  const { cashIn, cashOut } = summarizeCashEvents(galla?.events)
+
+  const transferCards: TransferCardConfig[] = [
+    {
+      kind: "LOCKER",
+      title: "Transfer to Locker",
+      icon: <Vault size={18} className="text-blue-500" />,
+      amountValue: toLockerAmt,
+      onAmountChange: setToLockerAmt,
+      refValue: toLockerRef,
+      onRefChange: setToLockerRef,
+      accentColor: "blue",
+    },
+    {
+      kind: "BANK",
+      title: "Transfer to Bank (direct)",
+      icon: <Building2 size={18} className="text-purple-500" />,
+      amountValue: toBankAmt,
+      onAmountChange: setToBankAmt,
+      refValue: toBankRef,
+      onRefChange: setToBankRef,
+      accentColor: "purple",
+    },
+  ]
+
   return (
-    <PageShell title="Cash Close" subtitle="Review today's cash events and close the galla.">
+    <PageShell title="Cash Management" subtitle={`Register · Locker · Bank — ${today()}`}>
       {toast && (
-        <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-medium ${toast.ok ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"}`}>
+        <div className={`mb-5 rounded-lg px-4 py-3 text-sm font-semibold ${toast.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-800"}`}>
           {toast.msg}
         </div>
       )}
 
       {loading ? (
         <p className="text-sm text-slate-400">Loading…</p>
-      ) : !gallaDay ? (
-        <p className="text-sm text-slate-400">No galla data for today.</p>
       ) : (
-        <div className="grid grid-cols-3 gap-6">
-          {/* Summary */}
-          <div className="col-span-2 space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: "Opening Balance", value: `₹${parseFloat(gallaDay.openingBalance).toFixed(2)}` },
-                { label: "Computed Balance", value: `₹${parseFloat(gallaDay.balance).toFixed(2)}` },
-                gallaDay.isClosed
-                  ? { label: "Variance", value: `₹${parseFloat(gallaDay.variance ?? "0").toFixed(2)}`, highlight: parseFloat(gallaDay.variance ?? "0") !== 0 }
-                  : { label: "Status", value: "Open" },
-              ].map((card) => (
-                <div key={card.label} className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-                  <p className="text-xs text-slate-400">{card.label}</p>
-                  <p className={`mt-1 text-xl font-bold ${"highlight" in card && card.highlight ? "text-red-400" : "text-slate-100"}`}>
-                    {card.value}
-                  </p>
-                </div>
-              ))}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+
+          {/* ── Column 1: Cash Register ── */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* Balance bar */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Card label="Opening" value={fmt(galla?.openingBalance ?? 0)} />
+              <Card label="Cash In (sales)" value={fmt(cashIn)} green />
+              <Card label="Cash Out" value={fmt(cashOut)} red />
+              <Card label="Register Balance" value={fmt(galla?.balance ?? 0)} big />
             </div>
 
-            {/* Events */}
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60">
-              <div className="border-b border-slate-800 px-4 py-3">
-                <h3 className="text-sm font-semibold text-slate-200">Today&apos;s Events</h3>
+            {/* Transfer actions */}
+            {!galla?.isClosed && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {transferCards.map((card) => (
+                  <ActionCard
+                    key={card.kind}
+                    icon={card.icon}
+                    title={card.title}
+                    amountValue={card.amountValue}
+                    onAmountChange={card.onAmountChange}
+                    refValue={card.refValue}
+                    onRefChange={card.onRefChange}
+                    buttonLabel="Transfer"
+                    onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
+                    busy={busy}
+                    accentColor={card.accentColor}
+                  />
+                ))}
               </div>
-              {gallaDay.events.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-slate-500">No events recorded yet.</p>
+            )}
+
+            {/* Event log */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h3 className="text-sm font-bold text-slate-800">Register Events — {today()}</h3>
+              </div>
+              {!galla?.events.length ? (
+                <p className="px-5 py-8 text-sm text-slate-400 text-center">No events yet today</p>
               ) : (
-                <div className="divide-y divide-slate-800">
-                  {gallaDay.events.map((event) => (
-                    <div key={event.id} className="flex items-center justify-between px-4 py-3">
+                <div className="divide-y divide-slate-100">
+                  {galla.events.map((e) => (
+                    <div key={e.id} className="flex items-center justify-between px-5 py-3">
                       <div>
-                        <p className={`text-sm font-medium ${EVENT_COLORS[event.eventType] ?? "text-slate-300"}`}>
-                          {event.eventType.replace(/_/g, " ")}
+                        <p className={`text-sm font-semibold ${EVENT_COLOR[e.eventType] ?? "text-slate-600"}`}>
+                          {EVENT_LABEL[e.eventType] ?? e.eventType}
                         </p>
-                        {event.reference && <p className="text-xs text-slate-500">{event.reference}</p>}
+                        <p className="text-xs text-slate-400">
+                          {new Date(e.occurredAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          {e.reference ? ` · ${e.reference}` : ""}
+                        </p>
                       </div>
-                      <p className="font-medium text-slate-200">₹{parseFloat(event.amount).toFixed(2)}</p>
+                      <p className="font-mono text-sm font-bold text-slate-800">{fmt(e.amount)}</p>
                     </div>
                   ))}
                 </div>
@@ -135,40 +294,140 @@ export default function CashClosePage(): JSX.Element {
             </div>
           </div>
 
-          {/* Close panel */}
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-            <h3 className="mb-4 text-sm font-semibold text-slate-200">Close Day</h3>
-            {gallaDay.isClosed ? (
-              <div className="rounded-lg border border-emerald-800 bg-emerald-900/20 p-4 text-center">
-                <p className="text-sm text-emerald-300">Day closed</p>
-                <p className="mt-1 text-2xl font-bold text-slate-100">₹{parseFloat(gallaDay.countedAmount ?? "0").toFixed(2)}</p>
-                <p className="mt-1 text-xs text-slate-400">counted</p>
+          {/* ── Column 2: Locker + Close Day ── */}
+          <div className="space-y-6">
+
+            {/* Locker balance */}
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Vault size={18} className="text-blue-500" />
+                <h3 className="text-sm font-bold text-slate-800">Locker</h3>
               </div>
-            ) : (
-              <>
-                <p className="mb-3 text-xs text-slate-400">Enter the physical cash count before closing.</p>
+              <p className="text-3xl font-black text-slate-900">{fmt(locker?.balance ?? 0)}</p>
+              <p className="mt-1 text-xs text-slate-400">accumulated balance</p>
+
+              <div className="mt-5 space-y-2">
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={countedAmount}
-                  onChange={(e) => setCountedAmount(e.target.value)}
-                  placeholder="Counted amount…"
-                  className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                  placeholder="Amount to deposit to bank"
+                  value={lockerDepositAmt}
+                  onChange={(e) => setLockerDepositAmt(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Reference (optional)"
+                  value={lockerDepositRef}
+                  onChange={(e) => setLockerDepositRef(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
                 />
                 <Button
-                  variant="primary"
-                  className="mt-4 w-full"
-                  onClick={handleClose}
-                  disabled={closing}
+                  variant="secondary"
+                  className="w-full"
+                  onClick={depositLocker}
+                  disabled={busy}
                 >
-                  {closing ? "Closing…" : "Close Day"}
+                  <Building2 size={14} className="mr-1.5 inline" />
+                  Deposit to Bank
                 </Button>
-              </>
+              </div>
+
+              {(locker?.events.length ?? 0) > 0 && (
+                <div className="mt-4 space-y-1">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recent</p>
+                  {locker!.events.slice(0, 6).map((e) => (
+                    <div key={e.id} className="flex justify-between text-xs">
+                      <span className="text-slate-500">{LOCKER_EVENT_LABEL[e.eventType] ?? e.eventType}</span>
+                      <span className={`font-mono font-semibold ${e.eventType === "TRANSFER_IN" ? "text-emerald-600" : "text-red-500"}`}>
+                        {e.eventType === "TRANSFER_IN" ? "+" : "−"}{fmt(e.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Day status (auto-closed by EOD cron) */}
+            {galla?.isClosed && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day Closed</p>
+                <p className="mt-1 text-2xl font-black text-slate-800">{fmt(galla.countedAmount ?? 0)}</p>
+                <p className="text-xs text-slate-500">closing balance</p>
+                {galla.variance && Math.abs(parseFloat(galla.variance)) > 0.01 && (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    Variance: {fmt(galla.variance)}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
       )}
     </PageShell>
+  )
+}
+
+function Card({ label, value, green, red, big }: {
+  label: string; value: string; green?: boolean; red?: boolean; big?: boolean
+}): JSX.Element {
+  return (
+    <div className={`rounded-xl border p-4 ${big ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`}>
+      <p className={`text-[10px] font-bold uppercase tracking-wider ${big ? "text-slate-400" : "text-slate-400"}`}>{label}</p>
+      <p className={`mt-1 text-xl font-black ${big ? "text-white" : green ? "text-emerald-600" : red ? "text-red-500" : "text-slate-800"}`}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefChange, buttonLabel, onSubmit, busy, accentColor }: {
+  icon: React.ReactNode
+  title: string
+  amountValue: string
+  onAmountChange: (v: string) => void
+  refValue: string
+  onRefChange: (v: string) => void
+  buttonLabel: string
+  onSubmit: () => void
+  busy: boolean
+  accentColor: "blue" | "purple"
+}): JSX.Element {
+  const borderClass = accentColor === "blue" ? "border-blue-200 focus:border-blue-400" : "border-purple-200 focus:border-purple-400"
+  const btnBg = accentColor === "blue" ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        {icon}
+        <p className="text-sm font-bold text-slate-800">{title}</p>
+      </div>
+      <div className="space-y-2">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Amount…"
+          value={amountValue}
+          onChange={(e) => onAmountChange(e.target.value)}
+          className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${borderClass}`}
+        />
+        <input
+          type="text"
+          placeholder="Reference (optional)"
+          value={refValue}
+          onChange={(e) => onRefChange(e.target.value)}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+        />
+        <button
+          onClick={onSubmit}
+          disabled={busy}
+          className={`w-full rounded-lg px-3 py-2 text-sm font-bold text-white transition disabled:opacity-50 ${btnBg}`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
   )
 }

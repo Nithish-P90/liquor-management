@@ -24,3 +24,33 @@ services:
         value: "1006"
       - key: ALLOW_PIN_FALLBACK
         value: "false"
+
+  - type: cron
+    name: liquor-eod
+    runtime: node
+    schedule: "29 18 * * *"
+    buildCommand: echo "no build needed"
+    startCommand: >-
+      curl -sfS -X POST "$NEXTAUTH_URL/api/cron/eod"
+      -H "Authorization: Bearer $CRON_SECRET"
+      -H "Content-Type: application/json"
+    envVars:
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: liquor-rollover
+    runtime: node
+    schedule: "31 18 * * *"
+    buildCommand: echo "no build needed"
+    startCommand: >-
+      curl -sfS -X POST "$NEXTAUTH_URL/api/cron/rollover"
+      -H "Authorization: Bearer $CRON_SECRET"
+      -H "Content-Type: application/json"
+    envVars:
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false

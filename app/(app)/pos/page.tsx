@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
-import { posCommit, posOpenTab, posSettleTab, posVoid } from "./actions"
+import { postCommit, postOpenTab, postAddToTab, postSettleTab, postReturn, postCompute, type PricedCart } from "./api-client"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,8 +33,8 @@ type MiscItemResult = {
 }
 
 type SearchResult =
-  | { kind: "LIQUOR"; item: ProductSizeResult }
-  | { kind: "MISC"; item: MiscItemResult }
+  | { kind: "LIQUOR"; item: ProductSizeResult; stock: number }
+  | { kind: "MISC"; item: MiscItemResult; stock: number }
 
 type CartLine = {
   key: string
@@ -68,6 +68,16 @@ type RecentBill = {
   netCollectible: string
   billedAt: string
   operator: { name: string }
+  clerkId: number | null
+  clerk?: { name: string }
+  lines: Array<{
+    id: number
+    itemNameSnapshot: string
+    quantity: number
+    unitPrice: string
+    lineTotal: string
+    isVoidedLine: boolean
+  }>
 }
 
 type PaymentSplit = { cash: string; card: string; upi: string }
@@ -96,6 +106,8 @@ export default function PosPage(): JSX.Element {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [allItems, setAllItems] = useState<SearchResult[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
+  const [pricing, setPricing] = useState<PricedCart | null>(null)
+  const [pricingLoading, setPricingLoading] = useState(false)
   const [attribution, setAttribution] = useState<"COUNTER" | "CLERK">("COUNTER")
   const [clerks, setClerks] = useState<Array<{ id: number; name: string }>>([])
   const [selectedClerkId, setSelectedClerkId] = useState<number | undefined>()
@@ -103,19 +115,19 @@ export default function PosPage(): JSX.Element {
   const [recentBills, setRecentBills] = useState<RecentBill[]>([])
   const [showTabs, setShowTabs] = useState(false)
   const [showRecent, setShowRecent] = useState(false)
-  const [paymentMode, setPaymentMode] = useState<"CASH" | "CARD" | "UPI" | "SPLIT">("CASH")
+  const [paymentMode, setPaymentMode] = useState<"CASH" | "CARD" | "UPI" | "SPLIT" | "TAB">("CASH")
+  const [customerName, setCustomerName] = useState("")
+  const [tabMode, setTabMode] = useState<"NEW" | "APPEND">("NEW")
+  const [selectedTabId, setSelectedTabId] = useState<number | null>(null)
   const [showTabSettle, setShowTabSettle] = useState<OpenTab | null>(null)
-  const [showVoidModal, setShowVoidModal] = useState<RecentBill | null>(null)
   const [showMapBarcode, setShowMapBarcode] = useState<{ code: string } | null>(null)
   const [mapSearch, setMapSearch] = useState("")
   const [mapResults, setMapResults] = useState<SearchResult[]>([])
   const [mapTarget, setMapTarget] = useState<SearchResult | null>(null)
   const [payment, setPayment] = useState<PaymentSplit>({ cash: "", card: "", upi: "" })
   const [cashReceived, setCashReceived] = useState("")
-  const [voidReason, setVoidReason] = useState("")
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [saveAsTab, setSaveAsTab] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL")
   const [isScannerFocused, setIsScannerFocused] = useState(true)
 
@@ -138,10 +150,18 @@ export default function PosPage(): JSX.Element {
 
   // Load clerks
   useEffect(() => {
-    fetch("/api/clerks")
+    fetch(`/api/clerks`)
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setClerks(data)
+        if (Array.isArray(data)) {
+          setClerks(data)
+          // Default to Counter if found
+          const counterClerk = data.find(c => c.name.toLowerCase() === "counter")
+          if (counterClerk) {
+            setAttribution("COUNTER")
+            setSelectedClerkId(counterClerk.id)
+          }
+        }
       })
       .catch(() => {})
   }, [])
@@ -196,6 +216,41 @@ export default function PosPage(): JSX.Element {
     setSearchResults(filtered)
   }, [searchQuery, allItems, selectedCategory])
 
+  useEffect(() => {
+    if (cart.length === 0) {
+      setPricing(null)
+      setPricingLoading(false)
+      return
+    }
+
+    let active = true
+    setPricingLoading(true)
+    const timer = setTimeout(() => {
+      postCompute(
+        cart.map((l) => ({
+          kind: l.kind,
+          productSizeId: l.kind === "LIQUOR" ? l.productSizeId : undefined,
+          miscItemId: l.kind === "MISC" ? l.miscItemId : undefined,
+          quantity: l.quantity,
+        })),
+      ).then((result) => {
+        if (!active) return
+        setPricingLoading(false)
+        if (result.ok) {
+          setPricing(result.data)
+        } else {
+          setPricing(null)
+          showToast(result.error, false)
+        }
+      })
+    }, 200)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [cart, showToast])
+
   // Map Barcode Debounce
   useEffect(() => {
     if (!showMapBarcode) return
@@ -209,7 +264,18 @@ export default function PosPage(): JSX.Element {
     return () => clearTimeout(timer)
   }, [mapSearch, showMapBarcode])
 
+  // Load tabs when switching to APPEND mode
+  useEffect(() => {
+    if (paymentMode === "TAB" && tabMode === "APPEND") {
+      refreshTabs()
+    }
+  }, [paymentMode, tabMode])
+
   function addToCart(result: SearchResult): void {
+    if (result.stock <= 0) {
+      showToast("Item out of stock", false)
+      return
+    }
     const key = result.kind === "LIQUOR" ? `ps-${result.item.id}` : `mi-${result.item.id}`
     setCart((prev) => {
       const existing = prev.find((l) => l.key === key)
@@ -301,10 +367,44 @@ export default function PosPage(): JSX.Element {
     if (cart.length === 0) return
     setLoading(true)
 
-    if (saveAsTab) {
-      const result = await posOpenTab({
+    if (paymentMode === "TAB") {
+      if (tabMode === "APPEND") {
+        if (!selectedTabId) {
+          setLoading(false)
+          showToast("Select a tab to append to", false)
+          return
+        }
+        const result = await postAddToTab(selectedTabId, {
+          lines: cart.map((l) => ({
+            productSizeId: l.kind === "LIQUOR" ? l.productSizeId : undefined,
+            miscItemId: l.kind === "MISC" ? l.miscItemId : undefined,
+            itemNameSnapshot: l.itemName,
+            quantity: l.quantity,
+            barcodeSnapshot: undefined,
+            scanMethod: "BARCODE_USB",
+          })),
+        })
+        setLoading(false)
+        if (result.ok) {
+          showToast(`Items added to tab: ${result.data.billNumber}`, true)
+          setCart([])
+          setCustomerName("")
+          setTabMode("NEW")
+          setSelectedTabId(null)
+          setPaymentMode("CASH")
+          setPayment({ cash: "", card: "", upi: "" })
+          setCashReceived("")
+          refreshTabs()
+        } else {
+          showToast(result.error, false)
+        }
+        return
+      }
+
+      const result = await postOpenTab({
         attributionType: attribution,
         clerkId: selectedClerkId,
+        customerName: customerName.trim() || undefined,
         lines: cart.map((l) => ({
           productSizeId: l.kind === "LIQUOR" ? l.productSizeId : undefined,
           miscItemId: l.kind === "MISC" ? l.miscItemId : undefined,
@@ -318,10 +418,13 @@ export default function PosPage(): JSX.Element {
       if (result.ok) {
         showToast(`Tab opened: ${result.data.billNumber}`, true)
         setCart([])
-        setSaveAsTab(false)
+        setCustomerName("")
+        setTabMode("NEW")
+        setSelectedTabId(null)
+        setPaymentMode("CASH")
         setPayment({ cash: "", card: "", upi: "" })
         setCashReceived("")
-        setPaymentMode("CASH")
+        refreshTabs()
       } else {
         showToast(result.error, false)
       }
@@ -334,7 +437,7 @@ export default function PosPage(): JSX.Element {
       return
     }
 
-    const result = await posCommit({
+    const result = await postCommit({
       attributionType: attribution,
       clerkId: selectedClerkId,
       lines: cart.map((l) => ({
@@ -355,6 +458,7 @@ export default function PosPage(): JSX.Element {
       setCashReceived("")
       setPaymentMode("CASH")
       refreshRecent()
+      refreshItems()
       barcodeRef.current?.focus()
     } else {
       showToast(result.error, false)
@@ -363,7 +467,7 @@ export default function PosPage(): JSX.Element {
 
   async function handleSettleTab(tab: OpenTab): Promise<void> {
     setLoading(true)
-    const result = await posSettleTab(tab.id, buildPayments())
+    const result = await postSettleTab(tab.id, buildPayments())
     setLoading(false)
     if (result.ok) {
       showToast("Tab settled", true)
@@ -371,25 +475,12 @@ export default function PosPage(): JSX.Element {
       setPayment({ cash: "", card: "", upi: "" })
       refreshTabs()
       refreshRecent()
+      refreshItems()
     } else {
       showToast(result.error, false)
     }
   }
 
-  async function handleVoid(bill: RecentBill): Promise<void> {
-    if (!voidReason.trim()) { showToast("Enter void reason", false); return }
-    setLoading(true)
-    const result = await posVoid(bill.id, voidReason)
-    setLoading(false)
-    if (result.ok) {
-      showToast("Bill voided", true)
-      setShowVoidModal(null)
-      setVoidReason("")
-      refreshRecent()
-    } else {
-      showToast(result.error, false)
-    }
-  }
 
   async function handleMapBarcode(): Promise<void> {
     if (!showMapBarcode || !mapTarget) return
@@ -412,6 +503,44 @@ export default function PosPage(): JSX.Element {
     }
   }
 
+
+  async function handleProcessReturn(): Promise<void> {
+    if (cart.length === 0) return
+    if (!selectedClerkId) {
+      showToast("Select a clerk before processing a return", false)
+      return
+    }
+
+    setLoading(true)
+    const result = await postReturn({
+      clerkId: selectedClerkId,
+      reason: "POS Return",
+      lines: cart.map((l) => ({
+        productSizeId: l.kind === "LIQUOR" ? l.productSizeId : undefined,
+        miscItemId: l.kind === "MISC" ? l.miscItemId : undefined,
+        itemNameSnapshot: l.itemName,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+    })
+    setLoading(false)
+    if (result.ok) {
+      showToast("Return processed", true)
+      setCart([])
+      refreshItems()
+      refreshRecent()
+    } else {
+      showToast(result.error, false)
+    }
+  }
+
+  function refreshItems(): void {
+    fetch("/api/pos/items")
+      .then((r) => r.json())
+      .then((items) => { if (Array.isArray(items)) setAllItems(items) })
+      .catch(() => {})
+  }
+
   function refreshTabs(): void {
     fetch("/api/pos/open-tabs").then((r) => r.json()).then(setOpenTabs).catch(() => {})
   }
@@ -420,7 +549,9 @@ export default function PosPage(): JSX.Element {
     fetch("/api/pos/recent-bills").then((r) => r.json()).then(setRecentBills).catch(() => {})
   }
 
-  const total = cartTotal(cart)
+  const localTotal = cartTotal(cart)
+  const total = pricing?.total ?? localTotal
+  const pricingWarnings = pricing?.warnings ?? []
   const paymentSum = Number(payment.cash) + Number(payment.card) + Number(payment.upi)
   const changeDue = Math.max(0, Number(cashReceived || 0) - total)
   const isSplit = paymentMode === "SPLIT"
@@ -433,28 +564,40 @@ export default function PosPage(): JSX.Element {
       return
     }
     if (paymentMode === "SPLIT") return
-    if (paymentMode === "CASH") setPayment({ cash: total.toFixed(2), card: "", upi: "" })
-    if (paymentMode === "CARD") setPayment({ cash: "", card: total.toFixed(2), upi: "" })
-    if (paymentMode === "UPI") setPayment({ cash: "", card: "", upi: total.toFixed(2) })
+    if (paymentMode === "CASH") {
+      setPayment({ cash: total.toFixed(2), card: "", upi: "" })
+      setTabMode("NEW")
+      setSelectedTabId(null)
+    }
+    if (paymentMode === "CARD") {
+      setPayment({ cash: "", card: total.toFixed(2), upi: "" })
+      setTabMode("NEW")
+      setSelectedTabId(null)
+    }
+    if (paymentMode === "UPI") {
+      setPayment({ cash: "", card: "", upi: total.toFixed(2) })
+      setTabMode("NEW")
+      setSelectedTabId(null)
+    }
   }, [cart.length, paymentMode, total])
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900 overflow-hidden select-none">
-      {/* Toast */}
+      {/* Toast - Better positioning */}
       {toast && (
-        <div className={`fixed top-4 right-1/2 translate-x-1/2 z-50 rounded-xl px-6 py-4 shadow-2xl flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-4 ${
+        <div className={`fixed bottom-6 right-6 z-[100] rounded-lg px-4 py-3 shadow-xl flex items-center gap-3 transition-all animate-in slide-in-from-bottom-4 ${
           toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
         }`}>
-          {toast.ok ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
-          <span className="text-sm font-bold uppercase tracking-widest">{toast.msg}</span>
+          {toast.ok ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span className="text-xs font-bold uppercase tracking-widest">{toast.msg}</span>
         </div>
       )}
 
-      {/* Main Items Section (Left ~65%) */}
-      <div className="flex-1 flex flex-col h-full bg-white relative shadow-lg z-10 border-r border-slate-200">
+      {/* Main Items Section (Left) */}
+      <div className="flex-1 flex flex-col h-full bg-white relative z-10 border-r border-slate-100 overflow-hidden">
         
-        {/* Top Search Bar & Utilities */}
-        <header className="p-4 border-b border-slate-100 bg-white flex items-center justify-between gap-4 shrink-0 shadow-sm">
+        {/* Top Search Bar & Utilities - Compact */}
+        <header className="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2">
             <button 
               type="button" 
@@ -550,47 +693,63 @@ export default function PosPage(): JSX.Element {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {searchResults.map((r) => (
-                <button
-                  key={`${r.kind}-${r.item.id}`}
-                  onClick={() => addToCart(r)}
-                  className="group flex flex-col items-start justify-between rounded-2xl border-2 border-transparent bg-white p-4 shadow-sm hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-500/10 active:scale-95 transition-all text-left h-36"
-                >
-                  <div className="w-full">
-                    <div className="flex items-start justify-between gap-1 w-full mb-1">
-                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
-                        r.kind === "LIQUOR" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
-                      }`}>
-                        {r.kind}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-400">{r.kind === "LIQUOR" ? `${r.item.sizeMl}ml` : r.item.unit}</span>
+              {searchResults.map((r) => {
+                const outOfStock = r.stock <= 0
+                return (
+                  <button
+                    key={`${r.kind}-${r.item.id}`}
+                    onClick={() => addToCart(r)}
+                    disabled={outOfStock}
+                    className={`group flex flex-col items-start justify-between rounded-lg border p-3 active:scale-95 transition-all text-left h-32 ${
+                      outOfStock 
+                        ? "bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed" 
+                        : "bg-white border-slate-200 hover:border-emerald-500"
+                    }`}
+                  >
+                    <div className="w-full">
+                      <div className="flex items-start justify-between gap-1 w-full mb-1">
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                          outOfStock 
+                            ? "bg-slate-200 text-slate-500" 
+                            : r.kind === "LIQUOR" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+                        }`}>
+                          {outOfStock ? "OUT" : r.kind}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400">{r.kind === "LIQUOR" ? `${r.item.sizeMl}ml` : r.item.unit}</span>
+                      </div>
+                      <p className={`font-bold text-xs line-clamp-2 leading-tight ${outOfStock ? "text-slate-400" : "text-slate-800"}`}>
+                        {r.kind === "LIQUOR" ? r.item.product.name : r.item.name}
+                      </p>
                     </div>
-                    <p className="font-bold text-slate-800 text-sm line-clamp-2 leading-snug">
-                      {r.kind === "LIQUOR" ? r.item.product.name : r.item.name}
-                    </p>
-                  </div>
-                  <div className="w-full flex items-end justify-between mt-2">
-                    <p className="text-xl font-black text-slate-900">{fmt(r.kind === "LIQUOR" ? r.item.sellingPrice : r.item.price)}</p>
-                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                      <Plus size={16} className="opacity-0 group-hover:opacity-100" />
+                    <div className="w-full flex items-end justify-between">
+                      <div>
+                        <p className={`text-lg font-black ${outOfStock ? "text-slate-400" : "text-slate-900"}`}>
+                          {fmt(r.kind === "LIQUOR" ? r.item.sellingPrice : r.item.price)}
+                        </p>
+                        {!outOfStock && r.kind === "LIQUOR" && (
+                          <p className="text-[9px] font-bold text-emerald-600 uppercase mt-0.5">
+                            {r.stock} left
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           )}
         </main>
       </div>
 
-      {/* Right Side: Cart & Checkout (~400px fixed) */}
-      <aside className="w-[520px] shrink-0 flex flex-col h-full bg-white z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.03)]">
-        <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-          <h2 className="text-lg font-black uppercase tracking-widest flex items-center gap-2 text-slate-800">
-            <ShoppingCart size={22} className="text-slate-400" />
-            Current Order
+      {/* Right Side: Cart & Checkout (Strict width to prevent cut-off) */}
+      <aside className="w-[380px] shrink-0 flex flex-col h-full bg-white border-l overflow-hidden">
+        <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+          <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-slate-800">
+            <ShoppingCart size={18} className="text-slate-400" />
+            Order
           </h2>
-          <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-sm font-bold">
-            {cart.length} items
+          <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
+            {cart.length} ITEMS
           </span>
         </div>
 
@@ -633,59 +792,143 @@ export default function PosPage(): JSX.Element {
         </div>
 
         {/* Footer Checkout Area */}
-        <div className="bg-white shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.06)] relative z-30">
+        <div className="bg-white shrink-0 border-t">
           
-          {/* Totals Banner */}
-          <div className="px-6 py-4 flex items-center justify-between border-t border-slate-100 cursor-pointer" onClick={() => setCart([])}>
-            <span className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Total amount</span>
-            <span className="text-5xl font-black text-slate-900 tracking-tight">{fmt(total)}</span>
+          {/* Totals Banner - Compact */}
+          <div className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setCart([])}>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
+            <span className="text-3xl font-black text-slate-900">{pricingLoading ? "..." : fmt(total)}</span>
           </div>
 
-          {/* Payment Tenders */}
+          {/* Payment Tenders - Simplified */}
           {cart.length > 0 && (
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
-              <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">
+              {pricingWarnings.length > 0 && (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
+                  {pricingWarnings.map((w, idx) => (
+                    <div key={`${idx}-${w}`}>{w}</div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-5 gap-1 mb-3">
                 <button
                   type="button"
                   onClick={() => applyPaymentMode("CASH")}
-                  className={`h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-all ${
-                    paymentMode === "CASH" ? "border-amber-500 bg-amber-500 text-white shadow-lg shadow-amber-500/30" : "border-slate-200 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600"
+                  className={`h-11 flex flex-col items-center justify-center rounded-lg border-2 transition-all ${
+                    paymentMode === "CASH" ? "border-amber-600 bg-amber-600 text-white" : "border-slate-200 bg-white text-slate-500"
                   }`}
                 >
-                  <Banknote size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Cash</span>
+                  <Banknote size={14} />
+                  <span className="text-[8px] font-black uppercase">Cash</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => applyPaymentMode("CARD")}
-                  className={`h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-all ${
-                    paymentMode === "CARD" ? "border-slate-800 bg-slate-800 text-white shadow-lg shadow-slate-800/30" : "border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:text-slate-800"
+                  className={`h-11 flex flex-col items-center justify-center rounded-lg border-2 transition-all ${
+                    paymentMode === "CARD" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500"
                   }`}
                 >
-                  <CreditCard size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Card</span>
+                  <CreditCard size={14} />
+                  <span className="text-[8px] font-black uppercase">Card</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => applyPaymentMode("UPI")}
-                  className={`h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-all ${
-                    paymentMode === "UPI" ? "border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
+                  className={`h-11 flex flex-col items-center justify-center rounded-lg border-2 transition-all ${
+                    paymentMode === "UPI" ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-200 bg-white text-slate-500"
                   }`}
                 >
-                  <Smartphone size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-wider">UPI</span>
+                  <Smartphone size={14} />
+                  <span className="text-[8px] font-black uppercase">UPI</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => { setPaymentMode("SPLIT"); setPayment({ cash: "", card: "", upi: "" }); setCashReceived("") }}
-                  className={`h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-all ${
-                    paymentMode === "SPLIT" ? "border-indigo-500 bg-indigo-500 text-white shadow-lg shadow-indigo-500/30" : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+                  className={`h-11 flex flex-col items-center justify-center rounded-lg border-2 transition-all ${
+                    paymentMode === "SPLIT" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-500"
                   }`}
                 >
-                  <Split size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Split</span>
+                  <Split size={14} />
+                  <span className="text-[8px] font-black uppercase">Split</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMode("TAB"); setPayment({ cash: "", card: "", upi: "" }); setCashReceived("") }}
+                  className={`h-11 flex flex-col items-center justify-center rounded-lg border-2 transition-all ${
+                    paymentMode === "TAB" ? "border-indigo-800 bg-indigo-800 text-white" : "border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  <Library size={14} />
+                  <span className="text-[8px] font-black uppercase">Tab</span>
                 </button>
               </div>
+
+              {/* Tab specific UI */}
+              {paymentMode === "TAB" && (
+                <div className="mb-3 space-y-3 animate-in slide-in-from-top-2 fade-in">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setTabMode("NEW"); setSelectedTabId(null); setCustomerName("") }}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-colors border-2 ${
+                        tabMode === "NEW" 
+                          ? "bg-indigo-600 text-white border-indigo-600" 
+                          : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                      }`}
+                    >
+                      New Tab
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setTabMode("APPEND"); setCustomerName("") }}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-colors border-2 ${
+                        tabMode === "APPEND" 
+                          ? "bg-indigo-600 text-white border-indigo-600" 
+                          : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                      }`}
+                    >
+                      Append to Tab
+                    </button>
+                  </div>
+                  
+                  {tabMode === "NEW" && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">Customer / Table Name</label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="E.g. Table 4, Mr. Rao..."
+                        className="w-full rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 focus:border-indigo-500 focus:outline-none transition-colors"
+                      />
+                    </div>
+                  )}
+                  
+                  {tabMode === "APPEND" && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">Select Tab to Add To</label>
+                      {openTabs.length === 0 ? (
+                        <div className="w-full rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-400 text-center">
+                          No open tabs available
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedTabId || ""}
+                          onChange={(e) => setSelectedTabId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 focus:border-indigo-500 focus:outline-none transition-colors"
+                        >
+                          <option value="">-- Select a tab --</option>
+                          {openTabs.map((tab) => (
+                            <option key={tab.id} value={tab.id}>
+                              {tab.billNumber} {tab.customerName ? `- ${tab.customerName}` : ""} ({fmt(tab.netCollectible)})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cash specific UI */}
               {(paymentMode === "CASH" || (isSplit && Number(payment.cash) > 0)) && (
@@ -750,46 +993,60 @@ export default function PosPage(): JSX.Element {
               <div className="flex flex-col flex-1 pl-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 flex items-center gap-1"><User size={12}/> Clerk</span>
                 <div className="flex items-center gap-2 flex-wrap no-scrollbar pb-1">
-                  <button
-                    type="button"
-                    onClick={() => { setAttribution("COUNTER"); setSelectedClerkId(undefined) }}
-                    className={`flex-shrink-0 px-3 py-2 h-10 min-w-[80px] flex items-center justify-center rounded-lg text-sm font-bold transition-colors border-2 ${attribution === "COUNTER" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-white hover:border-slate-200"}`}
-                  >
-                    Counter
-                  </button>
-                  {clerks.map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => { setAttribution("CLERK"); setSelectedClerkId(c.id) }}
-                      className={`flex-shrink-0 px-3 py-2 h-10 min-w-[80px] flex items-center justify-center rounded-lg text-sm font-bold transition-colors border-2 ${selectedClerkId === c.id ? "bg-indigo-700 text-white border-indigo-700" : "bg-white text-slate-700 border-white hover:border-slate-200"}`}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
+                  {clerks.map(c => {
+                    const isCounter = c.name.toLowerCase() === "counter"
+                    const isActive = selectedClerkId === c.id
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { 
+                          setAttribution(isCounter ? "COUNTER" : "CLERK")
+                          setSelectedClerkId(c.id) 
+                        }}
+                        className={`flex-shrink-0 px-3 py-2 h-10 min-w-[80px] flex items-center justify-center rounded-lg text-sm font-bold transition-colors border-2 ${
+                          isActive 
+                            ? (isCounter ? "bg-slate-800 text-white border-slate-800" : "bg-indigo-700 text-white border-indigo-700") 
+                            : "bg-white text-slate-700 border-white hover:border-slate-200"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-
-              <label className="flex items-center gap-2 cursor-pointer pt-1 pr-2">
-                <input type="checkbox" className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" checked={saveAsTab} onChange={e => setSaveAsTab(e.target.checked)}/>
-                <span className="text-sm font-bold text-slate-600">Save as Tab</span>
-              </label>
             </div>
 
-            <Button
-              variant="primary"
-              className={`w-full py-5 text-xl font-black tracking-widest uppercase transition-all rounded-2xl shadow-xl ${
-                saveAsTab 
-                  ? "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30" 
-                  : paymentValid || cart.length === 0
-                    ? "bg-emerald-500 shadow-emerald-500/40 hover:bg-emerald-400 hover:shadow-emerald-500/50 hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm" 
-                    : "bg-slate-300 cursor-not-allowed shadow-none text-slate-500"
-              }`}
-              onClick={handleCommit}
-              disabled={loading || (!saveAsTab && !paymentValid) || cart.length === 0}
-            >
-              {loading ? "Processing..." : saveAsTab ? "Open Tab" : `Checkout ${fmt(total)}`}
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="primary"
+                className={`w-full py-4 text-lg font-black tracking-widest uppercase transition-all rounded-xl shadow-lg ${
+                  paymentMode === "TAB" 
+                    ? "bg-indigo-600 hover:bg-indigo-700" 
+                    : paymentValid || cart.length === 0
+                      ? "bg-emerald-600 hover:bg-emerald-700" 
+                      : "bg-slate-300 cursor-not-allowed text-slate-500 shadow-none"
+                }`}
+                onClick={handleCommit}
+                disabled={loading || (paymentMode !== "TAB" && !paymentValid) || cart.length === 0 || !selectedClerkId}
+              >
+                {loading ? "..." : paymentMode === "TAB" ? "Tab It" : `Pay`}
+              </Button>
+
+              <Button
+                variant="danger"
+                className={`w-full py-4 text-lg font-black tracking-widest uppercase transition-all rounded-xl shadow-lg ${
+                  cart.length > 0 && selectedClerkId
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-slate-300 cursor-not-allowed text-slate-500 shadow-none"
+                }`}
+                onClick={handleProcessReturn}
+                disabled={loading || cart.length === 0 || !selectedClerkId}
+              >
+                {loading ? "..." : "Return"}
+              </Button>
+            </div>
 
           </div>
         </div>
@@ -886,25 +1143,42 @@ export default function PosPage(): JSX.Element {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="text-lg font-black text-slate-900">{b.billNumber}</p>
-                      <p className="text-xs font-bold text-slate-400 mt-0.5">{new Date(b.billedAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' })} • {b.operator.name}</p>
+                      <p className="text-xs font-bold text-slate-400 mt-0.5">
+                        {new Date(b.billedAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' })} • {b.clerk?.name || "Counter"}
+                      </p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${b.status === "VOIDED" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
                       {b.status}
                     </span>
                   </div>
                   
-                  <div className="flex items-center justify-between mt-4">
+                  <div className="mt-4 border-t border-slate-50 pt-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Bill Items</p>
+                    <div className="space-y-2">
+                      {b.lines.map(line => (
+                        <div key={line.id} className={`flex items-center justify-between text-sm ${line.isVoidedLine ? "opacity-40 line-through" : ""}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-slate-800 truncate">{line.itemNameSnapshot}</p>
+                            <p className="text-[10px] text-slate-400">Qty: {line.quantity} • {fmt(line.unitPrice)}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <span className="font-black text-slate-900">{fmt(line.lineTotal)}</span>
+                             {line.isVoidedLine && (
+                               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                 Returned
+                               </span>
+                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-6 pt-3 border-t border-slate-50">
                     <span className="text-xl font-black text-slate-900">{fmt(b.netCollectible)}</span>
-                    {b.status === "COMMITTED" && (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-none font-bold shadow-none"
-                        onClick={() => { setShowVoidModal(b); setShowRecent(false) }}
-                      >
-                        Void Bill
-                      </Button>
-                    )}
+                    <div className="flex gap-2">
+                      {/* Void functionality removed per user request */}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -913,34 +1187,6 @@ export default function PosPage(): JSX.Element {
         </Modal>
       )}
 
-      {/* Void Modal */}
-      {showVoidModal && (
-        <Modal title="Void Bill" onClose={() => setShowVoidModal(null)}>
-          <div className="mb-6">
-            <h3 className="text-2xl font-black text-red-600 mb-1">{showVoidModal.billNumber}</h3>
-            <p className="text-slate-500 font-medium">Please enter a reason for voiding this bill.</p>
-          </div>
-          
-          <input
-            value={voidReason}
-            onChange={(e) => setVoidReason(e.target.value)}
-            placeholder="Type reason here..."
-            className="w-full mb-6 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-medium text-slate-900 focus:border-red-500 focus:outline-none transition-colors"
-            autoFocus
-          />
-          <div className="flex gap-3">
-            <Button
-              variant="danger"
-              className="flex-1 py-4 text-base font-black uppercase tracking-widest bg-red-600 hover:bg-red-500 shadow-md shadow-red-600/20"
-              onClick={() => showVoidModal && handleVoid(showVoidModal)}
-              disabled={loading || voidReason.trim().length < 3}
-            >
-              {loading ? "Voiding..." : "Confirm Void"}
-            </Button>
-            <Button variant="secondary" className="py-4 font-bold" onClick={() => setShowVoidModal(null)}>Cancel</Button>
-          </div>
-        </Modal>
-      )}
 
       {/* Map Barcode Modal */}
       {showMapBarcode && (

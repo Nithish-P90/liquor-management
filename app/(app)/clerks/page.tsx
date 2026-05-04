@@ -10,6 +10,10 @@ type Clerk = {
   name: string
   isActive: boolean
   createdAt: string
+  metrics: {
+    billsHandled: number
+    totalSales: number
+  }
 }
 
 export default function ClerksPage(): JSX.Element {
@@ -115,6 +119,8 @@ export default function ClerksPage(): JSX.Element {
               <tr>
                 <th className="px-6 py-4 font-semibold">ID</th>
                 <th className="px-6 py-4 font-semibold">Name</th>
+                <th className="px-6 py-4 font-semibold">Total Bills</th>
+                <th className="px-6 py-4 font-semibold">Total Sales</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Created At</th>
               </tr>
@@ -124,6 +130,8 @@ export default function ClerksPage(): JSX.Element {
                 <tr key={c.id} className="hover:bg-slate-50/50">
                   <td className="px-6 py-4 text-slate-500 font-mono text-xs">{c.id}</td>
                   <td className="px-6 py-4 font-bold text-slate-900">{c.name}</td>
+                  <td className="px-6 py-4 text-slate-900 font-black">{c.metrics.billsHandled}</td>
+                  <td className="px-6 py-4 text-emerald-600 font-black">₹{c.metrics.totalSales.toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
                       Active

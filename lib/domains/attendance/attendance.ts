@@ -27,6 +27,7 @@ function dayOfWeekMonday0(d: Date): number {
 export async function punch(params: {
   staffId: number
   method: AttendanceMethod
+  eventType?: AttendanceEventType
   confidenceScore?: number
   overrideReason?: string
   requestId?: string
@@ -34,7 +35,7 @@ export async function punch(params: {
   ipAddress?: string
   userAgent?: string
 }): Promise<PunchResult> {
-  const { staffId, method, confidenceScore, overrideReason, requestId, deviceLabel, ipAddress, userAgent } = params
+  const { staffId, method, eventType, confidenceScore, overrideReason, requestId, deviceLabel, ipAddress, userAgent } = params
   const now = new Date()
 
   return prisma.$transaction(async (tx) => {
@@ -59,6 +60,36 @@ export async function punch(params: {
     })
     if (!staff) throw new Error("Staff not found")
 
+    const dayStart = new Date(now)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(now)
+    dayEnd.setHours(23, 59, 59, 999)
+
+    const todayEvents = await tx.attendanceEvent.findMany({
+      where: {
+        staffId,
+        occurredAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { eventType: true },
+    })
+    const hasClockInToday = todayEvents.some((ev) => ev.eventType === AttendanceEventType.CLOCK_IN)
+    const hasClockOutToday = todayEvents.some((ev) => ev.eventType === AttendanceEventType.CLOCK_OUT)
+
+    const desiredEventType = eventType ?? (hasClockInToday ? AttendanceEventType.CLOCK_OUT : AttendanceEventType.CLOCK_IN)
+
+    if (desiredEventType === AttendanceEventType.CLOCK_IN) {
+      if (hasClockInToday || hasClockOutToday) {
+        throw new Error("Already clocked in today")
+      }
+    } else if (desiredEventType === AttendanceEventType.CLOCK_OUT) {
+      if (!hasClockInToday) {
+        throw new Error("Clock in first")
+      }
+      if (hasClockOutToday) {
+        throw new Error("Already clocked out today")
+      }
+    }
+
     // Find last event (recent) for dedupe, then decide toggle direction.
     const lastEvent = await tx.attendanceEvent.findFirst({
       where: { staffId },
@@ -75,9 +106,7 @@ export async function punch(params: {
       }
     }
 
-    const eventType = !lastEvent || lastEvent.eventType === AttendanceEventType.CLOCK_OUT
-      ? AttendanceEventType.CLOCK_IN
-      : AttendanceEventType.CLOCK_OUT
+    const finalEventType = desiredEventType
 
     // Pick an applicable shift: today's shift, or previous-day shift if overnight.
     const activeShift = await tx.shiftTemplate.findFirst({
@@ -112,7 +141,7 @@ export async function punch(params: {
         shiftEnd.setHours(endH, endM, 0, 0)
         if (overnight) shiftEnd.setDate(shiftEnd.getDate() + 1)
 
-        if (eventType === AttendanceEventType.CLOCK_IN) {
+        if (finalEventType === AttendanceEventType.CLOCK_IN) {
           const graceMs = (staff.lateGraceMinutes ?? 15) * 60 * 1000
           isLate = now.getTime() > shiftStart.getTime() + graceMs
         } else {
@@ -124,7 +153,7 @@ export async function punch(params: {
     await tx.attendanceEvent.create({
       data: {
         staffId,
-        eventType,
+        eventType: finalEventType,
         method,
         requestId: requestId ?? null,
         confidenceScore: confidenceScore ?? null,
@@ -140,10 +169,10 @@ export async function punch(params: {
     })
 
     return {
-      eventType,
+      eventType: finalEventType,
       isLate,
       isEarlyDeparture,
-      message: eventType === AttendanceEventType.CLOCK_IN
+      message: finalEventType === AttendanceEventType.CLOCK_IN
         ? isLate ? "Clocked in (LATE)" : "Clocked in"
         : isEarlyDeparture ? "Clocked out (EARLY)" : "Clocked out",
     }

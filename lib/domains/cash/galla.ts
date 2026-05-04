@@ -70,6 +70,7 @@ export async function computeGallaBalance(
       case GallaEventType.REFUND_CASH:
       case GallaEventType.EXPENSE:
       case GallaEventType.TRANSFER_TO_LOCKER:
+      case GallaEventType.TRANSFER_TO_BANK:
         balance = balance.minus(event.amount)
         break
       default:

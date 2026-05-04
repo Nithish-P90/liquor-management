@@ -1,0 +1,12 @@
+@startuml
+participant Operator
+participant API
+participant Domain
+participant DB
+Operator -> API: POST /api/indents/:id/receive
+API -> Domain: receiveIndent(params)
+Domain -> DB: create Receipt + ReceiptItems, update stock
+DB --> Domain: persisted
+Domain --> API: receipt
+API --> Operator: 200 OK
+@enduml

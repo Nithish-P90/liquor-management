@@ -1,0 +1,9 @@
+@startuml
+node "Kiosk / Browser" as Browser
+node "Next.js App Server" as Server
+database "Postgres (Prisma)" as DB
+artifact "Face Models Storage" as Models
+Browser --> Server : HTTPS
+Server --> DB
+Server --> Models : serve static models
+@enduml

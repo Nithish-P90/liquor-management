@@ -1,0 +1,20 @@
+%% Component diagram: Next.js app, API routes, domain modules, DB, face-api
+flowchart TB
+  subgraph Client
+    A[Browser UI - app pages]
+    A -->|calls| B[API Routes]
+    A -->|uses| F[face-api.js (browser) for face matching]
+  end
+
+  subgraph Server
+    B[API Routes]
+    B --> C[lib/domains/*]
+    C --> D[Prisma Client]
+    C --> E[lib/platform/*]
+  end
+
+  D --> DB[(Postgres)]
+  F -.-> A
+
+  click B "app/api/*" "API route handlers"
+  click C "lib/domains" "Domain modules (billing, attendance, cash)"

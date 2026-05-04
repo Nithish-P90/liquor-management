@@ -3,12 +3,13 @@ import { BillStatus, GallaEventType, PaymentMode, Prisma } from "@prisma/client"
 import { parseDateParam, todayDateString } from "@/lib/platform/dates"
 import { getOrCreateGallaDay } from "@/lib/domains/cash/galla"
 import { prisma } from "@/lib/platform/prisma"
-import { calculateStock } from "@/lib/domains/inventory/stock"
+import { calculateStock, splitStock } from "@/lib/domains/inventory/stock"
 import { DateString } from "@/lib/platform/types"
 
 export async function runEndOfDay(businessDate: DateString = todayDateString()): Promise<{
   forcedTabs: number
   snapshotCreated: boolean
+  closingEntriesWritten: number
 }> {
   const dateObj = parseDateParam(businessDate)
 
@@ -37,7 +38,66 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
       })
     }
 
-    // 2. Build stock snapshot for all active product sizes
+    // 2. Write CLOSING stock entries and lock the inventory session for this day
+    const session = await tx.inventorySession.findFirst({
+      where: {
+        periodStart: { lte: dateObj },
+        periodEnd: { gte: dateObj },
+        locked: false,
+      },
+      orderBy: { id: "desc" },
+      select: { id: true, periodStart: true, periodEnd: true },
+    })
+
+    let closingEntriesWritten = 0
+
+    if (session) {
+      const sizes = await tx.productSize.findMany({
+        select: { id: true, bottlesPerCase: true },
+      })
+
+      for (const size of sizes) {
+        const stock = await calculateStock(tx, size.id, { upToDate: businessDate })
+        const normalized = splitStock(stock.totalBottles, size.bottlesPerCase)
+
+        await tx.stockEntry.upsert({
+          where: {
+            sessionId_productSizeId_entryType: {
+              sessionId: session.id,
+              productSizeId: size.id,
+              entryType: "CLOSING",
+            },
+          },
+          update: {
+            cases: normalized.cases,
+            bottles: normalized.bottles,
+            totalBottles: stock.totalBottles,
+          },
+          create: {
+            sessionId: session.id,
+            productSizeId: size.id,
+            entryType: "CLOSING",
+            cases: normalized.cases,
+            bottles: normalized.bottles,
+            totalBottles: stock.totalBottles,
+          },
+        })
+      }
+
+      closingEntriesWritten = sizes.length
+
+      await tx.inventorySession.update({
+        where: { id: session.id },
+        data: { locked: true },
+      })
+
+      await tx.gallaDay.update({
+        where: { businessDate: dateObj },
+        data: { isClosed: true, closedAt: new Date() },
+      })
+    }
+
+    // 3. Build stock snapshot for all active product sizes
     const sizes = await tx.productSize.findMany({ select: { id: true } })
     const stockMap: Record<number, number> = {}
     for (const size of sizes) {
@@ -45,14 +105,17 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
       stockMap[size.id] = result.totalBottles
     }
 
-    // 3. Compute payment totals for the day
+    // 4. Compute payment totals for the day
     const payments = await tx.paymentAllocation.groupBy({
       by: ["mode"],
       _sum: { amount: true },
       where: {
         bill: {
           businessDate: dateObj,
-          status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
+          OR: [
+            { status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] } },
+            { status: BillStatus.VOIDED, netCollectible: { lt: 0 } },
+          ],
         },
       },
     })
@@ -73,7 +136,7 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
     })
     const totalExpenses = expenses._sum.amount ?? new Prisma.Decimal(0)
 
-    // 4. Write DailySnapshot (upsert — EOD can run once)
+    // 5. Write DailySnapshot (upsert — EOD can run once)
     const gallaDay = await getOrCreateGallaDay(tx, dateObj)
 
     const existing = await tx.dailySnapshot.findUnique({ where: { gallaDayId: gallaDay.id } })
@@ -94,7 +157,7 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
       snapshotCreated = true
     }
 
-    // 5. Payment reconciliation row
+    // 6. Payment reconciliation row
     await tx.paymentReconciliation.upsert({
       where: { businessDate: dateObj },
       create: {
@@ -110,18 +173,8 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
       },
     })
 
-    // 6. Emit cash sales event to galla
-    if (cashSales.greaterThan(0) && !gallaDay.isClosed) {
-      await tx.gallaEvent.create({
-        data: {
-          gallaDayId: gallaDay.id,
-          eventType: GallaEventType.SALE_CASH,
-          amount: cashSales,
-          reference: `EOD ${businessDate}`,
-        },
-      })
-    }
+    // SALE_CASH events are emitted per-bill at commit time; EOD no longer emits a bulk event.
 
-    return { forcedTabs: openTabs.length, snapshotCreated }
+    return { forcedTabs: openTabs.length, snapshotCreated, closingEntriesWritten }
   })
 }

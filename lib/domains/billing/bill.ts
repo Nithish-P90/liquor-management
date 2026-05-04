@@ -1,8 +1,33 @@
-import { AttributionType, BillStatus, PaymentMode, Prisma, ScanMethod } from "@prisma/client"
+import { AttributionType, BillStatus, GallaEventType, PaymentMode, Prisma, ScanMethod } from "@prisma/client"
 
 import { parseDateParam, todayDateString } from "@/lib/platform/dates"
 import { PrismaTransactionClient, getAvailableStock } from "@/lib/domains/inventory/stock"
 import { applyClearanceSegments, reverseClearanceSegments, resolveRate } from "@/lib/domains/inventory/clearance"
+import { emitGallaEvent } from "@/lib/domains/cash/galla"
+
+export const REVENUE_BILL_STATUSES = [BillStatus.COMMITTED, BillStatus.TAB_SETTLED, BillStatus.TAB_FORCE_SETTLED]
+
+/**
+ * Prisma 'where' clause for bills that contribute to revenue/sales.
+ * Includes: COMMITTED/SETTLED bills, and VOIDED returns (negative collectible).
+ */
+export const REVENUE_BILL_WHERE: Prisma.BillWhereInput = {
+  OR: [
+    { status: { in: REVENUE_BILL_STATUSES } },
+    { status: BillStatus.VOIDED, netCollectible: { lt: 0 } }
+  ]
+}
+
+/**
+ * Prisma 'where' clause for bill lines that contribute to net sales volume.
+ * Includes: non-voided lines on committed bills, and negative lines on return bills.
+ */
+export const REVENUE_LINE_WHERE: Prisma.BillLineWhereInput = {
+  OR: [
+    { bill: { status: { in: REVENUE_BILL_STATUSES } }, isVoidedLine: false },
+    { bill: { status: BillStatus.VOIDED }, quantity: { lt: 0 } }
+  ]
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,6 +77,7 @@ export type SettleTabParams = {
   actorId: number
   payments: DraftPayment[]
 }
+
 
 // ---------------------------------------------------------------------------
 // Bill number
@@ -256,6 +282,7 @@ export async function commitBill(
     unitPrice: Prisma.Decimal
     lineTotal: Prisma.Decimal
     clearanceBatchId?: number
+    isThirdPartySnapshot?: boolean
   }
 
   const resolvedLines: ResolvedLine[] = []
@@ -297,25 +324,34 @@ export async function commitBill(
         }
       }
     } else {
-      // MISC line — price from miscItem
+      // MISC line — price from miscItem, snapshot third-party flag for audit
       const miscItem = await tx.miscItem.findUniqueOrThrow({
         where: { id: line.miscItemId! },
-        select: { price: true },
+        select: { price: true, isThirdParty: true },
       })
       const unitPrice = miscItem.price
-      resolvedLines.push({ ...line, unitPrice, lineTotal: unitPrice.times(line.quantity) })
+      resolvedLines.push({
+        ...line,
+        unitPrice,
+        lineTotal: unitPrice.times(line.quantity),
+        isThirdPartySnapshot: miscItem.isThirdParty,
+      })
     }
   }
 
   // --- Compute totals ---
   let ownerTotal = new Prisma.Decimal(0)
   let cashierTotal = new Prisma.Decimal(0)
+  let thirdPartyTotal = new Prisma.Decimal(0)
 
   for (const l of resolvedLines) {
     if (l.productSizeId != null) {
       ownerTotal = ownerTotal.plus(l.lineTotal)
     } else {
       cashierTotal = cashierTotal.plus(l.lineTotal)
+      if (l.isThirdPartySnapshot) {
+        thirdPartyTotal = thirdPartyTotal.plus(l.lineTotal)
+      }
     }
   }
 
@@ -341,6 +377,7 @@ export async function commitBill(
       grossTotal,
       ownerTotal,
       cashierTotal,
+      thirdPartyTotal,
       discountTotal,
       discountReason: params.discountReason ?? null,
       netCollectible,
@@ -367,6 +404,7 @@ export async function commitBill(
         scanMethod: line.scanMethod ?? ScanMethod.MANUAL,
         isManualOverride: line.isManualOverride ?? false,
         overrideReason: line.overrideReason ?? null,
+        isThirdPartySnapshot: line.isThirdPartySnapshot ?? false,
       },
     })
   }
@@ -380,6 +418,21 @@ export async function commitBill(
         amount: decimalFrom(payment.amount),
         reference: payment.reference ?? null,
       },
+    })
+  }
+
+  // Emit SALE_CASH to galla immediately so register balance reflects real-time sales
+  const cashPaid = params.payments
+    .filter((p) => p.mode === PaymentMode.CASH)
+    .reduce((sum, p) => sum.plus(decimalFrom(p.amount)), new Prisma.Decimal(0))
+
+  if (cashPaid.greaterThan(0)) {
+    await emitGallaEvent(tx, {
+      businessDate: parseDateParam(businessDate),
+      eventType: GallaEventType.SALE_CASH,
+      amount: cashPaid,
+      reference: `BILL ${bill.billNumber}`,
+      billId: bill.id,
     })
   }
 
@@ -417,7 +470,7 @@ export async function voidBill(tx: PrismaTransactionClient, params: VoidBillPara
 
   const bill = await tx.bill.findUniqueOrThrow({
     where: { id: params.billId },
-    include: { lines: true },
+    include: { lines: true, payments: true },
   })
 
   if (bill.status !== BillStatus.COMMITTED) {
@@ -432,6 +485,12 @@ export async function voidBill(tx: PrismaTransactionClient, params: VoidBillPara
       voidedById: params.actorId,
       voidReason: reason,
     },
+  })
+
+  // IMPORTANT: Mark all lines as voided so they are excluded from stock and sales sums
+  await tx.billLine.updateMany({
+    where: { billId: params.billId },
+    data: { isVoidedLine: true }
   })
 
   // Reverse clearance consumption by scanning lines for clearance-priced items.
@@ -467,6 +526,20 @@ export async function voidBill(tx: PrismaTransactionClient, params: VoidBillPara
 
   if (segmentsToReverse.length > 0) {
     await reverseClearanceSegments(tx, segmentsToReverse)
+  }
+
+  const refundCash = (bill.payments ?? [])
+    .filter((payment) => payment.mode === PaymentMode.CASH)
+    .reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0))
+
+  if (refundCash.greaterThan(0)) {
+    await emitGallaEvent(tx, {
+      businessDate: parseDateParam(todayDateString()),
+      eventType: GallaEventType.REFUND_CASH,
+      amount: refundCash,
+      reference: `VOID ${bill.billNumber}`,
+      billId: bill.id,
+    })
   }
 
   await tx.auditEvent.create({
@@ -516,6 +589,21 @@ export async function settleTab(
     })
   }
 
+  // Emit SALE_CASH to galla so register balance reflects tab settlement
+  const tabCashPaid = params.payments
+    .filter((p) => p.mode === PaymentMode.CASH)
+    .reduce((sum, p) => sum.plus(decimalFrom(p.amount)), new Prisma.Decimal(0))
+
+  if (tabCashPaid.greaterThan(0)) {
+    await emitGallaEvent(tx, {
+      businessDate: parseDateParam(todayDateString()),
+      eventType: GallaEventType.SALE_CASH,
+      amount: tabCashPaid,
+      reference: `TAB ${params.billId}`,
+      billId: params.billId,
+    })
+  }
+
   await tx.auditEvent.create({
     data: {
       actorId: params.actorId,
@@ -543,6 +631,7 @@ export async function openTab(
     unitPrice: Prisma.Decimal
     lineTotal: Prisma.Decimal
     clearanceBatchId?: number
+    isThirdPartySnapshot?: boolean
   }
 
   const resolvedLines: ResolvedLine[] = []
@@ -584,17 +673,27 @@ export async function openTab(
     } else {
       const miscItem = await tx.miscItem.findUniqueOrThrow({
         where: { id: line.miscItemId! },
-        select: { price: true },
+        select: { price: true, isThirdParty: true },
       })
-      resolvedLines.push({ ...line, unitPrice: miscItem.price, lineTotal: miscItem.price.times(line.quantity) })
+      resolvedLines.push({
+        ...line,
+        unitPrice: miscItem.price,
+        lineTotal: miscItem.price.times(line.quantity),
+        isThirdPartySnapshot: miscItem.isThirdParty,
+      })
     }
   }
 
   let ownerTotal = new Prisma.Decimal(0)
   let cashierTotal = new Prisma.Decimal(0)
+  let thirdPartyTotal = new Prisma.Decimal(0)
   for (const l of resolvedLines) {
-    if (l.productSizeId != null) ownerTotal = ownerTotal.plus(l.lineTotal)
-    else cashierTotal = cashierTotal.plus(l.lineTotal)
+    if (l.productSizeId != null) {
+      ownerTotal = ownerTotal.plus(l.lineTotal)
+    } else {
+      cashierTotal = cashierTotal.plus(l.lineTotal)
+      if (l.isThirdPartySnapshot) thirdPartyTotal = thirdPartyTotal.plus(l.lineTotal)
+    }
   }
 
   const discountTotal = new Prisma.Decimal(params.discountTotal?.toString() ?? "0")
@@ -603,6 +702,87 @@ export async function openTab(
 
   if (netCollectible.lessThan(0)) {
     throw new Error("Discount total cannot exceed gross total")
+  }
+
+  if (params.existingBillId != null) {
+    const existingBill = await tx.bill.findUniqueOrThrow({
+      where: { id: params.existingBillId },
+      select: {
+        id: true,
+        status: true,
+        billNumber: true,
+        grossTotal: true,
+        ownerTotal: true,
+        cashierTotal: true,
+        thirdPartyTotal: true,
+        discountTotal: true,
+        netCollectible: true,
+        lines: { select: { id: true } },
+      },
+    })
+
+    if (existingBill.status !== BillStatus.TAB_OPEN) {
+      throw new Error(`Cannot add to bill ${existingBill.billNumber}: status is ${existingBill.status}`)
+    }
+
+    for (let i = 0; i < resolvedLines.length; i++) {
+      const line = resolvedLines[i]
+      await tx.billLine.create({
+        data: {
+          billId: existingBill.id,
+          lineNo: existingBill.lines.length + i + 1,
+          entityType: line.productSizeId != null ? "OWNER" : "CASHIER",
+          sourceType: line.productSizeId != null ? "LIQUOR" : "MISC",
+          productSizeId: line.productSizeId ?? null,
+          miscItemId: line.miscItemId ?? null,
+          barcodeSnapshot: line.barcodeSnapshot ?? null,
+          itemNameSnapshot: line.itemNameSnapshot,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineTotal: line.lineTotal,
+          scanMethod: line.scanMethod ?? ScanMethod.MANUAL,
+          isManualOverride: line.isManualOverride ?? false,
+          overrideReason: line.overrideReason ?? null,
+          isThirdPartySnapshot: line.isThirdPartySnapshot ?? false,
+        },
+      })
+    }
+
+    const updatedOwnerTotal = existingBill.ownerTotal.plus(ownerTotal)
+    const updatedCashierTotal = existingBill.cashierTotal.plus(cashierTotal)
+    const updatedThirdPartyTotal = existingBill.thirdPartyTotal.plus(thirdPartyTotal)
+    const updatedGrossTotal = existingBill.grossTotal.plus(grossTotal)
+    const updatedNetCollectible = existingBill.netCollectible.plus(grossTotal)
+
+    await tx.bill.update({
+      where: { id: existingBill.id },
+      data: {
+        grossTotal: updatedGrossTotal,
+        ownerTotal: updatedOwnerTotal,
+        cashierTotal: updatedCashierTotal,
+        thirdPartyTotal: updatedThirdPartyTotal,
+        netCollectible: updatedNetCollectible,
+      },
+    })
+
+    const clearanceSegments = resolvedLines
+      .filter((l) => l.clearanceBatchId != null)
+      .map((l) => ({ rate: l.unitPrice, quantity: l.quantity, clearanceBatchId: l.clearanceBatchId }))
+    if (clearanceSegments.length > 0) {
+      await applyClearanceSegments(tx, clearanceSegments)
+    }
+
+    await tx.auditEvent.create({
+      data: {
+        actorId: params.operatorId,
+        eventType: "TAB_OPENED",
+        entity: "Bill",
+        entityId: existingBill.id,
+        afterSnapshot: { billNumber: existingBill.billNumber, appended: true },
+      },
+    })
+
+    return existingBill.id
   }
 
   const billNumber = await nextBillNumber(tx, businessDate)
@@ -620,6 +800,7 @@ export async function openTab(
       grossTotal,
       ownerTotal,
       cashierTotal,
+      thirdPartyTotal,
       discountTotal,
       discountReason: params.discountReason ?? null,
       netCollectible,
@@ -645,6 +826,7 @@ export async function openTab(
         scanMethod: line.scanMethod ?? ScanMethod.MANUAL,
         isManualOverride: line.isManualOverride ?? false,
         overrideReason: line.overrideReason ?? null,
+        isThirdPartySnapshot: line.isThirdPartySnapshot ?? false,
       },
     })
   }
@@ -668,4 +850,215 @@ export async function openTab(
   })
 
   return bill.id
+}
+
+// ---------------------------------------------------------------------------
+// returnItem
+// ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
+// commitReturn — scan-to-cart return workflow
+// ---------------------------------------------------------------------------
+// Design: A return is NOT a negative sale. It is a separate operational event:
+//   1. VOIDED bill (audit trail only — excluded from all sales aggregates)
+//   2. StockAdjustment(RETURN) per liquor item (puts bottles back in inventory)
+//   3. GallaEvent(REFUND_CASH) (subtracts cash from register)
+// ---------------------------------------------------------------------------
+
+export async function commitReturn(
+  tx: PrismaTransactionClient,
+  params: {
+    operatorId: number
+    clerkId: number
+    reason: string
+    lines: Array<{
+      productSizeId?: number
+      miscItemId?: number
+      itemNameSnapshot: string
+      quantity: number
+      unitPrice: number | Prisma.Decimal
+    }>
+  }
+): Promise<{ billNumber: string }> {
+  const businessDate = todayDateString()
+  const businessDateParsed = parseDateParam(businessDate)
+  const reason = params.reason.trim() || "Customer Return"
+
+  if (params.lines.length === 0) {
+    throw new Error("Return must contain at least one item")
+  }
+
+  // 1. Validate each item was actually sold in sufficient quantity
+  //    Net returnable = (total sold on COMMITTED bills) - (already returned via StockAdjustment)
+  for (const line of params.lines) {
+    const lineIdentity = line.productSizeId
+      ? { productSizeId: line.productSizeId, sourceType: "LIQUOR" as const }
+      : line.miscItemId
+        ? { miscItemId: line.miscItemId, sourceType: "MISC" as const }
+        : null
+
+    if (!lineIdentity) {
+      throw new Error(`Return line is missing item reference: ${line.itemNameSnapshot}`)
+    }
+
+    const clerkSoldData = await tx.billLine.aggregate({
+      where: {
+        ...lineIdentity,
+        isVoidedLine: false,
+        quantity: { gt: 0 },
+        bill: { status: { in: ["COMMITTED", "TAB_FORCE_SETTLED"] }, clerkId: params.clerkId },
+      },
+      _sum: { quantity: true },
+    })
+    const clerkSold = clerkSoldData._sum.quantity ?? 0
+
+    const clerkReturnedData = await tx.billLine.aggregate({
+      where: {
+        ...lineIdentity,
+        isVoidedLine: true,
+        quantity: { lt: 0 },
+        bill: { status: BillStatus.VOIDED, clerkId: params.clerkId },
+      },
+      _sum: { quantity: true },
+    })
+    const clerkReturned = Math.abs(clerkReturnedData._sum.quantity ?? 0)
+    const clerkNetReturnable = clerkSold - clerkReturned
+
+    if (clerkNetReturnable < line.quantity) {
+      throw new Error(
+        `Return denied for ${line.itemNameSnapshot}: this clerk has only ${clerkNetReturnable} eligible for return.`
+      )
+    }
+
+    if (!line.productSizeId) continue // misc items skip stock validation
+
+    // Total sold (positive quantities on non-voided lines of COMMITTED bills)
+    const soldData = await tx.billLine.aggregate({
+      where: {
+        productSizeId: line.productSizeId,
+        isVoidedLine: false,
+        quantity: { gt: 0 },
+        bill: { status: { in: ["COMMITTED", "TAB_FORCE_SETTLED"] } }
+      },
+      _sum: { quantity: true }
+    })
+    const totalSold = soldData._sum.quantity ?? 0
+
+    // Already returned (positive quantities of non-voided lines on VOIDED bills with negative totals)
+    const returnedData = await tx.billLine.aggregate({
+      where: {
+        productSizeId: line.productSizeId,
+        isVoidedLine: false,
+        quantity: { lt: 0 },
+        bill: { status: BillStatus.VOIDED, netCollectible: { lt: 0 } }
+      },
+      _sum: { quantity: true }
+    })
+    const totalReturned = Math.abs(returnedData._sum.quantity ?? 0)
+
+    const netReturnable = totalSold - totalReturned
+    if (netReturnable < line.quantity) {
+      throw new Error(
+        `Cannot return ${line.quantity}x ${line.itemNameSnapshot}: only ${netReturnable} eligible for return (${totalSold} sold, ${totalReturned} already returned).`
+      )
+    }
+  }
+
+  // 2. Calculate totals (all positive — they represent the refund amount)
+  let ownerAmt = new Prisma.Decimal(0)
+  let cashierAmt = new Prisma.Decimal(0)
+  for (const line of params.lines) {
+    const lineAmt = new Prisma.Decimal(line.unitPrice.toString()).times(line.quantity)
+    if (line.productSizeId) ownerAmt = ownerAmt.plus(lineAmt)
+    else cashierAmt = cashierAmt.plus(lineAmt)
+  }
+  const totalAmount = ownerAmt.plus(cashierAmt)
+
+  // 3. Create audit-trail bill (VOIDED status, negative values for net sales parity)
+  const baseBillNumber = await nextBillNumber(tx, businessDate)
+  const billNumber = `${baseBillNumber}-RET`
+  const bill = await tx.bill.create({
+    data: {
+      billNumber,
+      businessDate: businessDateParsed,
+      operatorId: params.operatorId,
+      clerkId: params.clerkId,
+      attributionType: params.clerkId ? "CLERK" : "COUNTER",
+      status: BillStatus.VOIDED,
+      voidReason: reason,
+      voidedById: params.operatorId,
+      voidedAt: new Date(),
+      grossTotal: totalAmount.negated(),
+      ownerTotal: ownerAmt.negated(),
+      cashierTotal: cashierAmt.negated(),
+      netCollectible: totalAmount.negated(),
+    },
+  })
+
+  // 4. Create bill lines (negative quantities for net sales aggregation)
+  for (let i = 0; i < params.lines.length; i++) {
+    const l = params.lines[i]
+    const lineTotal = new Prisma.Decimal(l.unitPrice.toString()).times(l.quantity)
+
+    await tx.billLine.create({
+      data: {
+        billId: bill.id,
+        lineNo: i + 1,
+        entityType: l.productSizeId ? "OWNER" : "CASHIER",
+        sourceType: l.productSizeId ? "LIQUOR" : "MISC",
+        productSizeId: l.productSizeId,
+        miscItemId: l.miscItemId,
+        itemNameSnapshot: l.itemNameSnapshot,
+        quantity: -Math.abs(l.quantity), // Store as negative for net sales aggregation
+        unitPrice: new Prisma.Decimal(l.unitPrice.toString()),
+        lineTotal: lineTotal.negated(),
+        isVoidedLine: false, // Set to false so it contributes to the net-sales/net-stock sum
+      }
+    })
+  }
+
+  // 5. Audit event (StockAdjustment is no longer needed as calculateStock now handles returns via BillLines)
+
+  // 5b. Create negative PaymentAllocation so Net Distribution aggregates correctly
+  await tx.paymentAllocation.create({
+    data: {
+      billId: bill.id,
+      mode: PaymentMode.CASH,
+      amount: totalAmount.negated(),
+      reference: `RETURN ${bill.billNumber}`,
+    },
+  })
+
+  // 6. Emit Galla refund → subtracts cash from register
+  await emitGallaEvent(tx, {
+    businessDate: businessDateParsed,
+    eventType: GallaEventType.REFUND_CASH,
+    amount: totalAmount,
+    reference: `RETURN: ${bill.billNumber}`,
+    billId: bill.id,
+  })
+
+  // 7. Audit event
+  await tx.auditEvent.create({
+    data: {
+      actorId: params.operatorId,
+      eventType: "RETURN_PROCESSED",
+      entity: "Bill",
+      entityId: bill.id,
+      reason,
+      afterSnapshot: {
+        billNumber: bill.billNumber,
+        totalRefund: totalAmount.toString(),
+        items: params.lines.map(l => ({
+          name: l.itemNameSnapshot,
+          qty: l.quantity,
+          unitPrice: l.unitPrice.toString(),
+        })),
+      },
+    }
+  })
+
+  return { billNumber: bill.billNumber }
 }

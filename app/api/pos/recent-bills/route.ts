@@ -24,7 +24,6 @@ export async function GET(req: Request): Promise<Response> {
         clerk: { select: { name: true } },
         payments: true,
         lines: {
-          where: { isVoidedLine: false },
           include: {
             productSize: { include: { product: { select: { name: true } } } },
             miscItem: { select: { name: true } },

@@ -31,8 +31,8 @@ This index is a development reliability tool. Keep it current when files are add
 | `app/globals.css` | Global Tailwind styles. |
 | `app/(app)/layout.tsx` | Protected application layout wrapper. |
 | `app/(app)/dashboard/page.tsx` | Operational dashboard. |
-| `app/(app)/pos/page.tsx` | POS client UI for scanning, cart, tabs, settlement, and void flows. |
-| `app/(app)/pos/actions.ts` | POS server actions that delegate to billing behavior. |
+| `app/(app)/pos/page.tsx` | POS client UI for scanning, cart, tabs, settlement, and return flows. |
+| `app/(app)/pos/api-client.ts` | POS REST client wrappers for billing operations. |
 | `app/(app)/products/page.tsx` | Product catalog management UI. |
 | `app/(app)/attendance/page.tsx` | Attendance UI and face matching flow. |
 | `app/(app)/cash/close/page.tsx` | Galla close UI. |
@@ -43,8 +43,9 @@ This index is a development reliability tool. Keep it current when files are add
 | `app/(app)/indents/page.tsx` | Indent listing UI. |
 | `app/(app)/indents/upload/page.tsx` | Indent upload and parse UI. |
 | `app/(app)/indents/[id]/page.tsx` | Scaffolded indent detail page. |
-| `app/(app)/inventory/page.tsx` | Scaffolded inventory overview page. |
-| `app/(app)/inventory/opening/page.tsx` | Scaffolded opening inventory page. |
+| `app/(app)/inventory/page.tsx` | Inventory hub with session status and quick links to opening stock, the catalog, and closing count. |
+| `app/(app)/inventory/opening/page.tsx` | Opening stock page for viewing the active session and editing opening balances as an admin. |
+| `app/(app)/inventory/catalog/page.tsx` | Inventory catalog page showing live stock snapshot and admin entry point for opening-stock adjustments. |
 | `app/(app)/inventory/closing/page.tsx` | Scaffolded closing inventory page. |
 | `app/(app)/cash/page.tsx` | Scaffolded cash overview page. |
 | `app/(app)/sales/page.tsx` | Scaffolded sales page. |
@@ -59,6 +60,22 @@ This index is a development reliability tool. Keep it current when files are add
 ## API Routes
 
 Use `docs/api-routes.md` and `lib/api/routes.ts` as the authoritative API index.
+
+| File | Purpose |
+| --- | --- |
+| `app/api/pos/bills/compute/route.ts` | POS cart pricing preview endpoint. |
+| `app/api/pos/bills/commit/route.ts` | POS bill commit endpoint. |
+| `app/api/pos/bills/open-tab/route.ts` | POS open-tab endpoint. |
+| `app/api/pos/bills/settle-tab/route.ts` | POS tab settlement endpoint. |
+| `app/api/pos/bills/return/route.ts` | POS return endpoint. |
+| `app/api/misc-items/route.ts` | Admin misc-item catalog endpoint for listing and creation. |
+| `app/api/misc-items/[id]/route.ts` | Admin misc-item update endpoint. |
+| `app/api/misc-items/metrics/route.ts` | Admin misc sales metrics endpoint. |
+| `app/api/attendance/metrics/route.ts` | Attendance metrics report endpoint. |
+| `app/api/inventory/sessions/route.ts` | Inventory session status endpoint that self-heals by running rollover when needed. |
+| `app/api/reports/third-party-payout/route.ts` | Third-party payout report endpoint. |
+| `app/api/staff/metrics/route.ts` | Staff metrics report endpoint. |
+| `app/api/staff/payroll/route.ts` | Staff payroll report endpoint. |
 
 ## Components
 
@@ -84,19 +101,25 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | `lib/domains/auth/auth.ts` | NextAuth credentials provider and session configuration. |
 | `lib/domains/auth/api-auth.ts` | API route authorization helpers. |
 | `lib/domains/auth/types.ts` | Auth domain type exports. |
-| `lib/domains/billing/bill.ts` | Bill creation, settlement, void, split accounting, and stock deduction behavior. |
+| `lib/domains/billing/bill.ts` | Bill creation, settlement, void, split accounting, stock deduction, and return processing (via StockAdjustment and GallaEvent). |
 | `lib/domains/billing/types.ts` | Billing domain type exports. |
+| `lib/domains/billing/compute.ts` | Canonical cart pricing and split subtotal computation. |
+| `lib/domains/billing/preconditions.ts` | Shared billing precondition checks for POS routes. |
+| `lib/domains/billing/third-party-ledger.ts` | Third-party payout summary queries. |
 | `lib/domains/inventory/stock.ts` | Stock movement and lot behavior. |
 | `lib/domains/inventory/reconciliation.ts` | Inventory reconciliation behavior. |
 | `lib/domains/inventory/rollover.ts` | Daily stock rollover behavior. |
 | `lib/domains/inventory/eod.ts` | End-of-day processing behavior. |
+| `lib/domains/inventory/stock-entry.ts` | Opening stock bootstrap behavior for day one. |
 | `lib/domains/cash/galla.ts` | Galla event and cash close behavior. |
 | `lib/domains/cash/ledger.ts` | Ledger reporting behavior. |
 | `lib/domains/cash/analytics.ts` | Analytics query behavior. |
 | `lib/domains/attendance/attendance.ts` | Staff attendance punch behavior. |
+| `lib/domains/attendance/metrics.ts` | Attendance metrics behavior. |
 | `lib/domains/inventory/alerts.ts` | Alert creation and notification behavior. |
 | `lib/domains/inventory/clearance.ts` | Clearance batch behavior. |
 | `lib/domains/inventory/physical-count.ts` | Physical count session and approval behavior. |
+| `lib/domains/inventory/opening-stock.ts` | Opening stock view and replacement behavior for the active session. |
 | `lib/domains/inventory/types.ts` | Inventory domain type exports. |
 | `lib/domains/indents/ksbcl-parser.ts` | KSBCL file parsing behavior. |
 | `lib/domains/indents/ksbcl-match.ts` | KSBCL item matching behavior. |
@@ -105,8 +128,11 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | `lib/domains/catalog/product-import.ts` | Product workbook import behavior. |
 | `lib/domains/catalog/infer-category.ts` | Product category inference helper. |
 | `lib/domains/catalog/types.ts` | Catalog domain type exports. |
+| `lib/domains/catalog/misc-items.ts` | Misc item CRUD and misc sales metrics behavior. |
 | `lib/domains/cash/types.ts` | Cash and ledger domain type exports. |
 | `lib/domains/attendance/types.ts` | Attendance domain type exports. |
+| `lib/domains/staff/metrics.ts` | Staff performance and attendance metrics. |
+| `lib/domains/staff/payroll.ts` | Staff payroll reporting behavior. |
 | `lib/platform/index.ts` | Shared platform barrel for dates, Prisma, types, and validation exports. |
 | `lib/platform/dates.ts` | Date parsing and business date helpers. |
 | `lib/platform/prisma.ts` | Shared Prisma client. |
@@ -124,7 +150,13 @@ Canonical behavior lives under `lib/domains/*` and shared infrastructure lives u
 | `lib/domains/billing/bill.test.ts` | Unit coverage for billing behavior. |
 | `lib/domains/billing/bill.e2e.test.ts` | End-to-end style billing behavior coverage with mocked persistence. |
 | `lib/domains/billing/bill.db.integration.test.ts` | Database-oriented billing integration coverage. |
+| `lib/domains/billing/compute.test.ts` | Unit coverage for cart pricing computation. |
+| `lib/domains/billing/preconditions.test.ts` | Unit coverage for billing precondition checks. |
+| `lib/domains/billing/third-party-ledger.test.ts` | Unit coverage for third-party payout aggregation. |
+| `lib/domains/catalog/misc-items.test.ts` | Unit coverage for misc item CRUD and sales metrics. |
+| `lib/domains/inventory/opening-stock.test.ts` | Unit coverage for opening stock snapshot and replacement behavior. |
 | `lib/domains/inventory/stock.test.ts` | Stock behavior coverage. |
+| `lib/domains/staff/metrics.test.ts` | Unit coverage for staff metrics aggregation. |
 
 ## Prisma And Scripts
 

@@ -1,0 +1,2 @@
+-- Add TRANSFER_TO_BANK to GallaEventType enum
+ALTER TYPE "GallaEventType" ADD VALUE IF NOT EXISTS 'TRANSFER_TO_BANK';

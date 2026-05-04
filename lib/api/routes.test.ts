@@ -13,11 +13,11 @@ function routePathFromFile(file: string): string {
 function exportedMethods(file: string): string[] {
   const source = readFileSync(join(process.cwd(), file), "utf8")
   const directExports = Array.from(
-    source.matchAll(/export\s+async\s+function\s+(GET|POST|PATCH|DELETE)\b/g),
+    source.matchAll(/export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b/g),
     (match) => match[1],
   )
   const aliasedExports = Array.from(
-    source.matchAll(/handler\s+as\s+(GET|POST|PATCH|DELETE)\b/g),
+    source.matchAll(/handler\s+as\s+(GET|POST|PUT|PATCH|DELETE)\b/g),
     (match) => match[1],
   )
 

@@ -1,8 +1,8 @@
 import { BillStatus, Prisma } from "@prisma/client"
-
 import { parseDateParam } from "@/lib/platform/dates"
 import { prisma } from "@/lib/platform/prisma"
 import { DateString } from "@/lib/platform/types"
+import { REVENUE_BILL_WHERE, REVENUE_LINE_WHERE } from "../billing/bill"
 
 export type DateRange = { from: DateString; to: DateString }
 
@@ -16,10 +16,10 @@ export async function getSalesSummary(range: DateRange) {
   const [bills, payments] = await Promise.all([
     prisma.bill.aggregate({
       _count: { id: true },
-      _sum: { grossTotal: true, discountTotal: true, netCollectible: true },
+      _sum: { grossTotal: true, discountTotal: true, netCollectible: true, ownerTotal: true, thirdPartyTotal: true },
       where: {
+        ...REVENUE_BILL_WHERE,
         businessDate: dr,
-        status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
       },
     }),
     prisma.paymentAllocation.groupBy({
@@ -27,8 +27,8 @@ export async function getSalesSummary(range: DateRange) {
       _sum: { amount: true },
       where: {
         bill: {
+          ...REVENUE_BILL_WHERE,
           businessDate: dr,
-          status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
         },
       },
     }),
@@ -39,11 +39,16 @@ export async function getSalesSummary(range: DateRange) {
     byMode[p.mode] = p._sum.amount ?? new Prisma.Decimal(0)
   }
 
+  const netCollectible = bills._sum.netCollectible ?? new Prisma.Decimal(0)
+  const thirdPartyTotal = bills._sum.thirdPartyTotal ?? new Prisma.Decimal(0)
+
   return {
     billCount: bills._count.id,
     grossTotal: bills._sum.grossTotal ?? new Prisma.Decimal(0),
     discountTotal: bills._sum.discountTotal ?? new Prisma.Decimal(0),
-    netCollectible: bills._sum.netCollectible ?? new Prisma.Decimal(0),
+    netCollectible,
+    ownerRevenue: netCollectible.minus(thirdPartyTotal),
+    thirdPartyTotal,
     byMode,
   }
 }
@@ -51,12 +56,11 @@ export async function getSalesSummary(range: DateRange) {
 export async function getBillLines(range: DateRange, limit = 200) {
   return prisma.bill.findMany({
     where: {
+      ...REVENUE_BILL_WHERE,
       businessDate: dateRange(range),
-      status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
     },
     include: {
       lines: {
-        where: { isVoidedLine: false },
         include: {
           productSize: { include: { product: { select: { name: true, category: true } } } },
           miscItem: { select: { name: true, category: true } },
@@ -100,12 +104,11 @@ export async function getTopSellers(range: DateRange, limit = 20) {
     by: ["productSizeId"],
     _sum: { quantity: true, lineTotal: true },
     where: {
+      ...REVENUE_LINE_WHERE,
       sourceType: "LIQUOR",
-      isVoidedLine: false,
       productSizeId: { not: null },
       bill: {
         businessDate: dateRange(range),
-        status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
       },
     },
     orderBy: { _sum: { quantity: "desc" } },
@@ -132,10 +135,10 @@ export async function getClerkPerformance(range: DateRange) {
     _count: { id: true },
     _sum: { netCollectible: true },
     where: {
+      ...REVENUE_BILL_WHERE,
       attributionType: "CLERK",
       clerkId: { not: null },
       businessDate: dateRange(range),
-      status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] },
     },
   })
 }

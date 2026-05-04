@@ -1,0 +1,39 @@
+@startuml
+' Simple ERD derived from prisma schema
+entity "Staff" as STAFF {
+  * id : Int
+  --
+  name : String
+  email : String
+}
+entity "FaceProfile" as FACEPROFILE {
+  * id : Int
+  staffId : Int
+}
+entity "FaceSample" as FACESAMPLE {
+  * id : Int
+  profileId : Int
+}
+entity "Bill" as BILL {
+  * id : Int
+  billNumber : String
+}
+entity "BillLine" as BILLLINE {
+  * id : Int
+  billId : Int
+}
+entity "Product" as PRODUCT {
+  * id : Int
+  itemCode : String
+}
+entity "ProductSize" as PRODUCTSIZE {
+  * id : Int
+  productId : Int
+}
+STAFF ||--o{ FACEPROFILE
+FACEPROFILE ||--o{ FACESAMPLE
+STAFF ||--o{ BILL
+BILL ||--o{ BILLLINE
+PRODUCT ||--o{ PRODUCTSIZE
+PRODUCTSIZE ||--o{ BILLLINE
+@enduml

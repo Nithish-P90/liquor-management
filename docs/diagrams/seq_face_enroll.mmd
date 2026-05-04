@@ -1,0 +1,14 @@
+%% Sequence diagram: Face enroll (capture poses -> POST /api/face/enroll -> domain create profile/samples)
+sequenceDiagram
+  participant Browser
+  participant API as /api/face/enroll
+  participant Domain as lib/domains/face/enroll()
+  participant DB as Postgres/Prisma
+
+  Browser->>Browser: capture pose samples (POSES)
+  Browser->>API: POST { staffId, descriptors[] }
+  API->>Domain: validate auth (admin) -> enrollProfile(params)
+  Domain->>DB: upsert FaceProfile, insert FaceSample rows
+  DB-->>Domain: created profile + samples
+  Domain-->>API: enrollment success
+  API-->>Browser: 200 OK

@@ -1,0 +1,17 @@
+@startuml
+start
+:Create Bill (OPEN/TAB_OPEN);
+:Add BillLines;
+if (Commit?) then (yes)
+  :commitBill() -> create payments;
+  :emit Galla SALE event;
+else (no)
+  :leave as TAB_OPEN;
+endif
+if (Void requested?) then (yes)
+  :voidBill() -> mark voided;
+  :emit REFUND_CASH if cash;
+endif
+:Update DailySnapshot / GallaDay;
+stop
+@enduml

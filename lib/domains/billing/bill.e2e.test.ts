@@ -189,7 +189,9 @@ function createFakeTx() {
         if (include?.lines) {
           return {
             ...bill,
-            lines: state.billLines.filter((line) => line.billId === where.id),
+            lines: state.billLines
+              .filter((line) => line.billId === where.id)
+              .map((line) => ({ ...line })),
           }
         }
 
@@ -221,6 +223,16 @@ function createFakeTx() {
         const record = { id: billLineId++, isVoidedLine: false, ...data }
         state.billLines.push(record)
         return record
+      }),
+      updateMany: vi.fn(async ({ where, data }: { where: { billId: number }; data: Record<string, unknown> }) => {
+        let count = 0
+        for (const line of state.billLines) {
+          if (line.billId === where.billId) {
+            Object.assign(line, data)
+            count += 1
+          }
+        }
+        return { count }
       }),
     },
 

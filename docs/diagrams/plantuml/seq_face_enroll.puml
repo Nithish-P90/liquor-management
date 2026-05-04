@@ -1,0 +1,12 @@
+@startuml
+participant Browser
+participant API
+participant Domain
+participant DB
+Browser -> API: POST /api/face/enroll { staffId, descriptors }
+API -> Domain: enrollProfile(params)
+Domain -> DB: upsert FaceProfile, insert FaceSample[]
+DB --> Domain: persisted
+Domain --> API: success
+API --> Browser: 200 OK
+@enduml

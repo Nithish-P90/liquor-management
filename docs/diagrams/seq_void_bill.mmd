@@ -1,0 +1,19 @@
+%% Sequence diagram: Void bill (UI -> /api/pos/bills/void -> domain voidBill -> galla event)
+sequenceDiagram
+  participant Browser
+  participant API as /api/pos/bills/void
+  participant Domain as lib/domains/billing/voidBill()
+  participant DB as Postgres/Prisma
+  participant Galla as lib/domains/cash/galla
+
+  Browser->>API: POST { billId, reason }
+  API->>Domain: requireSession -> voidBill(billId, reason)
+  Domain->>DB: load bill, bill.lines, payments
+  DB-->>Domain: bill data
+  Domain->>DB: mark bill voided, update lines
+  DB-->>Domain: voided bill
+  Domain->>Galla: emit GallaEvent(REFUND_CASH, amount, reference=billNumber)
+  Galla->>DB: insert GallaEvent, update GallaDay balances
+  DB-->>Galla: updated galla day
+  Domain-->>API: void result
+  API-->>Browser: 200 OK, voided bill

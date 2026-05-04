@@ -1,0 +1,11 @@
+%% Activity-style flow for billing lifecycle (open -> commit -> void -> refund)
+flowchart TD
+  A[Start: Create Bill (TAB_OPEN or OPEN)] --> B[Add BillLines]
+  B --> C{Commit?}
+  C -- Yes --> D[call commitBill() -> create payments -> GallaEvent sale]
+  C -- No --> E[Leave as TAB_OPEN]
+  D --> F{Void requested?}
+  F -- Yes --> G[voidBill() -> mark voided, emit REFUND_CASH if cash]
+  F -- No --> H[Finalize]
+  G --> H
+  H --> I[Update GallaDay / DailySnapshot]

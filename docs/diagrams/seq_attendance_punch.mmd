@@ -1,0 +1,18 @@
+%% Sequence diagram: Attendance punch (select staff -> client face match -> POST /api/attendance/punch -> domain punch -> DB)
+sequenceDiagram
+  participant Browser
+  participant FaceAPI as face-api.js
+  participant API as /api/attendance/punch
+  participant Domain as lib/domains/attendance/punch()
+  participant DB as Postgres/Prisma
+
+  Browser->>FaceAPI: run descriptor matching for selected staff
+  FaceAPI-->>Browser: match result (confidence)
+  Browser->>API: POST { staffId, eventType, method: FACE, confidence }
+  API->>Domain: validate, requireSession, requireAdmin? -> punch(params)
+  Domain->>DB: read staff, check existing events
+  DB-->>Domain: attendance rules result
+  Domain->>DB: create AttendanceEvent row
+  DB-->>Domain: created event
+  Domain-->>API: PunchResult
+  API-->>Browser: 200 OK, PunchResult

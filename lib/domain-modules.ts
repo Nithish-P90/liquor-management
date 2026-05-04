@@ -14,7 +14,13 @@ export const DOMAIN_MODULES = [
   {
     domain: "billing-pos",
     owner: "Billing and POS",
-    files: ["lib/domains/billing/bill.ts", "lib/domains/billing/types.ts"],
+    files: [
+      "lib/domains/billing/bill.ts",
+      "lib/domains/billing/types.ts",
+      "lib/domains/billing/compute.ts",
+      "lib/domains/billing/preconditions.ts",
+      "lib/domains/billing/third-party-ledger.ts",
+    ],
     purpose: "Bill creation, settlement, voiding, line posting, stock deduction, and split accounting behavior.",
   },
   {
@@ -26,6 +32,12 @@ export const DOMAIN_MODULES = [
       "lib/domains/catalog/types.ts",
     ],
     purpose: "Workbook product import and category inference for catalog setup.",
+  },
+  {
+    domain: "catalog-misc-items",
+    owner: "Misc sales",
+    files: ["lib/domains/catalog/misc-items.ts"],
+    purpose: "Misc item CRUD and misc-sales revenue aggregation.",
   },
   {
     domain: "cash-accounting",
@@ -41,8 +53,14 @@ export const DOMAIN_MODULES = [
   {
     domain: "attendance",
     owner: "Attendance",
-    files: ["lib/domains/attendance/attendance.ts", "lib/domains/attendance/types.ts"],
+    files: ["lib/domains/attendance/attendance.ts", "lib/domains/attendance/metrics.ts", "lib/domains/attendance/types.ts"],
     purpose: "Staff punch behavior and attendance log domain logic.",
+  },
+  {
+    domain: "staff",
+    owner: "Staff analytics",
+    files: ["lib/domains/staff/metrics.ts", "lib/domains/staff/payroll.ts"],
+    purpose: "Staff performance and attendance metric aggregation.",
   },
   {
     domain: "inventory",
@@ -51,13 +69,15 @@ export const DOMAIN_MODULES = [
       "lib/domains/inventory/alerts.ts",
       "lib/domains/inventory/clearance.ts",
       "lib/domains/inventory/eod.ts",
+      "lib/domains/inventory/opening-stock.ts",
       "lib/domains/inventory/physical-count.ts",
       "lib/domains/inventory/reconciliation.ts",
       "lib/domains/inventory/rollover.ts",
       "lib/domains/inventory/stock.ts",
+      "lib/domains/inventory/stock-entry.ts",
       "lib/domains/inventory/types.ts",
     ],
-    purpose: "Stock movement, clearance, physical count, reconciliation, alerting, rollover, and day-end behavior.",
+    purpose: "Stock movement, clearance, physical count, reconciliation, alerting, rollover, day-end behavior, opening stock bootstrap, and opening stock view/edit behavior.",
   },
   {
     domain: "supplier-indents",

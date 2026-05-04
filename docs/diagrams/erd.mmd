@@ -1,0 +1,127 @@
+%% Entity Relationship Diagram (ERD) - generated from prisma/schema.prisma
+erDiagram
+  STAFF {
+    Int id PK
+    String name
+    String? email
+    String? pin
+    Role role
+    Boolean active
+  }
+  FACEPROFILE {
+    Int id PK
+    Int staffId FK
+    Float threshold
+    Json descriptor
+  }
+  FACESAMPLE {
+    Int id PK
+    Int profileId FK
+    Json descriptor
+    Float detectionScore
+  }
+  ATTENDANCEEVENT {
+    Int id PK
+    Int staffId FK
+    AttendanceEventType eventType
+    AttendanceMethod method
+    DateTime occurredAt
+  }
+  BILL {
+    Int id PK
+    String billNumber
+    DateTime businessDate
+    Int operatorId FK
+    BillStatus status
+    Decimal grossTotal
+    Decimal netCollectible
+  }
+  BILLLINE {
+    Int id PK
+    Int billId FK
+    Int lineNo
+    BillEntityType entityType
+    Int? productSizeId FK
+    Int quantity
+    Decimal unitPrice
+    Decimal lineTotal
+  }
+  PAYMENTALLOCATION {
+    Int id PK
+    Int billId FK
+    PaymentMode mode
+    Decimal amount
+  }
+  PRODUCT {
+    Int id PK
+    String itemCode
+    String name
+    Category category
+  }
+  PRODUCTSIZE {
+    Int id PK
+    Int productId FK
+    Int sizeMl
+    Decimal mrp
+    Decimal sellingPrice
+  }
+  INDENT {
+    Int id PK
+    String indentNumber
+    DateTime indentDate
+    Decimal? totalIndentValue
+  }
+  INDENTITEM {
+    Int id PK
+    Int indentId FK
+    Int productId FK
+    Int productSizeId FK
+    Int indentCases
+    Int indentBottles
+  }
+  RECEIPT {
+    Int id PK
+    Int indentId FK
+    DateTime receivedDate
+    Int staffId FK
+  }
+  RECEIPTITEM {
+    Int id PK
+    Int receiptId FK
+    Int productSizeId FK
+    Int casesReceived
+  }
+  GALLADAY {
+    Int id PK
+    DateTime businessDate
+    Decimal openingBalance
+    Decimal closingBalance
+  }
+  GALLAEVENT {
+    Int id PK
+    Int gallaDayId FK
+    GallaEventType eventType
+    Decimal amount
+    Int? billId FK
+  }
+
+  STAFF ||--o{ FACEPROFILE : has
+  FACEPROFILE ||--o{ FACESAMPLE : contains
+  STAFF ||--o{ ATTENDANCEEVENT : emits
+
+  STAFF ||--o{ BILL : operates
+  BILL ||--o{ BILLLINE : contains
+  BILL ||--o{ PAYMENTALLOCATION : has
+  PRODUCT ||--o{ PRODUCTSIZE : has
+  PRODUCTSIZE ||--o{ BILLLINE : referenced_by
+
+  INDENT ||--o{ INDENTITEM : contains
+  PRODUCT ||--o{ INDENTITEM : referenced_by
+  INDENT ||--o{ RECEIPT : results_in
+  RECEIPT ||--o{ RECEIPTITEM : contains
+  PRODUCTSIZE ||--o{ RECEIPTITEM : referenced_by
+
+  GALLADAY ||--o{ GALLAEVENT : records
+  BILL ||--o{ GALLAEVENT : may_reference
+
+  %% Notes: Many auxiliary models (CashRecord, LockerRecord, StockEntry, etc.) omitted for brevity

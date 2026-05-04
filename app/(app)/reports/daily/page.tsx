@@ -106,20 +106,22 @@ function DailyView({ view, data }: { view: View; data: unknown }): JSX.Element {
   if (!data) return <p className="text-sm text-slate-500">No data.</p>
 
   if (view === "summary") {
-    const d = data as { billCount: number; grossTotal: string; discountTotal: string; netCollectible: string; byMode: Record<string, string> }
+    const d = data as { billCount: number; grossTotal: string; discountTotal: string; netCollectible: string; ownerRevenue: string; thirdPartyTotal: string; byMode: Record<string, string> }
     const cards = [
       { label: "Bills", value: String(d.billCount) },
       { label: "Gross", value: fmt(d.grossTotal) },
       { label: "Discounts", value: fmt(d.discountTotal) },
-      { label: "Net", value: fmt(d.netCollectible) },
+      { label: "Total Collected", value: fmt(d.netCollectible) },
+      { label: "Owner Revenue", value: fmt(d.ownerRevenue ?? 0), highlight: true },
+      { label: "Third-Party", value: fmt(d.thirdPartyTotal ?? 0) },
       ...Object.entries(d.byMode ?? {}).map(([mode, amount]) => ({ label: mode, value: fmt(amount) })),
     ]
     return (
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div key={c.label} className={`rounded-xl border p-4 ${'highlight' in c && c.highlight ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{c.label}</p>
-            <p className="mt-1 text-xl font-extrabold text-slate-900">{c.value}</p>
+            <p className={`mt-1 text-xl font-extrabold ${'highlight' in c && c.highlight ? 'text-emerald-700' : 'text-slate-900'}`}>{c.value}</p>
           </div>
         ))}
       </div>

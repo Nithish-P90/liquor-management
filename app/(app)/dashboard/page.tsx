@@ -1,29 +1,35 @@
 import Link from "next/link"
-import { TrendingUp, ShoppingBag, CreditCard, AlertTriangle, BarChart3, Package } from "lucide-react"
+import { TrendingUp, ShoppingBag, CreditCard, AlertTriangle, BarChart3, Package, Vault } from "lucide-react"
 
 import { prisma } from "@/lib/prisma"
 import { listActiveAlerts } from "@/lib/alerts"
-import { todayDateString } from "@/lib/dates"
+import { todayDateString, parseDateParam } from "@/lib/dates"
 import { getSalesSummary } from "@/lib/ledger"
-import { getTopSellingItems, getSalesByPaymentMode } from "@/lib/analytics"
+import { getTopSellingItems } from "@/lib/analytics"
+import { computeGallaBalance, getOrCreateGallaDay } from "@/lib/domains/cash/galla"
+import type { PrismaTransactionClient } from "@/lib/domains/inventory/stock"
 
 export default async function DashboardPage(): Promise<JSX.Element> {
   const today = todayDateString()
+  const todayObj = parseDateParam(today)
 
-  const [summary, alerts, openTabs, activeBatches, topItems, paymentStats] = await Promise.all([
+  const [summary, alerts, openTabs, activeBatches, topItems, gallaBalance] = await Promise.all([
     getSalesSummary({ from: today, to: today }).catch(() => null),
     listActiveAlerts(10).catch(() => []),
     prisma.bill.count({ where: { status: "TAB_OPEN" } }).catch(() => 0),
     prisma.clearanceBatch.count({ where: { status: "ACTIVE" } }).catch(() => 0),
     getTopSellingItems(5).catch(() => []),
-    getSalesByPaymentMode().catch(() => []),
+    prisma.$transaction(async (tx) => {
+      const day = await getOrCreateGallaDay(tx as unknown as PrismaTransactionClient, todayObj)
+      return computeGallaBalance(tx as unknown as PrismaTransactionClient, day.id)
+    }).catch(() => null),
   ])
 
   const stats = [
     { label: "Today's Bills", value: String(summary?.billCount ?? 0), icon: ShoppingBag, trend: "+12%" },
-    { label: "Today's Revenue", value: summary ? `₹${Number(summary.netCollectible).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : "₹0.00", icon: TrendingUp, trend: "+8%" },
+    { label: "Today's Revenue", value: summary ? `₹${Number(summary.ownerRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : "₹0.00", icon: TrendingUp, trend: "+8%" },
+    { label: "Cash Register", value: gallaBalance ? `₹${Number(gallaBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : "₹0.00", icon: Vault },
     { label: "Open Tabs", value: String(openTabs), icon: CreditCard, color: openTabs > 0 ? "text-amber-500" : "text-slate-400" },
-    { label: "In-Progress Clearances", value: String(activeBatches), icon: Package },
   ]
 
   return (
@@ -142,15 +148,30 @@ export default async function DashboardPage(): Promise<JSX.Element> {
           <section className="rounded-xl border border-slate-200 bg-slate-900 p-6 shadow-sm">
             <h2 className="mb-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Net Distribution</h2>
             <div className="space-y-5">
-              {paymentStats.map((stat, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-slate-800 pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-slate-200">{stat.mode}</span>
+              {summary && Object.entries(summary.byMode).length > 0 ? (
+                <>
+                  {Object.entries(summary.byMode).map(([mode, amount]) => (
+                    <div key={mode} className="flex items-center justify-between border-b border-slate-800 pb-4">
+                      <span className="text-xs font-bold text-slate-200">{mode}</span>
+                      <span className="font-mono text-sm font-bold text-white">₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400">Owner Revenue</span>
+                      <span className="font-mono text-sm font-bold text-emerald-400">₹{Number(summary.ownerRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {Number(summary.thirdPartyTotal) > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-400">Third-Party</span>
+                        <span className="font-mono text-sm font-bold text-amber-400">₹{Number(summary.thirdPartyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="font-mono text-sm font-bold text-white">₹{(stat._sum.amount ?? 0).toString()}</span>
-                </div>
-              ))}
-              {paymentStats.length === 0 && <p className="text-center text-xs font-medium text-slate-600 py-4">Nil distributions</p>}
+                </>
+              ) : (
+                <p className="text-center text-xs font-medium text-slate-600 py-4">Nil distributions</p>
+              )}
             </div>
           </section>
 

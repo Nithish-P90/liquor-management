@@ -20,9 +20,14 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/products/[id]` | `PATCH`, `DELETE` | `admin` | `catalog` | high | Updates product metadata and sizes, or deletes an unused product. |
 | `/api/products/[id]/barcode` | `PATCH` | `admin` | `catalog` | medium | Assigns or updates the barcode for a product size. |
 | `/api/admin/products/import` | `POST` | `admin` | `catalog` | high | Imports products and sizes from an uploaded workbook. |
+| `/api/misc-items` | `GET`, `POST` | `admin` | `catalog` | high | Lists misc items or creates a misc item used by POS. |
+| `/api/misc-items/[id]` | `PATCH` | `admin` | `catalog` | high | Updates a misc item used by POS. |
+| `/api/misc-items/metrics` | `GET` | `admin` | `catalog` | medium | Summarizes misc sales revenue split for a date range. |
+| `/api/attendance/metrics` | `GET` | `admin` | `attendance` | medium | Returns attendance metrics for a month and optional staff filter. |
 | `/api/expense-categories` | `GET`, `POST` | `session` | `accounting` | medium | Lists expense categories or creates a new active category. |
 | `/api/expenses` | `GET`, `POST` | `session` | `accounting` | high | Lists expenses for a date range or records a new expenditure. |
 | `/api/ledger` | `GET` | `session` | `accounting` | medium | Returns owner and cashier ledger rows for reporting. |
+| `/api/reports/third-party-payout` | `GET` | `admin` | `accounting` | medium | Summarizes third-party misc sales for supplier payout reporting. |
 | `/api/galla` | `GET` | `session` | `cash` | medium | Returns the galla day, cash events, and computed balance for a business date. |
 | `/api/galla/close` | `POST` | `session` | `cash` | high | Closes a galla day with counted cash and records the variance. |
 | `/api/pos/items` | `GET` | `session` | `pos` | medium | Returns all sellable liquor sizes and active misc items for the POS picker. |
@@ -31,6 +36,11 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/pos/map-barcode` | `POST` | `session` | `pos` | high | Maps an unknown barcode to an existing liquor size or misc item. |
 | `/api/pos/open-tabs` | `GET` | `session` | `pos` | medium | Lists pending open customer tabs that can be resumed or settled. |
 | `/api/pos/recent-bills` | `GET` | `session` | `pos` | medium | Lists recent bills for reprint, review, or void workflows. |
+| `/api/pos/bills/compute` | `POST` | `session` | `pos` | medium | Prices a cart using canonical rates and returns split totals. |
+| `/api/pos/bills/commit` | `POST` | `session` | `pos` | high | Commits a bill with canonical pricing, payments, and audit trail. |
+| `/api/pos/bills/open-tab` | `POST` | `session` | `pos` | high | Opens a customer tab with canonical pricing and audit trail. |
+| `/api/pos/bills/settle-tab` | `POST` | `session` | `pos` | high | Settles a tab bill and records payment allocations. |
+| `/api/pos/bills/return` | `POST` | `session` | `pos` | high | Processes a return and records refund cash events. |
 | `/api/settings` | `GET`, `POST` | `session` | `pos` | medium | Returns or updates global system settings and operational thresholds. |
 | `/api/indents` | `GET` | `admin` | `indents` | medium | Lists recent supplier indents with items and receipt references. |
 | `/api/indents/[id]` | `GET` | `admin` | `indents` | medium | Returns one indent with parsed items, mappings, and receipt details. |
@@ -46,7 +56,13 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/attendance/punch` | `POST` | `session` | `attendance` | high | Records staff check-in or check-out events from manual or face-matched flows. |
 | `/api/face/enroll` | `POST` | `admin` | `attendance` | high | Stores face descriptor samples for a staff member. |
 | `/api/face/profiles` | `GET` | `session` | `attendance` | high | Returns enrolled face descriptors for local browser-side matching. |
-| `/api/staff` | `GET`, `POST` | `session` | `staff` | medium | Lists active staff with role and face enrollment status, or creates a new staff member. |
+| `/api/staff` | `GET`, `POST` | `session` | `staff` | medium | Lists active staff with performance metrics, or creates a new staff member. |
+| `/api/inventory/sessions` | `GET` | `session` | `inventory` | low | Ensures daily rollover, then returns the current active inventory session and rollover status. |
+| `/api/inventory/opening` | `GET`, `POST`, `PATCH` | `session` | `inventory` | high | Returns opening stock for a session, bootstraps day-one opening stock, or updates the active session's opening balance. |
+| `/api/inventory/stock` | `GET` | `session` | `inventory` | low | Returns live computed stock for all product sizes within the current session. |
+| `/api/staff/metrics` | `GET` | `admin` | `staff` | medium | Returns staff performance metrics for a date range. |
+| `/api/staff/payroll` | `GET` | `admin` | `staff` | medium | Returns payroll reporting totals for a month and optional staff filter. |
+| `/api/staff/[id]` | `GET`, `PUT`, `DELETE` | `admin` | `staff` | medium | Returns, updates, or soft-deletes a staff member. |
 | `/api/clerks` | `GET`, `POST` | `session` | `staff` | medium | Lists active clerks or creates a new clerk for POS attribution. |
 | `/api/notifications` | `GET` | `session` | `notifications` | medium | Lists active user-visible notifications and operational alerts. |
 | `/api/notifications/[id]/dismiss` | `POST` | `session` | `notifications` | low | Dismisses a notification for the current workflow. |

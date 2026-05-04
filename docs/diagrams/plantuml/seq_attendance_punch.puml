@@ -1,0 +1,17 @@
+@startuml
+participant Browser
+participant FaceAPI
+participant API
+participant Domain
+participant DB
+Browser -> FaceAPI: match descriptor
+FaceAPI --> Browser: match result
+Browser -> API: POST /api/attendance/punch
+API -> Domain: punch(params)
+Domain -> DB: read existing events
+DB --> Domain: events
+Domain -> DB: create AttendanceEvent
+DB --> Domain: created
+Domain --> API: result
+API --> Browser: 200 OK
+@enduml

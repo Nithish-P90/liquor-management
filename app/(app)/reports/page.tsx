@@ -108,7 +108,9 @@ export default function ReportsPage(): JSX.Element {
           ["Bill Count", String(d.billCount)],
           ["Gross Total", `₹${Number(d.grossTotal).toFixed(2)}`],
           ["Discounts", `₹${Number(d.discountTotal).toFixed(2)}`],
-          ["Net Collected", `₹${Number(d.netCollectible).toFixed(2)}`],
+          ["Total Collected", `₹${Number(d.netCollectible).toFixed(2)}`],
+          ["Owner Revenue", `₹${Number(d.ownerRevenue ?? 0).toFixed(2)}`],
+          ["Third-Party", `₹${Number(d.thirdPartyTotal ?? 0).toFixed(2)}`],
           ...Object.entries((d.byMode ?? {}) as Record<string, string>).map(([mode, amount]) => [mode, `₹${Number(amount).toFixed(2)}`]),
         ] as [string, string][]
         setRows(mapped)

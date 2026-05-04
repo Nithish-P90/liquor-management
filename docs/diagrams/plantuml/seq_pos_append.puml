@@ -1,0 +1,12 @@
+@startuml
+participant Browser
+participant API
+participant Domain
+participant DB
+Browser -> API: POST /api/pos/bills/open-tab { existingBillId, lines }
+API -> Domain: openTab(params)
+Domain -> DB: load bill, insert BillLine rows
+DB --> Domain: updated bill
+Domain --> API: updated bill
+API --> Browser: 200 OK
+@enduml
