@@ -1,23 +1,23 @@
 "use client"
 
-import React, { useState } from "react"
+import React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  BarChart3, 
-  Receipt, 
-  Package, 
-  Tags, 
-  Users, 
-  Clock, 
-  Activity, 
-  CreditCard, 
-  TrendingUp, 
-  PlusSquare, 
-  ShieldCheck, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  BarChart3,
+  Receipt,
+  Package,
+  Tags,
+  Users,
+  Clock,
+  Activity,
+  CreditCard,
+  TrendingUp,
+  PlusSquare,
+  ShieldCheck,
   Settings,
   LogOut
 } from "lucide-react"
@@ -57,8 +57,6 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar({ name, role }: SidebarProps): JSX.Element {
   const pathname = usePathname()
-  const [isHovered, setIsHovered] = useState(false)
-  const collapsed = !isHovered
   const items = NAV_ITEMS.filter((item) => (item.adminOnly ? role === "ADMIN" : true))
 
   return (
@@ -68,22 +66,20 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
 
       <aside
         id="app-sidebar"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={`fixed left-0 top-0 z-[100] flex h-screen flex-col overflow-hidden border-r-2 border-slate-100 bg-white transition-[width,box-shadow] duration-200 ease-out ${collapsed ? "w-14" : "w-52 shadow-xl shadow-black/10"}`}
+        className="group fixed left-0 top-0 z-[100] flex h-screen w-14 flex-col overflow-hidden border-r-2 border-slate-100 bg-white transition-[width,box-shadow] duration-200 ease-out hover:w-52 hover:shadow-xl hover:shadow-black/10"
       >
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center px-3">
           <div className="flex items-center gap-3 overflow-hidden">
-            <span className="shrink-0 text-sm font-black tracking-tighter text-slate-900 border-b-2 border-slate-900 leading-none pb-0.5">MV</span>
-            <span className={`whitespace-nowrap text-xs font-black uppercase tracking-widest text-slate-900 transition-[opacity,max-width] duration-200 ${collapsed ? "max-w-0 opacity-0" : "max-w-xs opacity-100"}`}>
+            <span className="shrink-0 border-b-2 border-slate-900 pb-0.5 text-sm font-black leading-none tracking-tighter text-slate-900">MV</span>
+            <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-black uppercase tracking-widest text-slate-900 opacity-0 transition-[opacity,max-width] duration-200 group-hover:max-w-xs group-hover:opacity-100">
               Mahavishnu
             </span>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-0.5 no-scrollbar">
+        <nav className="no-scrollbar flex-1 space-y-0.5 overflow-x-hidden overflow-y-auto px-2 py-2">
           {items.map((item) => {
             const active = pathname === item.href
             return (
@@ -98,7 +94,7 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
                 }`}
               >
                 <item.icon size={18} className="shrink-0" />
-                <span className={`whitespace-nowrap text-[11px] font-black uppercase tracking-widest transition-[opacity,max-width] duration-200 ${collapsed ? "max-w-0 opacity-0" : "max-w-xs opacity-100"}`}>
+                <span className="max-w-0 overflow-hidden whitespace-nowrap text-[11px] font-black uppercase tracking-widest opacity-0 transition-[opacity,max-width] duration-200 group-hover:max-w-xs group-hover:opacity-100">
                   {item.label}
                 </span>
               </Link>
@@ -107,14 +103,14 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
         </nav>
 
         {/* Footer */}
-        <div className="shrink-0 border-t-2 border-slate-50 px-2 py-3 space-y-2">
-          <div className="flex items-center gap-3 px-1 overflow-hidden">
-            <div className="h-7 w-7 shrink-0 rounded-lg bg-slate-900 flex items-center justify-center text-[10px] font-black text-white">
+        <div className="shrink-0 space-y-2 border-t-2 border-slate-50 px-2 py-3">
+          <div className="flex items-center gap-3 overflow-hidden px-1">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-[10px] font-black text-white">
               {name.charAt(0)}
             </div>
-            <div className={`min-w-0 transition-[opacity,max-width] duration-200 ${collapsed ? "max-w-0 opacity-0" : "max-w-xs opacity-100"}`}>
-              <p className="truncate text-[11px] font-black text-slate-900 uppercase tracking-tight">{name}</p>
-              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em]">{role}</p>
+            <div className="max-w-0 min-w-0 overflow-hidden opacity-0 transition-[opacity,max-width] duration-200 group-hover:max-w-xs group-hover:opacity-100">
+              <p className="truncate text-[11px] font-black uppercase tracking-tight text-slate-900">{name}</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600">{role}</p>
             </div>
           </div>
           <button
@@ -124,7 +120,7 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
             onClick={() => signOut({ callbackUrl: "/login" })}
           >
             <LogOut size={14} />
-            <span className={`text-[10px] font-black uppercase tracking-[0.18em] transition-[opacity,max-width] duration-200 overflow-hidden ${collapsed ? "max-w-0 opacity-0" : "max-w-xs opacity-100"}`}>
+            <span className="max-w-0 overflow-hidden whitespace-nowrap text-[10px] font-black uppercase tracking-[0.18em] opacity-0 transition-[opacity,max-width] duration-200 group-hover:max-w-xs group-hover:opacity-100">
               Sign Out
             </span>
           </button>
