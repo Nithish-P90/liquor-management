@@ -66,14 +66,14 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
       id="app-sidebar" 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`relative flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${collapsed ? "w-24" : "w-80 shadow-2xl z-[100]"}`}
+      className={`relative flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${collapsed ? "w-16" : "w-52 shadow-2xl z-[100]"}`}
     >
-      <div className={`px-6 py-12 transition-all duration-500 ${collapsed ? "items-center px-4" : ""}`}>
+      <div className={`px-4 py-6 transition-all duration-500 ${collapsed ? "items-center px-2" : ""}`}>
         <div className={`flex flex-col ${collapsed ? "items-center" : ""}`}>
-          <p className={`text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 transition-all duration-500 ${collapsed ? "opacity-0 -translate-y-2 h-0" : "opacity-100 mb-2 translate-y-0"}`}>
+          <p className={`text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 transition-all duration-500 ${collapsed ? "opacity-0 -translate-y-2 h-0" : "opacity-100 mb-1.5 translate-y-0"}`}>
             Operations Console
           </p>
-          <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-700 ${collapsed ? "text-sm pb-1" : "text-3xl pb-2"}`}>
+          <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-700 ${collapsed ? "text-xs pb-1" : "text-xl pb-1.5"}`}>
             {collapsed ? "MV" : "MAHAVISHNU"}
           </h1>
         </div>
@@ -87,15 +87,15 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : ""}
-              className={`group flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all duration-300 active:scale-95 ${
-                active 
-                ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20" 
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-300 active:scale-95 ${
+                active
+                ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
                 : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               } ${collapsed ? "justify-center px-0" : ""}`}
             >
-              <item.icon size={20} className={`transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-slate-400 group-hover:text-slate-900"}`} />
+              <item.icon size={17} className={`shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-slate-400 group-hover:text-slate-900"}`} />
               {!collapsed && (
-                <span className="text-[11px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden">
+                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden">
                   {item.label}
                 </span>
               )}
@@ -104,26 +104,26 @@ export function Sidebar({ name, role }: SidebarProps): JSX.Element {
         })}
       </nav>
 
-      <div className={`border-t-2 border-slate-50 p-6 transition-all duration-500 ${collapsed ? "p-4" : ""}`}>
-        <div className={`flex items-center gap-4 mb-8 ${collapsed ? "justify-center" : ""}`}>
-          <div className="h-10 w-10 shrink-0 rounded-2xl bg-slate-900 flex items-center justify-center text-xs font-black text-white shadow-lg">
+      <div className={`border-t-2 border-slate-50 p-3 transition-all duration-500 ${collapsed ? "p-2" : ""}`}>
+        <div className={`flex items-center gap-3 mb-3 ${collapsed ? "justify-center" : ""}`}>
+          <div className="h-7 w-7 shrink-0 rounded-xl bg-slate-900 flex items-center justify-center text-[10px] font-black text-white shadow-md">
             {name.charAt(0)}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-black text-slate-900 uppercase tracking-tight">{name}</p>
-              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em] mt-0.5">{role}</p>
+              <p className="truncate text-[10px] font-black text-slate-900 uppercase tracking-tight">{name}</p>
+              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.2em] mt-0.5">{role}</p>
             </div>
           )}
         </div>
-        <button 
-          type="button" 
+        <button
+          type="button"
           title="Sign Out"
-          className={`flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-slate-100 bg-white py-4 transition-all hover:border-rose-200 hover:text-rose-600 active:scale-95 shadow-sm ${collapsed ? "px-0" : ""}`}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-white py-2 transition-all hover:border-rose-200 hover:text-rose-600 active:scale-95 shadow-sm ${collapsed ? "px-0" : ""}`}
           onClick={() => signOut({ callbackUrl: "/login" })}
         >
-          <LogOut size={16} />
-          {!collapsed && <span className="text-[10px] font-black uppercase tracking-widest">Sign Out</span>}
+          <LogOut size={14} />
+          {!collapsed && <span className="text-[9px] font-black uppercase tracking-widest">Sign Out</span>}
         </button>
       </div>
     </aside>
