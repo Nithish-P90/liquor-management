@@ -10,6 +10,11 @@ export async function GET(): Promise<Response> {
     const profiles = await prisma.faceProfile.findMany({
       include: {
         staff: { select: { id: true, name: true, role: true, active: true } },
+        samples: {
+          take: 6,
+          orderBy: [{ qualityScore: "desc" }, { detectionScore: "desc" }],
+          select: { descriptor: true },
+        },
       },
     })
 
@@ -23,6 +28,7 @@ export async function GET(): Promise<Response> {
           threshold: p.threshold,
           sampleCount: p.sampleCount,
           descriptor: p.descriptor,
+          sampleDescriptors: p.samples.map((s) => s.descriptor),
         })),
     )
   } catch {

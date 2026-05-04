@@ -61,9 +61,9 @@ function computeAdaptiveThreshold(
   const spread = average(samples.map((sample) => euclideanDistance(sample.descriptor, centroid)))
 
   // Higher-quality samples get a stricter threshold; noisier enrollments get a slightly wider one.
-  const base = 0.46 + (1 - avgQuality) * 0.05 + (1 - avgDetection) * 0.03
-  const adjusted = base + Math.min(0.04, spread * 0.15)
-  return clamp(adjusted, 0.38, 0.54)
+  const base = 0.48 + (1 - avgQuality) * 0.05 + (1 - avgDetection) * 0.03
+  const adjusted = base + Math.min(0.05, spread * 0.2)
+  return clamp(adjusted, 0.4, 0.6)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
