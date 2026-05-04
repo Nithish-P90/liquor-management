@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Search, Activity, Trash2, TrendingDown, Percent } from "lucide-react"
+import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"

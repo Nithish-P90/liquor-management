@@ -66,6 +66,7 @@ function computeAdaptiveThreshold(
   return clamp(adjusted, 0.38, 0.54)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function meanDescriptor(vectors: number[][]): number[] {
   const dims = vectors[0]?.length ?? 0
   const acc = new Array(dims).fill(0) as number[]

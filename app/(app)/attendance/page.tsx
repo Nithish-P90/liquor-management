@@ -5,7 +5,7 @@ import * as faceapi from "face-api.js"
 import { nanoid } from "nanoid"
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
-import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Activity, Scan, Sparkles, CircleCheckBig, ShieldAlert, Play, StopCircle, ScanFace } from "lucide-react"
+import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Sparkles, CircleCheckBig, ShieldAlert, Play, StopCircle, ScanFace } from "lucide-react"
 
 type StaffRow = { id: number; name: string; role: string; faceEnrolled: boolean; faceSampleCount: number }
 
@@ -421,6 +421,22 @@ export default function AttendancePage(): JSX.Element {
                     value={selectedStaffId ?? ""}
                     onChange={(e) => {
                       const next = e.target.value ? Number(e.target.value) : null
+                      setSelectedStaffId(next)
+                      setSelectedFaceMatch(null)
+                      if (!next) stopCamera()
+                    }}
+                    className="w-full appearance-none rounded-2xl border-2 border-slate-100 bg-slate-50 pl-14 pr-12 py-5 text-lg font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all cursor-pointer shadow-inner"
+                  >
+                    <option value="">Select identity from roster…</option>
+                    {staffOptions.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name} · {staff.role}{staff.faceEnrolled ? ` · Profile Active (${staff.faceSampleCount} Samples)` : " · Biometric Pending"}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
+                </div>
+              </div>
               <div className="flex flex-col gap-3 md:min-w-[260px]">
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                   <div className="flex items-center gap-2 font-bold text-slate-900">
@@ -453,22 +469,6 @@ export default function AttendancePage(): JSX.Element {
                   >
                     <StopCircle size={15} /> Stop
                   </Button>
-                </div>
-              </div>
-                      setSelectedStaffId(next)
-                      setSelectedFaceMatch(null)
-                      if (!next) stopCamera()
-                    }}
-                    className="w-full appearance-none rounded-2xl border-2 border-slate-100 bg-slate-50 pl-14 pr-12 py-5 text-lg font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all cursor-pointer shadow-inner"
-                  >
-                    <option value="">Select identity from roster…</option>
-                    {staffOptions.map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name} · {staff.role}{staff.faceEnrolled ? ` · Profile Active (${staff.faceSampleCount} Samples)` : " · Biometric Pending"}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
                 </div>
               </div>
             </div>

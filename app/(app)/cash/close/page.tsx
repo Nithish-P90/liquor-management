@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { Vault, Building2, TrendingUp, ArrowUpRight, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -48,7 +48,6 @@ type TransferCardConfig = {
   onAmountChange: (value: string) => void
   refValue: string
   onRefChange: (value: string) => void
-  accentColor: "blue" | "purple"
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -207,7 +206,6 @@ export default function CashManagementPage(): JSX.Element {
       onAmountChange: setToLockerAmt,
       refValue: toLockerRef,
       onRefChange: setToLockerRef,
-      accentColor: "blue",
     },
     {
       kind: "BANK",
@@ -217,7 +215,6 @@ export default function CashManagementPage(): JSX.Element {
       onAmountChange: setToBankAmt,
       refValue: toBankRef,
       onRefChange: setToBankRef,
-      accentColor: "purple",
     },
   ]
 
@@ -260,7 +257,6 @@ export default function CashManagementPage(): JSX.Element {
                     buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO VAULT" : "SETTLE TO BANK"}
                     onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
                     busy={busy}
-                    accentColor={card.accentColor}
                   />
                 ))}
               </div>
@@ -412,7 +408,7 @@ export default function CashManagementPage(): JSX.Element {
   )
 }
 
-function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any; subValue?: string }): JSX.Element {
+function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: React.ElementType; subValue?: string }): JSX.Element {
   const tones = {
     emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
     indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
@@ -434,7 +430,7 @@ function MetricCard({ label, value, color, icon: Icon, subValue }: { label: stri
   )
 }
 
-function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefChange, buttonLabel, onSubmit, busy, accentColor }: {
+function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefChange, buttonLabel, onSubmit, busy }: {
   icon: React.ReactNode
   title: string
   amountValue: string
@@ -444,10 +440,7 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
   buttonLabel: string
   onSubmit: () => void
   busy: boolean
-  accentColor: "blue" | "purple"
 }): JSX.Element {
-  const accent = accentColor === "blue" ? "indigo" : "indigo" // Standardization
-  
   return (
     <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-10 shadow-sm transition-all hover:shadow-lg">
       <div className="mb-8 flex items-center gap-4">
