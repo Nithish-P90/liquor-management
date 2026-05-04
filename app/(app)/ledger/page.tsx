@@ -50,53 +50,56 @@ export default function LedgerPage(): JSX.Element {
   const days = useMemo(() => generateDateRange(from, to), [from, to])
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-10">
-      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-200 pb-8">
+    <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-12">
+      <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8 border-b-2 border-slate-100 pb-10">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-            <BarChart3 className="text-emerald-600" size={32} />
+          <h1 className="text-4xl font-black tracking-tight text-slate-900 flex items-center gap-4">
+            <div className="rounded-2xl bg-slate-900 p-3 text-white shadow-xl shadow-slate-900/10">
+              <BarChart3 size={32} />
+            </div>
             Daily Financial Ledger
           </h1>
-          <p className="mt-2 text-sm font-semibold text-slate-500 uppercase tracking-wider">
-            Comprehensive Day-by-Day Analytics
+          <p className="mt-3 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">
+            Enterprise Financial Audit Trail
           </p>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center gap-2">
             {presets.map(p => (
-              <button key={p.label} onClick={p.onClick} className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-lg px-3 py-1.5 transition-colors shadow-sm">
+              <button key={p.label} onClick={p.onClick} className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white border-2 border-slate-100 hover:border-indigo-400 hover:text-indigo-600 rounded-xl px-4 py-2 transition-all shadow-sm active:scale-95">
                 {p.label}
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-3 bg-white border border-slate-200 p-2 rounded-xl shadow-sm">
-            <div className="flex items-center gap-2 pl-2">
-              <Calendar size={16} className="text-slate-400" />
+          <div className="flex flex-wrap items-center gap-3 bg-white border-2 border-slate-100 p-3 rounded-2xl shadow-md">
+            <div className="flex items-center gap-3 pl-3">
+              <Calendar size={18} className="text-slate-400" />
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none" />
+                className="bg-transparent text-base font-black text-slate-800 focus:outline-none" />
             </div>
-            <span className="text-slate-300 font-bold">→</span>
-            <div className="flex items-center gap-2">
+            <div className="h-6 w-px bg-slate-200 mx-1" />
+            <div className="flex items-center gap-3">
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none" />
+                className="bg-transparent text-base font-black text-slate-800 focus:outline-none" />
             </div>
             <a
               href={`/api/ledger?from=${from}&to=${to}&view=summary&format=csv`}
-              className="ml-2 flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+              className="ml-4 flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-slate-800 transition-all shadow-lg active:scale-95"
             >
-              <Download size={14} /> Export CSV
+              <Download size={14} /> Export
             </a>
           </div>
         </div>
       </header>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {days.length > 0 ? (
           days.map(day => <DailyAccordion key={day} date={day} />)
         ) : (
-          <div className="flex h-32 items-center justify-center rounded-2xl border border-slate-200 bg-white border-dashed text-sm font-bold text-slate-400">
-            Invalid date range selected.
+          <div className="flex flex-col h-48 items-center justify-center rounded-3xl border-4 border-slate-100 border-dashed text-slate-400 gap-3">
+            <AlertCircle size={32} />
+            <p className="text-sm font-black uppercase tracking-widest">No transaction data for this range</p>
           </div>
         )}
       </div>
@@ -149,63 +152,65 @@ function DailyAccordion({ date }: { date: string }) {
   const summary = data?.summary || (data?.billCount !== undefined ? data : null)
 
   return (
-    <div className={`rounded-2xl border transition-all ${isExpanded ? 'border-slate-300 shadow-md bg-white' : 'border-slate-200 shadow-sm bg-white hover:border-slate-300'}`}>
+    <div className={`rounded-3xl border-2 transition-all duration-300 ${isExpanded ? 'border-slate-900 shadow-2xl bg-white scale-[1.01] z-10' : 'border-slate-100 shadow-sm bg-white hover:border-indigo-200'}`}>
       <button 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex flex-col md:flex-row items-start md:items-center justify-between p-6 focus:outline-none"
+        className="w-full flex flex-col md:flex-row items-start md:items-center justify-between p-8 focus:outline-none"
       >
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-xl transition-colors ${isExpanded ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-            <Calendar size={24} />
+        <div className="flex items-center gap-6">
+          <div className={`p-4 rounded-2xl transition-all duration-500 shadow-inner ${isExpanded ? 'bg-indigo-600 text-white rotate-12 scale-110' : 'bg-slate-50 text-slate-400'}`}>
+            <Calendar size={28} />
           </div>
           <div className="text-left">
-            <h2 className="text-xl font-bold text-slate-900">{formattedDate}</h2>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mt-1">{date}</p>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{formattedDate}</h2>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400 mt-1.5">{date}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-6 mt-4 md:mt-0">
+        <div className="flex items-center gap-10 mt-6 md:mt-0">
           {!isExpanded && !hasFetchedOnce && (
-            <span className="text-xs font-bold text-slate-400">Click to load data</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 animate-pulse">Load Audit Data</span>
           )}
           {summary && !isExpanded && (
-            <div className="flex gap-4">
+            <div className="flex gap-8">
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Bills</p>
-                <p className="text-sm font-black text-slate-700">{summary.billCount}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bills</p>
+                <p className="text-lg font-black text-slate-900">{summary.billCount}</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Revenue</p>
-                <p className="text-sm font-black text-emerald-600">{fmt(summary.netCollectible || 0)}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Revenue</p>
+                <p className="text-lg font-black text-emerald-600">{fmt(summary.netCollectible || 0)}</p>
               </div>
             </div>
           )}
-          {isExpanded ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
+          <div className={`rounded-full p-2 transition-transform duration-500 ${isExpanded ? 'rotate-180 bg-slate-900 text-white' : 'bg-slate-50 text-slate-400'}`}>
+            <ChevronDown size={24} />
+          </div>
         </div>
       </button>
 
       {isExpanded && (
-        <div className="p-6 pt-0 border-t border-slate-100 mt-2">
-          <div className="mt-6 mb-8 flex flex-wrap gap-2">
+        <div className="p-8 pt-0 border-t-2 border-slate-50 mt-2">
+          <div className="mt-8 mb-10 flex flex-wrap gap-3">
             {[
-              { key: "overview", label: "Overview", icon: BarChart3 },
-              { key: "bills", label: "Bills", icon: Receipt },
-              { key: "voids", label: "Voids", icon: AlertCircle },
-              { key: "expenses", label: "Expenses", icon: TrendingUp },
-              { key: "top-sellers", label: "Top Sellers", icon: Package },
-              { key: "clerks", label: "Clerks", icon: Users },
-              { key: "audit", label: "Audit Log", icon: FileText },
+              { key: "overview", label: "Executive Summary", icon: BarChart3 },
+              { key: "bills", label: "Transaction Feed", icon: Receipt },
+              { key: "voids", label: "Void Log", icon: AlertCircle },
+              { key: "expenses", label: "Payouts", icon: TrendingUp },
+              { key: "top-sellers", label: "Product Performance", icon: Package },
+              { key: "clerks", label: "Operator Audit", icon: Users },
+              { key: "audit", label: "System Trail", icon: FileText },
             ].map((v) => (
               <button
                 key={v.key}
                 onClick={() => setView(v.key as View)}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all shadow-sm ${
+                className={`flex items-center gap-2 rounded-2xl px-6 py-3.5 text-[11px] font-black uppercase tracking-widest transition-all shadow-md active:scale-95 ${
                   view === v.key 
-                    ? "bg-slate-900 text-white border border-slate-900" 
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                    ? "bg-slate-900 text-white shadow-slate-900/20" 
+                    : "bg-white text-slate-500 border-2 border-slate-50 hover:border-indigo-300 hover:text-indigo-600"
                 }`}
               >
-                <v.icon size={14} />
+                <v.icon size={16} />
                 {v.label}
               </button>
             ))}
@@ -238,49 +243,51 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
 
     return (
       <div className="space-y-6">
+    return (
+      <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard title="Total Bills" value={summary.billCount} icon={Receipt} />
-          <MetricCard title="Gross Sales" value={fmt(summary.grossTotal)} icon={TrendingUp} />
-          <MetricCard title="Total Expenses" value={fmt(expenses?.total ?? 0)} icon={ArrowUpRight} color="text-red-600" />
-          <MetricCard title="Owner Revenue" value={fmt(summary.ownerRevenue)} icon={Vault} color="text-emerald-600" bg="bg-emerald-50" border="border-emerald-200" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard title="Transactions" value={summary.billCount} icon={Receipt} color="text-slate-900" bg="bg-white" accent="indigo" />
+          <MetricCard title="Gross Receipts" value={fmt(summary.grossTotal)} icon={TrendingUp} color="text-slate-900" bg="bg-white" accent="emerald" />
+          <MetricCard title="Total Payouts" value={fmt(expenses?.total ?? 0)} icon={ArrowUpRight} color="text-rose-600" bg="bg-rose-50/30" accent="red" />
+          <MetricCard title="Net Settlement" value={fmt(summary.netCollectible)} icon={Vault} color="text-emerald-700" bg="bg-emerald-50/50" accent="emerald" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           {/* Revenue Breakdown & Clerks */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Revenue Breakdown</h3>
-              <div className="space-y-4">
+          <div className="lg:col-span-1 space-y-10">
+            <div className="rounded-3xl border-2 border-slate-50 bg-white p-8 shadow-sm">
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8 px-1">Revenue Segmentation</h3>
+              <div className="space-y-5">
                 {summary.byMode && Object.entries(summary.byMode).map(([mode, amount]) => (
-                  <div key={mode} className="flex justify-between items-center pb-3 border-b border-slate-100">
-                    <span className="text-sm font-bold text-slate-700">{mode}</span>
-                    <span className="text-sm font-black text-slate-900">{fmt(amount as string)}</span>
+                  <div key={mode} className="flex justify-between items-center pb-4 border-b-2 border-slate-50">
+                    <span className="text-sm font-black text-slate-600 uppercase tracking-tight">{mode}</span>
+                    <span className="text-base font-black text-slate-900">{fmt(amount as string)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                  <span className="text-sm font-bold text-slate-700">Third-Party</span>
-                  <span className="text-sm font-black text-amber-600">{fmt(summary.thirdPartyTotal)}</span>
+                <div className="flex justify-between items-center pb-4 border-b-2 border-slate-50">
+                  <span className="text-sm font-black text-slate-600 uppercase tracking-tight">Third-Party Share</span>
+                  <span className="text-base font-black text-amber-600">{fmt(summary.thirdPartyTotal)}</span>
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                  <span className="text-sm font-black text-emerald-700">Net Collected</span>
-                  <span className="text-lg font-black text-emerald-600">{fmt(summary.netCollectible)}</span>
+                <div className="flex justify-between items-center pt-4 bg-emerald-50/50 -mx-4 px-4 rounded-2xl">
+                  <span className="text-sm font-black text-emerald-800 uppercase tracking-widest">Collectible Cash</span>
+                  <span className="text-2xl font-black text-emerald-600 tracking-tight">{fmt(summary.netCollectible)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><Users size={16}/> Clerk Performance</h3>
-              <div className="space-y-4">
+            <div className="rounded-3xl border-2 border-slate-50 bg-white p-8 shadow-sm">
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8 flex items-center gap-2"><Users size={16}/> Operator Efficiency</h3>
+              <div className="space-y-6">
                 {clerks?.length > 0 ? clerks.map((c: Row, i: number) => (
-                  <div key={i} className="flex justify-between items-center">
+                  <div key={i} className="flex justify-between items-center group">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-slate-800">{c.clerkId ? `Clerk #${c.clerkId}` : "Counter"}</span>
-                      <span className="text-xs text-slate-500 font-medium">{c._count.id} bills</span>
+                      <span className="text-sm font-black text-slate-800 tracking-tight">{c.clerkId ? `OPERATOR #${c.clerkId}` : "MASTER COUNTER"}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{c._count.id} DISPATCHES</span>
                     </div>
-                    <span className="text-sm font-black text-emerald-600">{fmt(c._sum.netCollectible)}</span>
+                    <span className="text-lg font-black text-emerald-600 tabular-nums">{fmt(c._sum.netCollectible)}</span>
                   </div>
-                )) : <p className="text-xs font-medium text-slate-400 text-center py-4">No clerk data</p>}
+                )) : <div className="text-center py-8 text-[11px] font-black uppercase tracking-widest text-slate-300">No Operator Data</div>}
               </div>
             </div>
           </div>
@@ -473,33 +480,40 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
   return <pre className="text-xs text-slate-400 overflow-auto bg-white p-6 rounded-2xl border border-slate-200">{JSON.stringify(data, null, 2)}</pre>
 }
 
-function MetricCard({ title, value, icon: Icon, color = "text-slate-900", bg = "bg-white", border = "border-slate-200" }: { title: string, value: string | number, icon: any, color?: string, bg?: string, border?: string }) {
+function MetricCard({ title, value, icon: Icon, color = "text-slate-900", bg = "bg-white", accent = "slate" }: { title: string, value: string | number, icon: any, color?: string, bg?: string, accent?: string }) {
+  const accentColor = {
+    emerald: "text-emerald-500",
+    indigo: "text-indigo-500",
+    red: "text-rose-500",
+    slate: "text-slate-400",
+  }[accent as any] || "text-slate-400"
+
   return (
-    <div className={`rounded-2xl border ${border} ${bg} p-6 shadow-sm flex flex-col justify-between h-32`}>
+    <div className={`rounded-3xl border-2 border-slate-50 ${bg} p-8 shadow-sm flex flex-col justify-between h-40 transition-all hover:shadow-xl hover:-translate-y-1`}>
       <div className="flex justify-between items-start">
-        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">{title}</p>
-        <div className={`p-1.5 rounded-lg bg-slate-50 text-slate-400`}>
-          <Icon size={16} />
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{title}</p>
+        <div className={`p-2.5 rounded-2xl bg-slate-50 ${accentColor} shadow-inner`}>
+          <Icon size={20} />
         </div>
       </div>
-      <p className={`text-2xl font-black tracking-tight ${color}`}>{value}</p>
+      <p className={`text-3xl font-black tracking-tight tabular-nums ${color}`}>{value}</p>
     </div>
   )
 }
 
 function DataTable({ headers, data, renderRow }: { headers: string[], data: any[], renderRow: (item: any, index: number) => JSX.Element }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+    <div className="rounded-3xl border-2 border-slate-50 bg-white overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-left whitespace-nowrap">
-          <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+          <thead className="bg-slate-100/50 text-[11px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-50">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className={`px-6 py-4 ${i === headers.length - 1 ? 'text-right' : ''}`}>{h}</th>
+                <th key={i} className={`px-6 py-5 ${i === headers.length - 1 ? 'text-right' : ''}`}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y-2 divide-slate-50">
             {data?.length > 0 ? data.map(renderRow) : (
               <tr><td colSpan={headers.length} className="px-6 py-12 text-center text-xs font-medium text-slate-400">No records found for the selected period.</td></tr>
             )}

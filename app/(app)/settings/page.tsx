@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Settings, ShieldCheck, Database, Sliders, Globe } from "lucide-react"
+
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
 
@@ -62,7 +64,11 @@ export default function SettingsPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="System Settings" subtitle="Configure application-wide variables and thresholds.">
+    <PageShell title="Global Configuration" subtitle="Define application-wide operational variables, regulatory thresholds, and system identities.">
+      <div className="mb-12 border-b-2 border-slate-50 pb-8">
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Environment</h2>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Administrative Variable Control</p>
+      </div>
       {error && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
           {error}
@@ -70,27 +76,29 @@ export default function SettingsPage(): JSX.Element {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading settings...</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Environment Variables…</div>
       ) : (
-        <form onSubmit={handleSave} className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="space-y-6">
-            {keys.map((k) => (
-              <div key={k.key}>
-                <label className="block text-sm font-bold text-slate-700 mb-1">{k.label}</label>
-                <input
-                  type="text"
-                  value={settings[k.key] || ""}
-                  onChange={(e) => handleChange(k.key, e.target.value)}
-                  placeholder={`Enter ${k.label.toLowerCase()}`}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-            ))}
+        <form onSubmit={handleSave} className="max-w-3xl rounded-[2.5rem] border-2 border-slate-100 bg-white p-10 shadow-sm">
+          <div className="space-y-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {keys.map((k) => (
+                <div key={k.key} className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">{k.label}</label>
+                  <input
+                    type="text"
+                    value={settings[k.key] || ""}
+                    onChange={(e) => handleChange(k.key, e.target.value)}
+                    placeholder={`Define ${k.label.toLowerCase()}...`}
+                    className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-base font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-            <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? "Saving..." : "Save Settings"}
+          <div className="mt-12 pt-10 border-t-2 border-slate-50 flex justify-end">
+            <Button type="submit" variant="primary" disabled={saving} className="rounded-2xl px-12 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-slate-900/10 active:scale-95 transition-all">
+              {saving ? "Deploying Updates…" : "Commit Changes"}
             </Button>
           </div>
         </form>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Calendar, BarChart3, Download, Search, FileText } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
@@ -105,13 +105,12 @@ export default function ReportsPage(): JSX.Element {
       if (selectedReport === "daily-sales") {
         const d = data as Record<string, unknown>
         const mapped = [
-          ["Bill Count", String(d.billCount)],
-          ["Gross Total", `₹${Number(d.grossTotal).toFixed(2)}`],
-          ["Discounts", `₹${Number(d.discountTotal).toFixed(2)}`],
-          ["Total Collected", `₹${Number(d.netCollectible).toFixed(2)}`],
-          ["Owner Revenue", `₹${Number(d.ownerRevenue ?? 0).toFixed(2)}`],
-          ["Third-Party", `₹${Number(d.thirdPartyTotal ?? 0).toFixed(2)}`],
-          ...Object.entries((d.byMode ?? {}) as Record<string, string>).map(([mode, amount]) => [mode, `₹${Number(amount).toFixed(2)}`]),
+          ["Sequential Bill Count", String(d.billCount)],
+          ["Gross System Total", `₹${Number(d.grossTotal).toFixed(2)}`],
+          ["Net Collectible Cash", `₹${Number(d.netCollectible).toFixed(2)}`],
+          ["Owner Settlement Payout", `₹${Number(d.ownerRevenue ?? 0).toFixed(2)}`],
+          ["Third-Party Share", `₹${Number(d.thirdPartyTotal ?? 0).toFixed(2)}`],
+          ...Object.entries((d.byMode ?? {}) as Record<string, string>).map(([mode, amount]) => [`MOP: ${mode}`, `₹${Number(amount).toFixed(2)}`]),
         ] as [string, string][]
         setRows(mapped)
       } else {
@@ -138,54 +137,77 @@ export default function ReportsPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Reports" subtitle="Generate and export operational reports.">
-      <div className="mb-6 flex flex-wrap gap-2">
+    <PageShell title="Business Intelligence" subtitle="Generate strategic operational reports and enterprise audit logs.">
+      <div className="mb-8 flex flex-wrap gap-3 border-b-2 border-slate-50 pb-8">
         {Object.entries(REPORTS).map(([key, r]) => (
           <button
             key={key}
             onClick={() => setSelectedReport(key)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${selectedReport === key ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"}`}
+            className={`rounded-2xl px-6 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-md active:scale-95 ${
+              selectedReport === key 
+                ? "bg-slate-900 text-white shadow-slate-900/20" 
+                : "bg-white text-slate-500 border-2 border-slate-50 hover:border-indigo-300 hover:text-indigo-600"
+            }`}
           >
             {r.title}
           </button>
         ))}
       </div>
 
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        {["from", "to"].map((field) => (
-          <div key={field} className="flex items-center gap-2">
-            <label className="text-xs capitalize text-slate-400">{field}</label>
+      <div className="mb-10 flex flex-wrap items-center gap-6 bg-white border-2 border-slate-100 p-4 rounded-3xl shadow-sm">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 pl-2">
+            <Calendar size={18} className="text-slate-400" />
             <input
               type="date"
-              value={field === "from" ? from : to}
-              onChange={(e) => field === "from" ? setFrom(e.target.value) : setTo(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="bg-transparent text-base font-black text-slate-800 focus:outline-none"
             />
           </div>
-        ))}
-        <Button onClick={runReport} disabled={loading}>{loading ? "Loading…" : "Run Report"}</Button>
-        {rows.length > 0 && (
-          <Button variant="secondary" onClick={downloadCsv}>Export CSV</Button>
-        )}
+          <div className="h-6 w-px bg-slate-200" />
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="bg-transparent text-base font-black text-slate-800 focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          <Button onClick={runReport} disabled={loading} className="rounded-2xl px-8 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-indigo-600/10">
+            {loading ? "..." : "Compile Report"}
+          </Button>
+          {rows.length > 0 && (
+            <Button variant="secondary" onClick={downloadCsv} className="rounded-2xl px-6 py-4 font-black uppercase tracking-widest text-[11px] border-2 border-slate-100">
+              Export CSV
+            </Button>
+          )}
+        </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && (
+        <div className="mb-6 rounded-2xl border-2 border-red-100 bg-red-50 p-5 text-sm font-black text-red-700 animate-in fade-in">
+          {error}
+        </div>
+      )}
 
       {rows.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-slate-800">
+        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800/60">
+            <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>
                 {report.columns.map((col) => (
-                  <th key={col} className="px-4 py-3 text-left text-xs uppercase tracking-wider text-slate-400">{col}</th>
+                  <th key={col} className="px-6 py-5">{col}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y-2 divide-slate-50">
               {rows.map((row, i) => (
-                <tr key={i} className="border-t border-slate-800 hover:bg-slate-800/30">
+                <tr key={i} className="group hover:bg-slate-50 transition-colors">
                   {row.map((cell, j) => (
-                    <td key={j} className="px-4 py-3 text-slate-200">{cell}</td>
+                    <td key={j} className={`px-6 py-5 font-black text-slate-800 ${j === 0 ? "text-base" : "text-sm"}`}>{cell}</td>
                   ))}
                 </tr>
               ))}
@@ -193,7 +215,12 @@ export default function ReportsPage(): JSX.Element {
           </table>
         </div>
       ) : (
-        <p className="text-sm text-slate-500">Select a report and click &quot;Run Report&quot;.</p>
+        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+          <div className="flex flex-col items-center gap-4 text-slate-400">
+            <BarChart3 size={48} className="opacity-20" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em]">Select analytical module and compile</p>
+          </div>
+        </div>
       )}
     </PageShell>
   )

@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Users, Plus, Activity, Search, ShieldCheck } from "lucide-react"
+
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
-import { Plus } from "lucide-react"
 
 type Clerk = {
   id: number
@@ -69,33 +70,41 @@ export default function ClerksPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Clerk Management" subtitle="Manage clerks for POS attribution.">
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-lg font-bold text-slate-800">Active Clerks</h2>
-        <Button onClick={() => setShowAddForm(!showAddForm)} variant="primary" className="flex items-center gap-2">
-          <Plus size={16} /> Add Clerk
+    <PageShell title="Clerk Management" subtitle="Configure sales attribution for POS operators and monitor individual throughput.">
+      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Roster</h2>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Operational Sales Attribution</p>
+        </div>
+        <Button onClick={() => setShowAddForm(!showAddForm)} variant="primary" className="flex items-center gap-3 px-8 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
+          <Plus size={18} /> Register Clerk
         </Button>
       </div>
 
       {showAddForm && (
-        <form onSubmit={handleAdd} className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">New Clerk</h3>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Clerk Name"
-              className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none"
-              autoFocus
-              required
-            />
-            <Button type="submit" variant="primary" disabled={submitting}>
-              {submitting ? "Saving..." : "Save Clerk"}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => setShowAddForm(false)}>
-              Cancel
-            </Button>
+        <form onSubmit={handleAdd} className="mb-10 rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm animate-in slide-in-from-top-4 duration-500">
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">Create New Personnel Entry</h3>
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="flex-1 min-w-[280px]">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2 px-1">Full Legal Name</label>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Enter clerk identity..."
+                className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-base font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all"
+                autoFocus
+                required
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button type="submit" variant="primary" disabled={submitting} className="rounded-2xl px-10 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl">
+                {submitting ? "Processing…" : "Register"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setShowAddForm(false)} className="rounded-2xl px-6 py-4 font-black uppercase tracking-widest text-[11px] text-slate-400">
+                Cancel
+              </Button>
+            </div>
           </div>
         </form>
       )}
@@ -107,38 +116,38 @@ export default function ClerksPage(): JSX.Element {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading clerks...</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Clerk Data…</div>
       ) : clerks.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 border-dashed bg-slate-50 p-10 text-center">
-          <p className="text-slate-500">No active clerks found. Add one to get started.</p>
+        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No active clerks configured</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>
-                <th className="px-6 py-4 font-semibold">ID</th>
-                <th className="px-6 py-4 font-semibold">Name</th>
-                <th className="px-6 py-4 font-semibold">Total Bills</th>
-                <th className="px-6 py-4 font-semibold">Total Sales</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold">Created At</th>
+                <th className="px-6 py-5">Personnel ID</th>
+                <th className="px-6 py-5">Identity</th>
+                <th className="px-6 py-5 text-right">Throughput (Bills)</th>
+                <th className="px-6 py-5 text-right">Cumulative Sales</th>
+                <th className="px-6 py-5 text-center">Status</th>
+                <th className="px-6 py-5 text-right">Registration Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y-2 divide-slate-50">
               {clerks.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4 text-slate-500 font-mono text-xs">{c.id}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{c.name}</td>
-                  <td className="px-6 py-4 text-slate-900 font-black">{c.metrics.billsHandled}</td>
-                  <td className="px-6 py-4 text-emerald-600 font-black">₹{c.metrics.totalSales.toLocaleString()}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                <tr key={c.id} className="group hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-5 text-slate-400 font-black font-mono text-xs">#{c.id}</td>
+                  <td className="px-6 py-5 font-black text-slate-900 text-base">{c.name}</td>
+                  <td className="px-6 py-5 text-right text-slate-700 font-black tabular-nums">{c.metrics.billsHandled}</td>
+                  <td className="px-6 py-5 text-right text-emerald-600 font-black text-base tabular-nums">₹{c.metrics.totalSales.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-center">
+                    <span className="inline-flex rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-emerald-600/20">
                       Active
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {new Date(c.createdAt).toLocaleDateString()}
+                  <td className="px-6 py-5 text-right text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+                    {new Date(c.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                 </tr>
               ))}

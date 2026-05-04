@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Calendar, IndianRupee, Lock, Unlock, Activity, Search } from "lucide-react"
 
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
@@ -67,62 +67,66 @@ export default function Page(): JSX.Element {
   }, [data])
 
   return (
-    <PageShell title="Cash Register" subtitle="Read-only view of galla balance and events.">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-slate-600">Business date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-          />
+    <PageShell title="Cash Register" subtitle="Review real-time galla balance and chronological audit trail of cash movements.">
+      <div className="mb-8 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
+        <div className="flex items-center gap-4 bg-white border-2 border-slate-100 p-2 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3 px-3 border-r-2 border-slate-100">
+            <Calendar size={18} className="text-slate-400" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-transparent text-base font-black text-slate-800 focus:outline-none"
+            />
+          </div>
+          <Button onClick={() => fetchDay(date)} disabled={loading} variant="ghost" className="px-5 py-2.5 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-all">
+            {loading ? "..." : "Sync"}
+          </Button>
         </div>
-        <Button onClick={() => fetchDay(date)} disabled={loading} variant="secondary">
-          {loading ? "Refreshing..." : "Refresh"}
-        </Button>
         <a
           href="/cash/close"
-          className="ml-auto rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className="ml-auto rounded-2xl bg-slate-900 px-6 py-3.5 text-[11px] font-black uppercase tracking-[0.2em] text-white hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-2"
         >
-          Close cash day
+          <Lock size={14} /> Close Cash Day
         </a>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <StatCard label="Balance" value={fmt(balance)} />
-        <StatCard label="Events" value={String(events.length)} />
-        <StatCard label="Status" value={isClosed ? "Closed" : "Open"} subtle={!isClosed} />
+      <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <StatCard label="Current Balance" value={fmt(balance)} color="emerald" icon={IndianRupee} />
+        <StatCard label="Audit Events" value={String(events.length)} color="indigo" icon={Activity} />
+        <StatCard label="Registry Status" value={isClosed ? "CLOSED" : "OPEN"} color={isClosed ? "rose" : "emerald"} icon={isClosed ? Lock : Unlock} />
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-6 rounded-2xl border-2 border-red-100 bg-red-50 p-5 text-sm font-black text-red-700 animate-in fade-in slide-in-from-top-4">
           {error}
         </div>
       )}
 
       {loading && !data ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Registry Data…</div>
       ) : events.length === 0 ? (
-        <p className="text-sm text-slate-500">No events for this date.</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px] border-4 border-slate-50 border-dashed rounded-3xl">No movements recorded for this date.</div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 shadow-sm bg-white">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+            <thead className="bg-slate-100 text-[11px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-50">
               <tr>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Kind</th>
-                <th className="px-4 py-3">Notes</th>
-                <th className="px-4 py-3 text-right">Amount</th>
+                <th className="px-6 py-5">Audit Timestamp</th>
+                <th className="px-6 py-5">Event Type</th>
+                <th className="px-6 py-5">Notes / Context</th>
+                <th className="px-6 py-5 text-right">Magnitude</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y-2 divide-slate-50">
               {events.map((e) => (
-                <tr key={e.id} className="border-t border-slate-200">
-                  <td className="px-4 py-3 text-slate-500">{new Date(e.occurredAt).toLocaleString("en-IN")}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{e.kind}</td>
-                  <td className="px-4 py-3 text-slate-700">{e.notes ?? "—"}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(e.amount)}</td>
+                <tr key={e.id} className="group hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-5 text-slate-400 font-bold">{new Date(e.occurredAt).toLocaleString("en-IN", { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</td>
+                  <td className="px-6 py-5">
+                    <span className="rounded-lg bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600 border border-slate-200">{e.kind}</span>
+                  </td>
+                  <td className="px-6 py-5 font-bold text-slate-700">{e.notes ?? "—"}</td>
+                  <td className={`px-6 py-5 text-right font-black text-lg ${Number(e.amount) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{fmt(e.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -133,11 +137,23 @@ export default function Page(): JSX.Element {
   )
 }
 
-function StatCard({ label, value, subtle }: { label: string; value: string; subtle?: boolean }): JSX.Element {
+function StatCard({ label, value, color, icon: Icon }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any }): JSX.Element {
+  const tones = {
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    slate: "border-slate-100 bg-slate-50 text-slate-600",
+  }[color]
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-extrabold ${subtle ? "text-slate-600" : "text-slate-900"}`}>{value}</p>
+    <div className={`rounded-3xl border-2 p-8 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+      <div className="flex justify-between items-start mb-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
+        <div className="rounded-xl bg-white/50 p-2 shadow-inner">
+          <Icon size={18} />
+        </div>
+      </div>
+      <p className="text-3xl font-black tracking-tight tabular-nums">{value}</p>
     </div>
   )
 }

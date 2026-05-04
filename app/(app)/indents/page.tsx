@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { Plus, Search, Activity, FileText, CheckCircle2 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
@@ -17,10 +18,10 @@ type IndentRow = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-900/50 text-amber-300",
-  PARTIAL: "bg-blue-900/50 text-blue-300",
-  FULLY_RECEIVED: "bg-green-900/50 text-green-300",
-  STOCK_ADDED: "bg-emerald-900/50 text-emerald-300",
+  PENDING: "bg-amber-100 text-amber-700 border-amber-200",
+  PARTIAL: "bg-blue-100 text-blue-700 border-blue-200",
+  FULLY_RECEIVED: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  STOCK_ADDED: "bg-slate-900 text-white border-slate-900",
 }
 
 export default function IndentsPage(): JSX.Element {
@@ -58,66 +59,74 @@ export default function IndentsPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="KSBCL Indents" subtitle="Upload PDF, review parsed items, confirm arrival to add stock.">
+    <PageShell title="Procurement Registry" subtitle="Manage KSBCL digital indents, review automated item parsing, and reconcile inventory arrival.">
       {toast && (
-        <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-medium ${toast.ok ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"}`}>
+        <div className={`mb-8 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="mb-4 flex justify-end">
+      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Indent Stream</h2>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Stock Acquisition Audit</p>
+        </div>
         <Link href="/indents/upload">
-          <Button variant="primary">Upload PDF</Button>
+          <Button variant="primary" className="flex items-center gap-3 px-8 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
+            <Plus size={18} /> Upload Indent PDF
+          </Button>
         </Link>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Procurement Data…</div>
       ) : indents.length === 0 ? (
-        <p className="text-sm text-slate-400">No indents yet. Upload a KSBCL PDF to get started.</p>
+        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No procurement records found</p>
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-800">
+        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800/60">
-              <tr className="text-left text-xs uppercase tracking-wider text-slate-400">
-                <th className="px-4 py-3">Indent No</th>
-                <th className="px-4 py-3">Retailer</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+            <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
+              <tr>
+                <th className="px-6 py-5">Sequential ID</th>
+                <th className="px-6 py-5">Retailer Entity</th>
+                <th className="px-6 py-5">Audit Date</th>
+                <th className="px-6 py-5">Line Count</th>
+                <th className="px-6 py-5">Status</th>
+                <th className="px-6 py-5 text-center">Management</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y-2 divide-slate-50">
               {indents.map((indent) => {
                 const unmapped = indent.items.filter((i) => i.isNewItem).length
                 return (
-                  <tr key={indent.id} className="border-t border-slate-800 hover:bg-slate-800/30">
-                    <td className="px-4 py-3 font-mono text-slate-200">{indent.indentNumber}</td>
-                    <td className="px-4 py-3 text-slate-300">{indent.retailerName}</td>
-                    <td className="px-4 py-3 text-slate-400">{indent.indentDate?.slice(0, 10)}</td>
-                    <td className="px-4 py-3 text-slate-300">
-                      {indent.items.length} items
-                      {unmapped > 0 && (
-                        <span className="ml-2 rounded-full bg-amber-900/50 px-2 py-0.5 text-xs text-amber-300">
-                          {unmapped} unmapped
-                        </span>
-                      )}
+                  <tr key={indent.id} className="group hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-5 font-black text-slate-900 font-mono text-base">{indent.indentNumber}</td>
+                    <td className="px-6 py-5 font-black text-slate-700 uppercase tracking-tight text-xs">{indent.retailerName}</td>
+                    <td className="px-6 py-5 text-slate-400 font-bold uppercase tracking-widest text-[10px]">{indent.indentDate?.slice(0, 10)}</td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-700">{indent.items.length} Units</span>
+                        {unmapped > 0 && (
+                          <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-rose-600 border border-rose-100">
+                            {unmapped} Unmapped
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[indent.status] ?? "bg-slate-800 text-slate-400"}`}>
-                        {indent.status}
+                    <td className="px-6 py-5">
+                      <span className={`rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm ${STATUS_COLORS[indent.status] ?? "bg-slate-50 text-slate-400 border-slate-200"}`}>
+                        {indent.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                    <td className="px-6 py-5">
+                      <div className="flex gap-4 justify-center">
                         <Link href={`/indents/${indent.id}`}>
-                          <Button size="sm" variant="secondary">Review</Button>
+                          <button className="text-indigo-600 hover:text-indigo-900 text-[10px] font-black uppercase tracking-widest transition-colors">Review Registry</button>
                         </Link>
                         {indent.status !== "STOCK_ADDED" && unmapped === 0 && (
-                          <Button size="sm" variant="primary" onClick={() => handleConfirm(indent.id)}>
-                            Confirm
-                          </Button>
+                          <button onClick={() => handleConfirm(indent.id)} className="text-emerald-600 hover:text-emerald-900 text-[10px] font-black uppercase tracking-widest transition-colors">Confirm Arrival</button>
                         )}
                       </div>
                     </td>

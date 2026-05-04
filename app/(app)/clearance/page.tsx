@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Plus, Search, Activity, Trash2, TrendingDown, Percent } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
@@ -19,9 +20,9 @@ type Batch = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: "bg-emerald-900/50 text-emerald-300",
-  EXHAUSTED: "bg-slate-700 text-slate-400",
-  CANCELLED: "bg-red-900/50 text-red-300",
+  ACTIVE: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  EXHAUSTED: "bg-slate-900 text-white border-slate-900",
+  CANCELLED: "bg-rose-100 text-rose-700 border-rose-200",
 }
 
 export default function ClearancePage(): JSX.Element {
@@ -83,89 +84,103 @@ export default function ClearancePage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Clearance Batches" subtitle="Owner-controlled temporary pricing for specific variants.">
+    <PageShell title="Liquidation Registry" subtitle="Manage high-velocity clearance pricing for near-expiry or slow-moving article variants.">
       {toast && (
-        <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-medium ${toast.ok ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"}`}>
+        <div className={`mb-8 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="mb-4 flex justify-end">
-        <Button onClick={() => setShowCreate(true)}>New Clearance Batch</Button>
+      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Clearance Stream</h2>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Strategic Pricing Management</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="flex items-center gap-3 px-8 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
+          <Plus size={18} /> Initiate Clearance
+        </Button>
       </div>
 
       {showCreate && (
-        <div className="mb-6 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-200">Create Clearance Batch</h3>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="mb-10 rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm animate-in slide-in-from-top-4 duration-500">
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">Initialize New Pricing Module</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              ["Product Size ID", "productSizeId", "number"],
-              ["Clearance Rate (₹)", "clearanceRate", "number"],
-              ["Total Quantity (bottles)", "totalQuantity", "number"],
-              ["Reason (optional)", "reason", "text"],
-            ].map(([label, key, type]) => (
+              ["Target Article ID", "productSizeId", "number", "variant#"],
+              ["Clearance Payout (₹)", "clearanceRate", "number", "0.00"],
+              ["Allocation Volume", "totalQuantity", "number", "bottles"],
+              ["Strategic Rationale", "reason", "text", "short context"],
+            ].map(([label, key, type, ph]) => (
               <div key={key}>
-                <label className="mb-1 block text-xs text-slate-400">{label}</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2 px-1">{label}</label>
                 <input
                   type={type}
+                  placeholder={ph}
                   value={form[key as keyof typeof form]}
                   onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                  className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-base font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all"
                 />
               </div>
             ))}
           </div>
-          <div className="mt-4 flex gap-3">
-            <Button onClick={handleCreate}>Create</Button>
-            <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
+          <div className="mt-8 flex gap-4">
+            <Button onClick={handleCreate} className="rounded-2xl px-10 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl">Activate Batch</Button>
+            <Button variant="ghost" onClick={() => setShowCreate(false)} className="rounded-2xl px-6 py-4 font-black uppercase tracking-widest text-[11px] text-slate-400">Cancel</Button>
           </div>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Liquidation Data…</div>
       ) : batches.length === 0 ? (
-        <p className="text-sm text-slate-400">No clearance batches.</p>
+        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No active clearance sessions</p>
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-800">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-800/60">
-              <tr className="text-left text-xs uppercase tracking-wider text-slate-400">
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Original Rate</th>
-                <th className="px-4 py-3">Clearance Rate</th>
-                <th className="px-4 py-3">Progress</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
+              <tr>
+                <th className="px-6 py-5">Article Identity</th>
+                <th className="px-6 py-5 text-right">Standard Rate</th>
+                <th className="px-6 py-5 text-right">Clearance Rate</th>
+                <th className="px-6 py-5">Liquidation Progress</th>
+                <th className="px-6 py-5 text-center">Status</th>
+                <th className="px-6 py-5 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y-2 divide-slate-50">
               {batches.map((batch) => (
-                <tr key={batch.id} className="border-t border-slate-800 hover:bg-slate-800/30">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-100">{batch.productSize.product.name}</p>
-                    <p className="text-xs text-slate-400">{batch.productSize.sizeMl}ml</p>
+                <tr key={batch.id} className="group hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-5">
+                    <p className="font-black text-slate-900 text-base tracking-tight">{batch.productSize.product.name}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{batch.productSize.sizeMl}ML · {batch.productSize.product.category}</p>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">₹{batch.originalRate}</td>
-                  <td className="px-4 py-3 font-medium text-emerald-400">₹{batch.clearanceRate}</td>
-                  <td className="px-4 py-3 text-slate-300">
-                    {batch.soldQuantity} / {batch.totalQuantity} bottles
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-slate-700">
+                  <td className="px-6 py-5 text-right text-slate-400 font-bold tabular-nums">₹{batch.originalRate}</td>
+                  <td className="px-6 py-5 text-right font-black text-emerald-600 text-base tabular-nums">₹{batch.clearanceRate}</td>
+                  <td className="px-6 py-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{batch.soldQuantity} / {batch.totalQuantity} Sold</span>
+                      <span className="text-[10px] font-black text-slate-900">{Math.round((batch.soldQuantity / batch.totalQuantity) * 100)}%</span>
+                    </div>
+                    <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden border-2 border-slate-50 shadow-inner">
                       <div
-                        className="h-1.5 rounded-full bg-emerald-500"
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-1000 shadow-sm"
                         style={{ width: `${Math.min(100, (batch.soldQuantity / batch.totalQuantity) * 100)}%` }}
                       />
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[batch.status] ?? "bg-slate-700 text-slate-400"}`}>
+                  <td className="px-6 py-5 text-center">
+                    <span className={`rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm ${STATUS_COLORS[batch.status] ?? "bg-slate-50 text-slate-400 border-slate-200"}`}>
                       {batch.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    {batch.status === "ACTIVE" && (
-                      <Button size="sm" variant="danger" onClick={() => handleCancel(batch.id)}>Cancel</Button>
-                    )}
+                  <td className="px-6 py-5">
+                    <div className="flex justify-center">
+                      {batch.status === "ACTIVE" && (
+                        <button onClick={() => handleCancel(batch.id)} className="text-rose-400 hover:text-rose-600 text-[10px] font-black uppercase tracking-widest transition-colors">Terminate Batch</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -34,18 +34,18 @@ export default async function DashboardPage(): Promise<JSX.Element> {
 
   return (
     <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-10">
-      <header className="mb-10 flex items-end justify-between border-b border-slate-200 pb-8">
+      <header className="mb-12 flex items-center justify-between border-b-2 border-slate-100 pb-10">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Operations Console</h1>
-          <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Active Session • {today}
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Operations Console</h1>
+          <p className="mt-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live Session Active • {today}
           </p>
         </div>
-        <div className="flex gap-3">
-           <Link href="/pos" className="flex items-center gap-2 rounded-lg bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800 active:scale-95">
+        <div className="flex gap-4">
+           <Link href="/pos" className="flex items-center gap-3 rounded-2xl bg-slate-900 px-8 py-4 text-[11px] font-black uppercase tracking-widest text-white transition-all shadow-xl shadow-slate-900/20 hover:scale-105 active:scale-95">
               <ShoppingBag size={18} />
-              OPEN POS
+              Open Terminal
            </Link>
         </div>
       </header>
@@ -53,14 +53,14 @@ export default async function DashboardPage(): Promise<JSX.Element> {
       {/* Primary Stats Grid */}
       <div className="mb-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="group relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+          <div key={stat.label} className="group relative rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:border-slate-300">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{stat.label}</p>
-                <p className={`mt-2 text-3xl font-black tracking-tight ${stat.color || "text-slate-900"}`}>{stat.value}</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400">{stat.label}</p>
+                <p className={`mt-2 text-4xl font-black tracking-tighter ${stat.color || "text-slate-900"}`}>{stat.value}</p>
               </div>
-              <div className="rounded-lg bg-slate-50 p-2.5 text-slate-400 group-hover:text-slate-900 transition-colors">
-                <stat.icon size={20} />
+              <div className="rounded-xl bg-slate-50 p-3 text-slate-400 group-hover:text-slate-900 group-hover:bg-slate-100 transition-colors">
+                <stat.icon size={24} />
               </div>
             </div>
             {stat.trend && (
@@ -77,39 +77,47 @@ export default async function DashboardPage(): Promise<JSX.Element> {
         {/* Left Column: Analytics */}
         <div className="space-y-10 lg:col-span-2">
           {/* Top Selling Items */}
-          <section className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-            <div className="flex items-center justify-between p-4 px-5">
-              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-slate-900">
+          <section className="rounded-3xl border-2 border-slate-50 bg-white p-2 shadow-sm">
+            <div className="flex items-center justify-between p-6 px-8">
+              <h2 className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                 <BarChart3 size={18} className="text-slate-400" />
                 Performance Leaderboard
               </h2>
-              <Link href="/reports" className="text-xs font-bold text-slate-900 hover:underline">Full Analytics</Link>
+              <Link href="/reports" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors">Analytical Audit</Link>
             </div>
-            <div className="overflow-hidden border-t border-slate-100">
+            <div className="overflow-hidden border-t-2 border-slate-50 rounded-b-3xl">
               <table className="w-full text-left">
-                <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <thead className="bg-slate-100/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
                   <tr>
-                    <th className="px-5 py-4">Item</th>
-                    <th className="px-5 py-4">Category</th>
-                    <th className="px-5 py-4 text-right">Units</th>
-                    <th className="px-5 py-4 text-right">Revenue</th>
+                    <th className="px-8 py-5">Article Profile</th>
+                    <th className="px-8 py-5">Classification</th>
+                    <th className="px-8 py-5 text-right">Units Sold</th>
+                    <th className="px-8 py-5 text-right">MAGNITUDE</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y-2 divide-slate-50">
                   {topItems.length > 0 ? topItems.map((item, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-4 text-sm font-bold text-slate-800">
-                        {item.productSize
-                          ? `${item.productSize.product.name} ${item.productSize.sizeMl}ml`
-                          : "Unknown"}
+                    <tr key={i} className="group hover:bg-slate-50 transition-colors">
+                      <td className="px-8 py-5">
+                        <p className="text-base font-black text-slate-900 tracking-tight">
+                          {item.productSize
+                            ? `${item.productSize.product.name} ${item.productSize.sizeMl}ml`
+                            : "Unknown"}
+                        </p>
                       </td>
-                      <td className="px-5 py-4 text-xs text-slate-500 font-medium">{item.productSize?.product.category}</td>
-                      <td className="px-5 py-4 text-right text-sm font-mono font-bold text-slate-600">{item.totalQuantity}</td>
-                      <td className="px-5 py-4 text-right text-sm font-mono font-bold text-slate-900">₹{item.totalRevenue.toFixed(2)}</td>
+                      <td className="px-8 py-5">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500 uppercase">{item.productSize?.product.category}</span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <span className="text-base font-black text-slate-600 tabular-nums">{item.totalQuantity}</span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <span className="text-lg font-black text-slate-900 tabular-nums">₹{item.totalRevenue.toFixed(2)}</span>
+                      </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-xs font-medium">No sales data recorded yet</td>
+                      <td colSpan={4} className="px-8 py-16 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">Nil performance metrics</td>
                     </tr>
                   )}
                 </tbody>
@@ -119,23 +127,25 @@ export default async function DashboardPage(): Promise<JSX.Element> {
 
           {/* Quick Actions Grid */}
           <section>
-            <h2 className="mb-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">System Management</h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <h2 className="mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">System Management Architecture</h2>
+            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
               {[
-                { href: "/cash/close", label: "Cash Close", icon: CreditCard },
-                { href: "/ledger", label: "Financials", icon: BarChart3 },
-                { href: "/indents", label: "Inventory Opt", icon: Package },
-                { href: "/inventory", label: "Stock Control", icon: Package },
-                { href: "/expenses", label: "Log Costs", icon: TrendingUp },
-                { href: "/reports", label: "Operations", icon: BarChart3 },
+                { href: "/cash/close", label: "Cash Close", icon: CreditCard, color: "text-emerald-500" },
+                { href: "/ledger", label: "Financials", icon: BarChart3, color: "text-indigo-500" },
+                { href: "/indents", label: "Inventory Opt", icon: Package, color: "text-amber-500" },
+                { href: "/inventory", label: "Stock Control", icon: Package, color: "text-slate-400" },
+                { href: "/expenses", label: "Log Costs", icon: TrendingUp, color: "text-rose-500" },
+                { href: "/reports", label: "Operations", icon: BarChart3, color: "text-indigo-400" },
               ].map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-8 transition hover:border-slate-900 hover:shadow-sm"
+                  className="group flex flex-col items-center justify-center gap-6 rounded-[2.5rem] border-2 border-slate-100 bg-white py-10 transition-all hover:-translate-y-1 hover:border-slate-900 hover:shadow-xl"
                 >
-                  <link.icon size={20} className="text-slate-400" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-tight">{link.label}</span>
+                  <div className={`p-4 rounded-2xl bg-slate-50 group-hover:bg-white group-hover:shadow-inner transition-all ${link.color}`}>
+                    <link.icon size={32} />
+                  </div>
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-widest">{link.label}</span>
                 </Link>
               ))}
             </div>
@@ -145,32 +155,32 @@ export default async function DashboardPage(): Promise<JSX.Element> {
         {/* Right Column: Alerts & Status */}
         <div className="space-y-10">
           {/* Revenue Breakdown */}
-          <section className="rounded-xl border border-slate-200 bg-slate-900 p-6 shadow-sm">
-            <h2 className="mb-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Net Distribution</h2>
-            <div className="space-y-5">
+          <section className="rounded-[2.5rem] border-2 border-slate-900 bg-slate-900 p-8 shadow-2xl text-white">
+            <h2 className="mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Net Revenue Distribution</h2>
+            <div className="space-y-6">
               {summary && Object.entries(summary.byMode).length > 0 ? (
                 <>
                   {Object.entries(summary.byMode).map(([mode, amount]) => (
-                    <div key={mode} className="flex items-center justify-between border-b border-slate-800 pb-4">
-                      <span className="text-xs font-bold text-slate-200">{mode}</span>
-                      <span className="font-mono text-sm font-bold text-white">₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <div key={mode} className="flex items-center justify-between border-b border-slate-800 pb-5">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{mode}</span>
+                      <span className="text-base font-black tabular-nums">₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                   ))}
-                  <div className="pt-2 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-emerald-400">Owner Revenue</span>
-                      <span className="font-mono text-sm font-bold text-emerald-400">₹{Number(summary.ownerRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <div className="pt-4 space-y-4">
+                    <div className="flex items-center justify-between bg-emerald-500/10 -mx-4 px-4 py-4 rounded-2xl">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-emerald-400">Owner Settlement</span>
+                      <span className="text-2xl font-black text-emerald-400 tabular-nums">₹{Number(summary.ownerRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {Number(summary.thirdPartyTotal) > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-400">Third-Party</span>
-                        <span className="font-mono text-sm font-bold text-amber-400">₹{Number(summary.thirdPartyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <div className="flex items-center justify-between px-4">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-amber-400">Third-Party Share</span>
+                        <span className="text-lg font-black text-amber-400 tabular-nums">₹{Number(summary.thirdPartyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                   </div>
                 </>
               ) : (
-                <p className="text-center text-xs font-medium text-slate-600 py-4">Nil distributions</p>
+                <p className="text-center text-[10px] font-black uppercase tracking-widest text-slate-600 py-8">Nil distribution data</p>
               )}
             </div>
           </section>

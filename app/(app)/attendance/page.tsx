@@ -5,7 +5,7 @@ import * as faceapi from "face-api.js"
 import { nanoid } from "nanoid"
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
-import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX } from "lucide-react"
+import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Activity, Scan } from "lucide-react"
 
 type StaffRow = { id: number; name: string; role: string; faceEnrolled: boolean; faceSampleCount: number }
 
@@ -333,41 +333,42 @@ export default function AttendancePage(): JSX.Element {
   const outCount = roster.filter((r) => r.status === "OUT").length
 
   return (
-    <PageShell title="Attendance Kiosk" subtitle="Select staff, verify face, then choose check in / check out.">
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+    <PageShell title="Deployment Terminal" subtitle="Biometric verification kiosk for real-time workforce synchronization and shift reconciliation.">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-10 items-start">
 
         {/* ── Camera Panel ── */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="lg:col-span-3 space-y-6">
+          <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="flex-1">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Select staff member</p>
-                <select
-                  value={selectedStaffId ?? ""}
-                  onChange={(e) => {
-                    const next = e.target.value ? Number(e.target.value) : null
-                    setSelectedStaffId(next)
-                    setSelectedFaceMatch(null)
-                    if (!next) stopCamera()
-                  }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none"
-                >
-                  <option value="">Choose a person to verify…</option>
-                  {staffOptions.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name} · {staff.role}{staff.faceEnrolled ? ` · face ${staff.faceSampleCount}` : " · no face"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500 md:w-64">
-                Live scan locks to the selected staff member only.
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Authenticate Personnel Identity</p>
+                <div className="relative group">
+                  <UserRoundCheck className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
+                  <select
+                    value={selectedStaffId ?? ""}
+                    onChange={(e) => {
+                      const next = e.target.value ? Number(e.target.value) : null
+                      setSelectedStaffId(next)
+                      setSelectedFaceMatch(null)
+                      if (!next) stopCamera()
+                    }}
+                    className="w-full appearance-none rounded-2xl border-2 border-slate-100 bg-slate-50 pl-14 pr-12 py-5 text-lg font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all cursor-pointer shadow-inner"
+                  >
+                    <option value="">Select identity from roster…</option>
+                    {staffOptions.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name} · {staff.role}{staff.faceEnrolled ? ` · Profile Active (${staff.faceSampleCount} Samples)` : " · Biometric Pending"}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Video */}
-          <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-2xl aspect-[4/3]">
+          <div className="relative rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl aspect-[4/3] border-4 border-white ring-8 ring-slate-100">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -398,8 +399,8 @@ export default function AttendancePage(): JSX.Element {
 
             {/* Status bar */}
             {scanState === "ready" && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-5 pb-4 pt-8">
-                <p className="text-white text-sm font-semibold text-center tracking-wide">{statusMsg}</p>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-8 pb-8 pt-16">
+                <p className="text-white text-base font-black text-center tracking-[0.1em] uppercase">{statusMsg}</p>
               </div>
             )}
 
@@ -426,34 +427,34 @@ export default function AttendancePage(): JSX.Element {
           )}
 
           {selectedStaff && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div className="rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-md space-y-5 transition-all animate-in slide-in-from-bottom-2">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b-2 border-slate-50 pb-5">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Selected staff</p>
-                  <p className="text-lg font-black text-slate-900">{selectedStaff.name}</p>
-                  <p className="text-xs text-slate-400 uppercase tracking-wider">{selectedStaff.role}</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Selected staff</p>
+                  <p className="text-2xl font-black text-slate-900 leading-tight">{selectedStaff.name}</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">{selectedStaff.role}</p>
                 </div>
-                <div className="text-right text-xs font-semibold text-slate-500">
-                    {selectedDayStatus?.hasClockIn ? (selectedDayStatus.hasClockOut ? "Checked in and out today" : "Already checked in today") : "Not marked yet today"}
+                <div className="text-right text-sm font-black text-slate-500 bg-slate-50 px-4 py-2 rounded-xl">
+                    {selectedDayStatus?.hasClockIn ? (selectedDayStatus.hasClockOut ? "FINISHED TODAY" : "CURRENTLY ON DUTY") : "NOT MARKED YET"}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Button
                   variant="primary"
-                  className="w-full justify-center gap-2"
+                  className="w-full justify-center gap-3 py-5 text-lg font-black uppercase tracking-[0.15em] shadow-lg shadow-emerald-900/10 active:scale-95 transition-all"
                   disabled={!selectedFaceMatch || !canClockIn || loadingAction !== null}
                   onClick={() => void submitPunch("CLOCK_IN", "FACE", selectedFaceMatch?.confidence)}
                 >
-                  <UserRoundCheck size={15} /> {loadingAction === "CLOCK_IN" ? "Checking in…" : "Check In"}
+                  <UserRoundCheck size={24} /> {loadingAction === "CLOCK_IN" ? "Syncing…" : "Check In"}
                 </Button>
                 <Button
                   variant="secondary"
-                  className="w-full justify-center gap-2"
+                  className="w-full justify-center gap-3 py-5 text-lg font-black uppercase tracking-[0.15em] shadow-lg border-2 border-slate-200 active:scale-95 transition-all"
                   disabled={!selectedFaceMatch || !canClockOut || loadingAction !== null}
                   onClick={() => void submitPunch("CLOCK_OUT", "FACE", selectedFaceMatch?.confidence)}
                 >
-                  <UserRoundX size={15} /> {loadingAction === "CLOCK_OUT" ? "Checking out…" : "Check Out"}
+                  <UserRoundX size={24} /> {loadingAction === "CLOCK_OUT" ? "Syncing…" : "Check Out"}
                 </Button>
               </div>
 
@@ -498,68 +499,71 @@ export default function AttendancePage(): JSX.Element {
           )}
 
           {/* Stats bar */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-              <p className="text-3xl font-black text-emerald-700">{presentCount}</p>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mt-0.5">Present</p>
+          <div className="grid grid-cols-3 gap-6">
+            <div className="rounded-[2rem] border-2 border-emerald-100 bg-emerald-50 p-8 text-center shadow-sm">
+              <p className="text-5xl font-black text-emerald-700 tracking-tighter tabular-nums">{presentCount}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500 mt-3">Active Duty</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
-              <p className="text-3xl font-black text-slate-500">{outCount}</p>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mt-0.5">Left</p>
+            <div className="rounded-[2rem] border-2 border-slate-100 bg-slate-50 p-8 text-center shadow-sm">
+              <p className="text-5xl font-black text-slate-600 tracking-tighter tabular-nums">{outCount}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-3">Released</p>
             </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-center">
-              <p className="text-3xl font-black text-rose-600">{absentCount}</p>
-              <p className="text-xs font-bold uppercase tracking-wider text-rose-400 mt-0.5">Absent</p>
+            <div className="rounded-[2rem] border-2 border-rose-100 bg-rose-50 p-8 text-center shadow-sm">
+              <p className="text-5xl font-black text-rose-600 tracking-tighter tabular-nums">{absentCount}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-400 mt-3">Pending</p>
             </div>
           </div>
         </div>
 
         {/* ── Roster Panel ── */}
         <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-700">Today&apos;s Roster</h3>
-              <span className="text-xs text-slate-400 font-medium">
+          <div className="rounded-2xl border-2 border-slate-100 bg-white shadow-xl overflow-hidden">
+            <div className="border-b-2 border-slate-50 px-6 py-5 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Today&apos;s Roster</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Deployment Status</p>
+              </div>
+              <span className="rounded-xl bg-white border-2 border-slate-100 px-4 py-2 text-xs font-black text-slate-900 shadow-sm">
                 {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
               </span>
             </div>
 
-            <div className="divide-y divide-slate-50 max-h-[70vh] overflow-y-auto">
+            <div className="divide-y-2 divide-slate-50 max-h-[75vh] overflow-y-auto">
               {roster.length === 0 ? (
-                <p className="px-5 py-8 text-sm text-slate-400 text-center">No staff data.</p>
+                <p className="px-6 py-12 text-sm font-bold text-slate-400 text-center uppercase tracking-widest">No staff data synced.</p>
               ) : (
                 roster.map((r) => (
-                  <div key={r.staffId} className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-                    r.status === "IN" ? "bg-emerald-50/60" :
-                    r.status === "OUT" ? "bg-slate-50/60" :
-                    "bg-white"
+                  <div key={r.staffId} className={`flex items-center gap-4 px-6 py-5 transition-all ${
+                    r.status === "IN" ? "bg-emerald-50/30 border-l-4 border-emerald-500" :
+                    r.status === "OUT" ? "bg-slate-50/30 border-l-4 border-slate-300" :
+                    "bg-white border-l-4 border-transparent"
                   }`}>
                     {/* Status icon */}
-                    <div className={`flex-shrink-0 rounded-full p-1.5 ${
-                      r.status === "IN" ? "bg-emerald-100 text-emerald-600" :
-                      r.status === "OUT" ? "bg-slate-100 text-slate-400" :
+                    <div className={`flex-shrink-0 rounded-2xl p-3 shadow-sm ${
+                      r.status === "IN" ? "bg-emerald-500 text-white" :
+                      r.status === "OUT" ? "bg-slate-200 text-slate-500" :
                       "bg-rose-50 text-rose-300"
                     }`}>
-                      {r.status === "IN" ? <UserCheck size={14} /> :
-                       r.status === "OUT" ? <Clock size={14} /> :
-                       <UserX size={14} />}
+                      {r.status === "IN" ? <UserCheck size={20} /> :
+                       r.status === "OUT" ? <Clock size={20} /> :
+                       <UserX size={20} />}
                     </div>
 
                     {/* Name */}
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-bold truncate ${r.status === "ABSENT" ? "text-slate-400" : "text-slate-900"}`}>
+                      <p className={`text-base font-black truncate ${r.status === "ABSENT" ? "text-slate-300" : "text-slate-900"}`}>
                         {r.name}
                       </p>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-tight">{r.role}</p>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{r.role}</p>
                     </div>
 
                     {/* Right: badge + time */}
                     <div className="flex-shrink-0 text-right">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                      <span className={`inline-flex rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] shadow-sm ${
                         r.status === "IN"
                           ? r.isLate
                             ? "bg-amber-100 text-amber-700"
-                            : "bg-emerald-100 text-emerald-700"
+                            : "bg-emerald-600 text-white"
                           : r.status === "OUT"
                           ? "bg-slate-100 text-slate-500"
                           : "bg-rose-50 text-rose-400"
@@ -567,7 +571,7 @@ export default function AttendancePage(): JSX.Element {
                         {r.status === "IN" && r.isLate ? "Late" : r.status}
                       </span>
                       {r.time && (
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] font-black text-slate-900 mt-2">
                           {new Date(r.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       )}

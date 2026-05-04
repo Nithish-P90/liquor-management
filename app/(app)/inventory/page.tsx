@@ -75,35 +75,35 @@ export default function InventoryPage(): JSX.Element {
   }, [])
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-10">
-      <header className="mb-8 flex items-center justify-between border-b border-slate-200 pb-6">
+    <main className="min-h-screen bg-[#f8fafc] p-8 lg:p-12">
+      <header className="mb-12 flex items-center justify-between border-b-2 border-slate-100 pb-10">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Inventory</h1>
-          <p className="mt-1 text-sm font-semibold uppercase tracking-widest text-slate-400">
-            Live stock · Product management
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Inventory Management</h1>
+          <p className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+            Real-time Stock Control & Article Catalog
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <a href="/inventory/opening" className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-            Opening Stock
+        <div className="flex items-center gap-4">
+          <a href="/inventory/opening" className="rounded-2xl border-2 border-slate-100 bg-white px-6 py-3.5 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm">
+            Opening Registry
           </a>
-          <a href="/inventory/closing" className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-            Closing Stock
+          <a href="/inventory/closing" className="rounded-2xl border-2 border-slate-100 bg-white px-6 py-3.5 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm">
+            Closing Registry
           </a>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-2">
+      <div className="mb-10 flex gap-4">
         {(["stock", "products"] as const).filter(t => t === "stock" || isAdmin).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
-              tab === t ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            className={`rounded-2xl px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 ${
+              tab === t ? "bg-slate-900 text-white shadow-slate-900/20" : "bg-white text-slate-500 border-2 border-slate-100 hover:border-indigo-300 hover:text-indigo-600"
             }`}
           >
-            {t === "stock" ? "Live Stock" : "Products"}
+            {t === "stock" ? "Live Inventory" : "Article Catalog"}
           </button>
         ))}
       </div>
@@ -198,67 +198,62 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       )}
 
       {/* Summary pills */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
-          <span className="text-xs font-bold text-slate-400">SKUs</span>
-          <span className="ml-2 text-sm font-black text-slate-900">{totalSkus}</span>
+      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <MetricCard label="Total Article SKUs" value={String(totalSkus)} color="indigo" icon={Package} />
+        <MetricCard 
+          label="Low Stock Exposure" 
+          value={String(lowStock)} 
+          color={lowStock > 0 ? "rose" : "emerald"} 
+          icon={AlertTriangle} 
+          subValue={lowStock > 0 ? "Replenishment Recommended" : "Optimal Stock Levels"}
+        />
+        <div className="flex flex-col justify-center">
+          <button onClick={() => void load(search, category)} className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white border-2 border-slate-100 px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm active:scale-95">
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            Sync Real-time Data
+          </button>
         </div>
-        {lowStock > 0 && (
-          <div className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2">
-            <AlertTriangle size={13} className="text-amber-500" />
-            <span className="text-xs font-bold text-amber-700">{lowStock} low stock</span>
-          </div>
-        )}
-        <button onClick={() => void load(search, category)} className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-          <RefreshCw size={13} />
-          Refresh
-        </button>
       </div>
 
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="mb-8 flex flex-wrap gap-4 items-center border-b-2 border-slate-50 pb-8">
+        <div className="flex-1 min-w-[300px] relative group">
+          <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, KSBCL code, barcode…"
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
+            placeholder="Search article identity, code or barcode…"
+            className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 py-4 pl-14 pr-6 text-base font-black text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all"
           />
         </div>
-        <div className="relative">
+        <div className="relative min-w-[200px]">
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-4 pr-8 text-sm font-semibold text-slate-700 focus:border-emerald-400 focus:outline-none"
+            className="w-full appearance-none rounded-2xl border-2 border-slate-100 bg-white py-4 pl-6 pr-12 text-[11px] font-black uppercase tracking-widest text-slate-600 focus:border-indigo-400 focus:outline-none transition-all cursor-pointer"
           >
-            <option value="">All categories</option>
+            <option value="">All Categories</option>
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <ChevronDown size={16} className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
         {loading && rows.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-sm text-slate-400">Loading…</div>
+          <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Live Stock Registry…</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <table className="w-full min-w-[1100px] text-sm">
+              <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
                 <tr>
-                  <th className="px-5 py-3.5 text-left">Product</th>
-                  <th className="px-5 py-3.5 text-left">KSBCL</th>
-                  <th className="px-5 py-3.5 text-left">Barcode</th>
-                  <th className="px-5 py-3.5 text-right">MRP</th>
-                  <th className="px-5 py-3.5 text-right">Price</th>
-                  <th className="px-5 py-3.5 text-right">Opening</th>
-                  <th className="px-5 py-3.5 text-right">Sold</th>
-                  <th className="px-5 py-3.5 text-right">Cases</th>
-                  <th className="px-5 py-3.5 text-right">Btls</th>
-                  <th className="px-5 py-3.5 text-right">Total</th>
-                  {isAdmin && <th className="px-5 py-3.5 text-right">Edit</th>}
+                  <th className="px-6 py-5 text-left">Article Profile</th>
+                  <th className="px-6 py-5 text-left">Identity Codes</th>
+                  <th className="px-6 py-5 text-right">MAGNITUDE</th>
+                  <th className="px-6 py-5 text-right">Audit Metrics</th>
+                  <th className="px-6 py-5 text-right">Live Inventory</th>
+                  {isAdmin && <th className="px-6 py-5 text-center">Manage</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -268,58 +263,83 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   const isOut = row.totalBottles <= 0
 
                   return (
-                    <tr key={row.productSizeId} className={`transition ${isOut ? "bg-red-50/40" : isLow ? "bg-amber-50/40" : "hover:bg-slate-50/50"}`}>
-                      <td className="px-5 py-3">
-                        <p className="font-bold text-slate-900">{row.name}</p>
-                        <p className="text-xs text-slate-400">{row.sizeMl}ml · {row.category}</p>
+                    <tr key={row.productSizeId} className={`group transition-colors border-b-2 border-slate-50 ${isOut ? "bg-rose-50/30" : isLow ? "bg-amber-50/30" : "hover:bg-slate-50"}`}>
+                      <td className="px-6 py-5">
+                        <p className="font-black text-slate-900 text-base tracking-tight">{row.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500 uppercase">{row.category}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.sizeMl}ML</span>
+                        </div>
                       </td>
-                      <td className="px-5 py-3 font-mono text-xs text-slate-500">{row.ksbclItemCode ?? row.itemCode ?? "—"}</td>
-                      <td className="px-5 py-3 font-mono text-xs text-slate-500">{row.barcode ?? "—"}</td>
-                      <td className="px-5 py-3 text-right text-sm text-slate-600">{fmt(row.mrp)}</td>
-                      <td className="px-5 py-3 text-right font-semibold text-slate-800">{fmt(row.sellingPrice)}</td>
-                      <td className="px-5 py-3 text-right text-slate-500">{row.openingBottles}</td>
-                      <td className="px-5 py-3 text-right text-slate-500">{row.soldBottles}</td>
+                      <td className="px-6 py-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KSBCL / UPC</p>
+                        <div className="flex flex-col gap-1">
+                          <code className="text-xs font-black text-slate-700">{row.ksbclItemCode ?? row.itemCode ?? "—"}</code>
+                          <code className="text-[10px] font-bold text-slate-400">{row.barcode ?? "—"}</code>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">MRP / PRICE</p>
+                        <p className="text-xs text-slate-400 line-through font-bold">{fmt(row.mrp)}</p>
+                        <p className="text-base font-black text-slate-900">{fmt(row.sellingPrice)}</p>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">OPEN / SOLD</p>
+                        <p className="text-sm font-black text-slate-700 tabular-nums">{row.openingBottles} <span className="text-slate-300 mx-1">/</span> <span className="text-rose-500">{row.soldBottles}</span></p>
+                      </td>
 
                       {isEditing ? (
                         <>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number" min="0" value={editCases}
-                              onChange={(e) => setEditCases(e.target.value)}
-                              className="w-16 rounded border border-emerald-400 px-2 py-1 text-right text-sm"
-                              autoFocus
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number" min="0" value={editBottles}
-                              onChange={(e) => setEditBottles(e.target.value)}
-                              className="w-16 rounded border border-emerald-400 px-2 py-1 text-right text-sm"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right text-sm text-slate-400">—</td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={saveEdit} disabled={saving} className="rounded-lg bg-emerald-600 px-2 py-1 text-white hover:bg-emerald-700 disabled:opacity-50">
-                                <Check size={13} />
-                              </button>
-                              <button onClick={() => setEditRow(null)} className="rounded-lg border border-slate-200 px-2 py-1 text-slate-500 hover:bg-slate-100">
-                                <X size={13} />
-                              </button>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8px] font-black text-slate-400 uppercase">Cases</label>
+                                <input
+                                  type="number" min="0" value={editCases}
+                                  onChange={(e) => setEditCases(e.target.value)}
+                                  className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
+                                  autoFocus
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8px] font-black text-slate-400 uppercase">Btls</label>
+                                <input
+                                  type="number" min="0" value={editBottles}
+                                  onChange={(e) => setEditBottles(e.target.value)}
+                                  className="w-20 rounded-xl border-2 border-emerald-400 bg-white px-3 py-2 text-right text-sm font-black focus:outline-none shadow-sm"
+                                />
+                              </div>
+                              <div className="flex gap-1 ml-2">
+                                <button onClick={saveEdit} disabled={saving} className="rounded-xl bg-emerald-600 p-3 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-90 transition-all">
+                                  <Check size={18} />
+                                </button>
+                                <button onClick={() => setEditRow(null)} className="rounded-xl bg-slate-100 p-3 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all">
+                                  <X size={18} />
+                                </button>
+                              </div>
                             </div>
                           </td>
                         </>
                       ) : (
                         <>
-                          <td className="px-5 py-3 text-right font-semibold text-slate-700">{row.cases}</td>
-                          <td className="px-5 py-3 text-right font-semibold text-slate-700">{row.bottles}</td>
-                          <td className={`px-5 py-3 text-right font-black ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-slate-900"}`}>
-                            {row.totalBottles}
+                          <td className="px-6 py-5 text-right">
+                            <div className="flex items-center justify-end gap-4">
+                              <div className="text-right">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CASES / EXTRA</p>
+                                <p className="text-sm font-black text-slate-700 tabular-nums">{row.cases}c <span className="text-slate-300">+</span> {row.bottles}b</p>
+                              </div>
+                              <div className="bg-slate-50 rounded-2xl px-6 py-4 border-2 border-slate-100 min-w-[120px]">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">TOTAL VOLUME</p>
+                                <p className={`text-2xl font-black text-center tabular-nums ${isOut ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-900"}`}>
+                                  {row.totalBottles}
+                                </p>
+                              </div>
+                            </div>
                           </td>
                           {isAdmin && (
-                            <td className="px-5 py-3 text-right">
-                              <button onClick={() => startEdit(row)} className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:border-slate-400 hover:text-slate-700">
-                                <Pencil size={13} />
+                            <td className="px-6 py-5 text-center">
+                              <button onClick={() => startEdit(row)} className="rounded-2xl border-2 border-slate-100 p-3.5 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm active:scale-95">
+                                <Pencil size={18} />
                               </button>
                             </td>
                           )}
@@ -400,19 +420,19 @@ function ProductsView(): JSX.Element {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 min-w-[250px]">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products…"
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
+            className="w-full rounded-xl border-2 border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-bold text-slate-900 placeholder:font-medium placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none transition-colors"
           />
         </div>
         <button
           onClick={() => setModal({ mode: "add" })}
-          className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
+          className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-slate-800 transition-all active:scale-95"
         >
-          <Plus size={15} />
+          <Plus size={18} />
           Add Product
         </button>
       </div>
@@ -420,34 +440,34 @@ function ProductsView(): JSX.Element {
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <thead className="border-b border-slate-200 bg-slate-100 text-[11px] font-black uppercase tracking-widest text-slate-500">
               <tr>
-                <th className="px-5 py-3.5 text-left">Name</th>
-                <th className="px-5 py-3.5 text-left">KSBCL Code</th>
-                <th className="px-5 py-3.5 text-left">Category</th>
-                <th className="px-5 py-3.5 text-left">Sizes</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
+                <th className="px-6 py-4 text-left">Name</th>
+                <th className="px-6 py-4 text-left">KSBCL Code</th>
+                <th className="px-6 py-4 text-left">Category</th>
+                <th className="px-6 py-4 text-left">Sizes</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {products.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50/50">
-                  <td className="px-5 py-3 font-bold text-slate-900">{p.name}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-slate-500">{p.itemCode}</td>
-                  <td className="px-5 py-3">
-                    <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">{p.category}</span>
+                <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 text-sm font-bold text-slate-900">{p.name}</td>
+                  <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-500">{p.itemCode}</td>
+                  <td className="px-6 py-4">
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{p.category}</span>
                   </td>
-                  <td className="px-5 py-3 text-slate-500">
+                  <td className="px-6 py-4 text-sm font-medium text-slate-500">
                     {p.sizes.map(s => `${s.sizeMl}ml`).join(" · ")}
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setModal({ mode: "edit", product: p })}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                        className="rounded-xl border-2 border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 transition-all">
                         Edit
                       </button>
                       <button onClick={() => void deleteProduct(p.id, p.name)}
-                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">
+                        className="rounded-xl border-2 border-red-200 px-4 py-2 text-xs font-bold text-red-600 hover:border-red-300 hover:bg-red-50 transition-all">
                         Delete
                       </button>
                     </div>
@@ -652,10 +672,32 @@ function ProductModal({
   )
 }
 
+function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any; subValue?: string }): JSX.Element {
+  const tones = {
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    slate: "border-slate-100 bg-slate-50 text-slate-600",
+  }[color]
+
+  return (
+    <div className={`rounded-[2.5rem] border-2 p-10 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+      <div className="flex justify-between items-start mb-6">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
+        <div className="rounded-2xl bg-white/50 p-3 shadow-inner">
+          <Icon size={24} />
+        </div>
+      </div>
+      <p className="text-5xl font-black tracking-tighter tabular-nums">{value}</p>
+      {subValue && <p className="mt-4 text-[10px] font-black uppercase tracking-widest opacity-60">{subValue}</p>}
+    </div>
+  )
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-bold text-slate-500">{label}</label>
+    <div className="space-y-2">
+      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">{label}</label>
       {children}
     </div>
   )
