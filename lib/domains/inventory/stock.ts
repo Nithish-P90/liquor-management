@@ -114,7 +114,7 @@ export async function calculateStock(
         isVoidedLine: false,
         bill: {
           OR: [
-            { status: { in: ["COMMITTED", "TAB_FORCE_SETTLED"] } },
+            { status: { in: ["COMMITTED", "TAB_SETTLED", "TAB_FORCE_SETTLED"] } },
             { status: "VOIDED", netCollectible: { lt: 0 } },
           ],
           businessDate: { gte: periodStart, lte: maxDate },
@@ -219,7 +219,7 @@ export async function getStockSnapshot(
         productSizeId: productSizeFilter ?? { not: null },
         bill: {
           OR: [
-            { status: { in: ["COMMITTED", "TAB_FORCE_SETTLED"] } },
+            { status: { in: ["COMMITTED", "TAB_SETTLED", "TAB_FORCE_SETTLED"] } },
             { status: "VOIDED", netCollectible: { lt: 0 } },
           ],
           businessDate: { gte: periodStart, lte: maxDate },

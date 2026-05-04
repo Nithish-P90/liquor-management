@@ -113,7 +113,7 @@ export async function runEndOfDay(businessDate: DateString = todayDateString()):
         bill: {
           businessDate: dateObj,
           OR: [
-            { status: { in: [BillStatus.COMMITTED, BillStatus.TAB_FORCE_SETTLED] } },
+            { status: { in: [BillStatus.COMMITTED, BillStatus.TAB_SETTLED, BillStatus.TAB_FORCE_SETTLED] } },
             { status: BillStatus.VOIDED, netCollectible: { lt: 0 } },
           ],
         },
