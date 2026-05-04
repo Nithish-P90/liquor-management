@@ -118,9 +118,7 @@ export default function UploadPage(): JSX.Element {
   const [result, setResult] = useState<ParseResponse | null>(null)
   const [error, setError] = useState("")
   const [products, setProducts] = useState<ProductOption[]>([])
-  // Track per-item remapping state: indentItemId → { productSizeId, productName }
   const [mappings, setMappings] = useState<Record<number, { sizeId: number; name: string }>>({})
-  const [remapping, setRemapping] = useState<number | null>(null)
 
   useEffect(() => {
     fetch("/api/pos/items")
@@ -160,29 +158,6 @@ export default function UploadPage(): JSX.Element {
     if (file) handleFile(file)
   }
 
-  async function handleRemap(indentItemId: number, productSizeId: number): Promise<void> {
-    if (!result) return
-    setRemapping(indentItemId)
-    try {
-      const res = await fetch(`/api/indents/${result.indentId}/map-item`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ indentItemId, productSizeId }),
-      })
-      if (!res.ok) throw new Error("Mapping failed")
-      const chosen = products.find((p) => p.id === productSizeId)
-      if (chosen) {
-        setMappings((prev) => ({
-          ...prev,
-          [indentItemId]: { sizeId: productSizeId, name: `${chosen.product.name} ${chosen.sizeMl}ml` },
-        }))
-      }
-    } catch {
-      /* silent — user can retry */
-    } finally {
-      setRemapping(null)
-    }
-  }
 
   if (!result) {
     return (

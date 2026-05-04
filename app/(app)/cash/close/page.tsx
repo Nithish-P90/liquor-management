@@ -78,18 +78,6 @@ function fmt(v: string | number): string {
   return "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2 })
 }
 
-function cardTone(kind: "slate" | "emerald" | "rose" | "indigo"): string {
-  switch (kind) {
-    case "emerald":
-      return "border-slate-200 bg-slate-50 text-emerald-700"
-    case "rose":
-      return "border-slate-200 bg-slate-50 text-rose-700"
-    case "indigo":
-      return "border-slate-200 bg-slate-50 text-indigo-700"
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-600"
-  }
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
