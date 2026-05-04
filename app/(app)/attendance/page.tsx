@@ -5,7 +5,7 @@ import * as faceapi from "face-api.js"
 import { nanoid } from "nanoid"
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
-import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Sparkles, CircleCheckBig, ShieldAlert, Play, StopCircle, ScanFace } from "lucide-react"
+import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, Sparkles, CircleCheckBig, ShieldAlert, Play, StopCircle, ScanFace } from "lucide-react"
 
 type StaffRow = { id: number; name: string; role: string; faceEnrolled: boolean; faceSampleCount: number }
 
@@ -32,6 +32,7 @@ type FaceProfile = {
   threshold: number
   sampleCount: number
   descriptor: number[] | null
+  sampleDescriptors?: number[][]
 }
 
 type ScanState = "loading" | "ready" | "scanning" | "error"
@@ -50,7 +51,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function confidenceFromDistance(distance: number, threshold: number): number {
   if (threshold <= 0) return 0
-  return clamp(1 - distance / threshold, 0, 1)
+  return clamp(1 - distance / (threshold * 1.1), 0, 1)
 }
 
 function faceCoverage(video: HTMLVideoElement, box?: { width: number; height: number } | null): number {
@@ -74,6 +75,15 @@ function pickBestDetection<T extends { detection: { score: number; box: { width:
   return best
 }
 
+function bestDistance(target: Float32Array, descriptors: number[][]): number {
+  let best = Number.POSITIVE_INFINITY
+  for (const descriptor of descriptors) {
+    const dist = euclideanDist(target, descriptor)
+    if (dist < best) best = dist
+  }
+  return best
+}
+
 export default function AttendancePage(): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -89,7 +99,6 @@ export default function AttendancePage(): JSX.Element {
   const [staffOptions, setStaffOptions] = useState<StaffRow[]>([])
   const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null)
   const [selectedFaceMatch, setSelectedFaceMatch] = useState<{ confidence: number } | null>(null)
-  const [matchStreak, setMatchStreak] = useState(0)
   const [enrolledCount, setEnrolledCount] = useState(0)
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
@@ -231,11 +240,9 @@ export default function AttendancePage(): JSX.Element {
   useEffect(() => {
     if (selectedStaffId == null) {
       setSelectedFaceMatch(null)
-      setMatchStreak(0)
       return
     }
     setSelectedFaceMatch(null)
-    setMatchStreak(0)
     setCaptureActive(false)
     setStatusMsg(modelsLoaded ? "Ready to verify the selected staff member." : "Loading face models…")
   }, [modelsLoaded, selectedStaffId, selectedStaffName])
@@ -275,7 +282,6 @@ export default function AttendancePage(): JSX.Element {
     streamRef.current = null
     setCameraActive(false)
     setCaptureActive(false)
-    setMatchStreak(0)
   }
 
   useEffect(() => {
@@ -348,13 +354,18 @@ export default function AttendancePage(): JSX.Element {
 
         if (!det) {
           setStatusMsg("No face detected. Keep the selected staff member in frame.")
-          setMatchStreak(0)
           await delay(200)
           continue
         }
 
         const profile = selectedProfile
-        if (!profile || !profile.descriptor || profile.descriptor.length === 0) {
+        const descriptors = profile?.sampleDescriptors?.length
+          ? profile.sampleDescriptors
+          : profile?.descriptor
+            ? [profile.descriptor]
+            : []
+
+        if (!profile || descriptors.length === 0) {
           setStatusMsg(`${selectedStaffName ?? "Selected staff"} has no enrolled face profile.`)
           await delay(1500)
           continue
@@ -364,7 +375,6 @@ export default function AttendancePage(): JSX.Element {
         const coverage = faceCoverage(video, faceBox)
 
         if (coverage < 0.05) {
-          setMatchStreak(0)
           setSelectedFaceMatch(null)
           setStatusMsg("Move closer so the face fills more of the frame.")
           await delay(250)
@@ -373,25 +383,19 @@ export default function AttendancePage(): JSX.Element {
 
         setStatusMsg(`Matching ${profile.staffName}…`)
 
-        const threshold = Math.min(0.54, Math.max(0.34, profile.threshold))
-        const dist = euclideanDist(det!.descriptor, profile.descriptor as number[])
+        const threshold = Math.min(0.6, Math.max(0.4, profile.threshold))
+        const dist = bestDistance(det!.descriptor, descriptors)
         const confidence = confidenceFromDistance(dist, threshold)
 
         if (dist > threshold) {
           setSelectedFaceMatch(null)
-          setMatchStreak(0)
           setStatusMsg("Face mismatch. Keep the selected staff member in view.")
           await delay(1200)
           continue
         }
 
-        const nextStreak = matchStreak + 1
-        setMatchStreak(nextStreak)
         setSelectedFaceMatch({ confidence })
-        setStatusMsg(`Matched ${profile.staffName}. Hold steady to confirm.`)
-        if (nextStreak >= 3 && confidence >= 0.7) {
-          setStatusMsg(`Confirmed ${profile.staffName}. Choose check in or check out.`)
-        }
+        setStatusMsg(`Matched ${profile.staffName}. You can check in or check out.`)
         await delay(1000)
       }
     }
@@ -404,7 +408,7 @@ export default function AttendancePage(): JSX.Element {
   const presentCount = useMemo(() => roster.filter((r) => r.status === "IN").length, [roster])
   const absentCount = useMemo(() => roster.filter((r) => r.status === "ABSENT").length, [roster])
   const outCount = useMemo(() => roster.filter((r) => r.status === "OUT").length, [roster])
-  const matchReady = !!selectedFaceMatch && matchStreak >= 3 && selectedFaceMatch.confidence >= 0.7
+  const matchReady = !!selectedFaceMatch
 
   return (
     <PageShell title="Attendance Kiosk" subtitle="Fast face verification for clock in and clock out.">
@@ -415,28 +419,27 @@ export default function AttendancePage(): JSX.Element {
           <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
               <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="flex-1">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Step 1 · Select identity</p>
-                <div className="relative group">
-                  <UserRoundCheck className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
-                  <select
-                    value={selectedStaffId ?? ""}
-                    onChange={(e) => {
-                      const next = e.target.value ? Number(e.target.value) : null
-                      setSelectedStaffId(next)
-                      setSelectedFaceMatch(null)
-                      if (!next) stopCamera()
-                    }}
-                    className="w-full appearance-none rounded-2xl border-2 border-slate-100 bg-slate-50 pl-14 pr-12 py-5 text-lg font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all cursor-pointer shadow-inner"
-                  >
-                    <option value="">Select identity from roster…</option>
-                    {staffOptions.map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name} · {staff.role}{staff.faceEnrolled ? ` · Profile Active (${staff.faceSampleCount} Samples)` : " · Biometric Pending"}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
-                </div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Step 1 · Select identity from roster</p>
+                {selectedStaff ? (
+                  <div className="flex items-center gap-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-5 py-4">
+                    <UserRoundCheck size={20} className="text-indigo-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-black text-slate-900 truncate">{selectedStaff.name}</p>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{selectedStaff.role}{selectedStaff.faceEnrolled ? ` · ${selectedStaff.faceSampleCount} samples` : " · No face profile"}</p>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedStaffId(null); setSelectedFaceMatch(null); stopCamera() }}
+                      className="text-slate-400 hover:text-slate-700 transition-colors p-1"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-slate-400">
+                    <UserRoundCheck size={20} className="flex-shrink-0" />
+                    <p className="text-sm font-bold">Click a name in the roster on the right →</p>
+                  </div>
+                )}
               </div>
               <div className="flex flex-col gap-3 md:min-w-[260px]">
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
@@ -551,7 +554,7 @@ export default function AttendancePage(): JSX.Element {
                 {matchReady ? (
                   <span className="flex items-center gap-2"><CircleCheckBig size={15} /> Face confirmed. Actions unlocked.</span>
                 ) : selectedFaceMatch ? (
-                  <span className="flex items-center gap-2"><Sparkles size={15} /> Matching… hold steady to confirm the face.</span>
+                  <span className="flex items-center gap-2"><Sparkles size={15} /> Face matched. Ready for action.</span>
                 ) : (
                   <span className="flex items-center gap-2"><ShieldAlert size={15} /> No confirmed match yet.</span>
                 )}
@@ -578,7 +581,7 @@ export default function AttendancePage(): JSX.Element {
 
               {selectedFaceMatch && (
                 <p className="text-sm font-semibold text-emerald-700 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
-                  Confidence {(selectedFaceMatch.confidence * 100).toFixed(0)}% · streak {matchStreak}/3.
+                  Confidence {(selectedFaceMatch.confidence * 100).toFixed(0)}%.
                 </p>
               )}
 
@@ -651,11 +654,25 @@ export default function AttendancePage(): JSX.Element {
                 <p className="px-6 py-12 text-sm font-bold text-slate-400 text-center uppercase tracking-widest">No staff data synced.</p>
               ) : (
                 roster.map((r) => (
-                  <div key={r.staffId} className={`flex items-center gap-4 px-6 py-5 transition-all ${
-                    r.status === "IN" ? "bg-emerald-50/30 border-l-4 border-emerald-500" :
-                    r.status === "OUT" ? "bg-slate-50/30 border-l-4 border-slate-300" :
-                    "bg-white border-l-4 border-transparent"
-                  }`}>
+                  <div
+                    key={r.staffId}
+                    onClick={() => {
+                      if (selectedStaffId === r.staffId) {
+                        setSelectedStaffId(null)
+                        setSelectedFaceMatch(null)
+                        stopCamera()
+                      } else {
+                        setSelectedStaffId(r.staffId)
+                        setSelectedFaceMatch(null)
+                      }
+                    }}
+                    className={`flex items-center gap-4 px-6 py-5 transition-all cursor-pointer ${
+                      selectedStaffId === r.staffId
+                        ? "bg-indigo-50 border-l-4 border-indigo-500 ring-1 ring-inset ring-indigo-100"
+                        : r.status === "IN" ? "bg-emerald-50/30 border-l-4 border-emerald-500 hover:bg-emerald-50" :
+                          r.status === "OUT" ? "bg-slate-50/30 border-l-4 border-slate-300 hover:bg-slate-50" :
+                          "bg-white border-l-4 border-transparent hover:bg-slate-50"
+                    }`}>
                     {/* Status icon */}
                     <div className={`flex-shrink-0 rounded-2xl p-3 shadow-sm ${
                       r.status === "IN" ? "bg-emerald-500 text-white" :

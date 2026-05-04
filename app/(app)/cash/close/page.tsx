@@ -250,29 +250,59 @@ export default function CashManagementPage(): JSX.Element {
             {/* Balance bar */}
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
               <MetricCard label="Opening Balance" value={fmt(galla?.openingBalance ?? 0)} color="slate" icon={Vault} />
-              <MetricCard label="Accumulated (Sales)" value={fmt(cashIn)} color="slate" icon={TrendingUp} />
-              <MetricCard label="Disbursements (Out)" value={fmt(cashOut)} color="slate" icon={ArrowUpRight} />
-              <MetricCard label="Live Galla Balance" value={fmt(galla?.balance ?? 0)} color="indigo" icon={Vault} subValue="Real-time Counter Cash" />
+              <MetricCard label="Total Sales" value={fmt(cashIn)} color="slate" icon={TrendingUp} />
+              <MetricCard label="Total Outflows" value={fmt(cashOut)} color="slate" icon={ArrowUpRight} />
+              <MetricCard label="Counter Cash" value={fmt(galla?.balance ?? 0)} color="indigo" icon={Vault} subValue="Live register balance" />
+            </div>
+
+            {/* Transfer actions */}
+            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
+              <div className="border-b-2 border-slate-50 px-8 py-6 bg-slate-50/50 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transfer Actions</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Move cash to locker or bank</p>
+                </div>
+              </div>
+              {!galla?.isClosed ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-8">
+                  {transferCards.map((card) => (
+                    <ActionCard
+                      key={card.kind}
+                      icon={card.icon}
+                      title={card.title}
+                      amountValue={card.amountValue}
+                      onAmountChange={card.onAmountChange}
+                      refValue={card.refValue}
+                      onRefChange={card.onRefChange}
+                      buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO LOCKER" : "TRANSFER TO BANK"}
+                      onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
+                      busy={busy}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-sm text-slate-500">This day is closed, so transfer actions are disabled.</div>
+              )}
             </div>
 
             {/* Event log */}
             <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
               <div className="border-b-2 border-slate-50 px-10 py-8 bg-slate-50/50 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Galla Audit Trail</h3>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Live Transaction Stream — {today()}</p>
+                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transaction Log</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">All register events today — {today()}</p>
                 </div>
               </div>
               {!galla?.events.length ? (
-                <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Register Events…</div>
+                <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">No transactions yet today</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500">
                       <tr>
-                        <th className="px-10 py-5">Magnitude / Type</th>
-                        <th className="px-10 py-5">Audit Identity</th>
-                        <th className="px-10 py-5 text-right">NET MAGNITUDE</th>
+                        <th className="px-10 py-5">Type</th>
+                        <th className="px-10 py-5">Reference</th>
+                        <th className="px-10 py-5 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y-2 divide-slate-50">
@@ -289,7 +319,7 @@ export default function CashManagementPage(): JSX.Element {
                             </div>
                           </td>
                           <td className="px-10 py-6">
-                            <span className="text-sm font-black text-slate-500 tracking-tight">{e.reference || "INTERNAL SYSTEM SYNC"}</span>
+                            <span className="text-sm font-black text-slate-500 tracking-tight">{e.reference || "—"}</span>
                           </td>
                           <td className="px-10 py-6 text-right">
                             <span className="text-lg font-black text-slate-900 tabular-nums">{fmt(e.amount)}</span>
@@ -306,36 +336,6 @@ export default function CashManagementPage(): JSX.Element {
           {/* ── Column 2: Locker + Close Day ── */}
           <div className="space-y-6">
 
-            {/* Transfer actions */}
-            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
-              <div className="border-b-2 border-slate-50 px-8 py-6 bg-slate-50/50 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transfer Actions</h3>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Locker and bank dispatch controls</p>
-                </div>
-              </div>
-              {!galla?.isClosed ? (
-                <div className="grid grid-cols-1 gap-6 p-8">
-                  {transferCards.map((card) => (
-                    <ActionCard
-                      key={card.kind}
-                      icon={card.icon}
-                      title={card.title}
-                      amountValue={card.amountValue}
-                      onAmountChange={card.onAmountChange}
-                      refValue={card.refValue}
-                      onRefChange={card.onRefChange}
-                      buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO VAULT" : "SETTLE TO BANK"}
-                      onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
-                      busy={busy}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-sm text-slate-500">This day is closed, so transfer actions are disabled.</div>
-              )}
-            </div>
-
             {/* Locker balance */}
             <div className="rounded-[2.5rem] border-2 border-slate-900 bg-slate-900 p-10 shadow-2xl text-white overflow-hidden relative">
               <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
@@ -347,24 +347,24 @@ export default function CashManagementPage(): JSX.Element {
                   <Vault size={24} className="text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Financial Vault</h3>
-                  <p className="text-emerald-400 text-[9px] font-black uppercase tracking-widest mt-1">Accumulated Reserves</p>
+                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Locker</h3>
+                  <p className="text-emerald-400 text-[9px] font-black uppercase tracking-widest mt-1">Cash stored in locker</p>
                 </div>
               </div>
 
               <div className="mb-10">
                 <p className="text-5xl font-black tracking-tighter tabular-nums">{fmt(locker?.balance ?? 0)}</p>
-                <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Vault Liquidity</p>
+                <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Balance</p>
               </div>
 
               <div className="space-y-4 pt-10 border-t border-white/10 mb-10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Locker Deposit</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Send to Bank</p>
                 <div className="space-y-3">
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="Magnitude..."
+                    placeholder="Amount..."
                     value={lockerDepositAmt}
                     onChange={(e) => setLockerDepositAmt(e.target.value)}
                     className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-slate-400/50 focus:bg-white/10 focus:outline-none transition-all"
@@ -390,7 +390,7 @@ export default function CashManagementPage(): JSX.Element {
 
               {(locker?.events.length ?? 0) > 0 && (
                 <div className="mt-12 space-y-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Vault Activity Log</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Recent Activity</p>
                   <div className="space-y-3">
                     {locker!.events.slice(0, 5).map((e) => (
                       <div key={e.id} className="flex justify-between items-center py-3 border-b border-white/5">
@@ -411,10 +411,10 @@ export default function CashManagementPage(): JSX.Element {
                 <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-emerald-900">
                   <ShieldCheck size={120} />
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600 mb-6">Operational Integrity Check</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600 mb-6">Day Closed</p>
                 <div className="space-y-1">
                   <p className="text-4xl font-black text-emerald-800 tracking-tighter tabular-nums">{fmt(galla.countedAmount ?? 0)}</p>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Terminal Closing Magnitude</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Closing Balance</p>
                 </div>
                 {galla.variance && Math.abs(parseFloat(galla.variance)) > 0.01 && (
                   <div className="mt-8 rounded-2xl bg-rose-50 border-2 border-rose-100 p-5">
@@ -470,29 +470,26 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
         <div className="rounded-2xl bg-slate-50 p-3 shadow-inner text-slate-400">
           {icon}
         </div>
-        <div>
-          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">{title}</h3>
-          <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-1">Magnitude Dispatch</p>
-        </div>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">{title}</h3>
       </div>
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Disbursement Magnitude</label>
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Amount</label>
           <input
             type="number"
             min="0"
             step="0.01"
-            placeholder="Enter magnitude..."
+            placeholder="Enter amount..."
             value={amountValue}
             onChange={(e) => onAmountChange(e.target.value)}
             className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-xl font-black text-slate-800 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all shadow-inner"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Audit Reference (Optional)</label>
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Reference (Optional)</label>
           <input
             type="text"
-            placeholder="Define identity..."
+            placeholder="Optional note..."
             value={refValue}
             onChange={(e) => onRefChange(e.target.value)}
             className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-base font-black text-slate-800 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all shadow-inner"

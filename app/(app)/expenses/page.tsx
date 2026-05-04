@@ -71,8 +71,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function ExpensesPage(): JSX.Element {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [from, setFrom] = useState(today())
-  const [to, setTo] = useState(today())
+  const [date, setDate] = useState(today())
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ expDate: today(), particulars: "", categoryId: "", amount: "" })
   const [loading, setLoading] = useState(false)
@@ -97,7 +96,7 @@ export default function ExpensesPage(): JSX.Element {
     setLoading(true)
     try {
       const [expRes, catRes] = await Promise.all([
-        fetch(`/api/expenses?from=${from}&to=${to}`),
+        fetch(`/api/expenses?from=${date}&to=${date}`),
         fetch("/api/expense-categories"),
       ])
       if (expRes.ok) setExpenses(await expRes.json())
@@ -107,7 +106,7 @@ export default function ExpensesPage(): JSX.Element {
     } finally {
       setLoading(false)
     }
-  }, [from, to, showToast])
+  }, [date, showToast])
 
   useEffect(() => {
     void fetchAll()
@@ -169,27 +168,15 @@ export default function ExpensesPage(): JSX.Element {
             <div className="rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-end gap-6">
                 <div className="flex-1 min-w-[200px]">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Audit Date Range</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-1 items-center gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-3 transition-colors focus-within:border-indigo-400 focus-within:bg-white">
-                      <CalendarDays size={18} className="text-slate-400" />
-                      <input
-                        type="date"
-                        value={from}
-                        onChange={(e) => setFrom(e.target.value)}
-                        className="w-full bg-transparent text-base font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
-                    <div className="h-px w-4 bg-slate-200" />
-                    <div className="flex flex-1 items-center gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-3 transition-colors focus-within:border-indigo-400 focus-within:bg-white">
-                      <CalendarDays size={18} className="text-slate-400" />
-                      <input
-                        type="date"
-                        value={to}
-                        onChange={(e) => setTo(e.target.value)}
-                        className="w-full bg-transparent text-base font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Date</p>
+                  <div className="flex flex-1 items-center gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-3 transition-colors focus-within:border-indigo-400 focus-within:bg-white">
+                    <CalendarDays size={18} className="text-slate-400" />
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full bg-transparent text-base font-bold text-slate-800 focus:outline-none"
+                    />
                   </div>
                 </div>
                 <Button 
