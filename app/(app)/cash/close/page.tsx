@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Vault, Building2 } from "lucide-react"
+import { Vault, Building2, TrendingUp, ArrowUpRight, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"
@@ -222,9 +222,9 @@ export default function CashManagementPage(): JSX.Element {
   ]
 
   return (
-    <PageShell title="Cash Management" subtitle={`Register · Locker · Bank — ${today()}`}>
+    <PageShell title="Galla Reconciliation" subtitle="Live cash register tracking, locker transfers, and bank settlement audit.">
       {toast && (
-        <div className={`mb-5 rounded-lg px-4 py-3 text-sm font-semibold ${toast.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-800"}`}>
+        <div className={`mb-8 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-emerald-50 border-emerald-100 text-emerald-800" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
           {toast.msg}
         </div>
       )}
@@ -238,16 +238,16 @@ export default function CashManagementPage(): JSX.Element {
           <div className="lg:col-span-2 space-y-6">
 
             {/* Balance bar */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Card label="Opening" value={fmt(galla?.openingBalance ?? 0)} />
-              <Card label="Cash In (sales)" value={fmt(cashIn)} green />
-              <Card label="Cash Out" value={fmt(cashOut)} red />
-              <Card label="Register Balance" value={fmt(galla?.balance ?? 0)} big />
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+              <MetricCard label="Opening Balance" value={fmt(galla?.openingBalance ?? 0)} color="slate" icon={Vault} />
+              <MetricCard label="Accumulated (Sales)" value={fmt(cashIn)} color="emerald" icon={TrendingUp} />
+              <MetricCard label="Disbursements (Out)" value={fmt(cashOut)} color="rose" icon={ArrowUpRight} />
+              <MetricCard label="Live Galla Balance" value={fmt(galla?.balance ?? 0)} color="indigo" icon={Vault} subValue="Real-time Counter Cash" />
             </div>
 
             {/* Transfer actions */}
             {!galla?.isClosed && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-10">
                 {transferCards.map((card) => (
                   <ActionCard
                     key={card.kind}
@@ -257,7 +257,7 @@ export default function CashManagementPage(): JSX.Element {
                     onAmountChange={card.onAmountChange}
                     refValue={card.refValue}
                     onRefChange={card.onRefChange}
-                    buttonLabel="Transfer"
+                    buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO VAULT" : "SETTLE TO BANK"}
                     onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
                     busy={busy}
                     accentColor={card.accentColor}
@@ -267,28 +267,48 @@ export default function CashManagementPage(): JSX.Element {
             )}
 
             {/* Event log */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-5 py-4">
-                <h3 className="text-sm font-bold text-slate-800">Register Events — {today()}</h3>
+            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
+              <div className="border-b-2 border-slate-50 px-10 py-8 bg-slate-50/50 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Galla Audit Trail</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Live Transaction Stream — {today()}</p>
+                </div>
               </div>
               {!galla?.events.length ? (
-                <p className="px-5 py-8 text-sm text-slate-400 text-center">No events yet today</p>
+                <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Register Events…</div>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {galla.events.map((e) => (
-                    <div key={e.id} className="flex items-center justify-between px-5 py-3">
-                      <div>
-                        <p className={`text-sm font-semibold ${EVENT_COLOR[e.eventType] ?? "text-slate-600"}`}>
-                          {EVENT_LABEL[e.eventType] ?? e.eventType}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(e.occurredAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                          {e.reference ? ` · ${e.reference}` : ""}
-                        </p>
-                      </div>
-                      <p className="font-mono text-sm font-bold text-slate-800">{fmt(e.amount)}</p>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <tr>
+                        <th className="px-10 py-5">Magnitude / Type</th>
+                        <th className="px-10 py-5">Audit Identity</th>
+                        <th className="px-10 py-5 text-right">NET MAGNITUDE</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y-2 divide-slate-50">
+                      {galla.events.map((e) => (
+                        <tr key={e.id} className="group hover:bg-slate-50 transition-colors">
+                          <td className="px-10 py-6">
+                            <div className="flex flex-col">
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${EVENT_COLOR[e.eventType] ?? "text-slate-600"}`}>
+                                {EVENT_LABEL[e.eventType] ?? e.eventType}
+                              </span>
+                              <span className="text-[11px] font-black text-slate-400 mt-1">
+                                {new Date(e.occurredAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-10 py-6">
+                            <span className="text-sm font-black text-slate-500 tracking-tight">{e.reference || "INTERNAL SYSTEM SYNC"}</span>
+                          </td>
+                          <td className="px-10 py-6 text-right">
+                            <span className="text-lg font-black text-slate-900 tabular-nums">{fmt(e.amount)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -298,67 +318,90 @@ export default function CashManagementPage(): JSX.Element {
           <div className="space-y-6">
 
             {/* Locker balance */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <Vault size={18} className="text-blue-500" />
-                <h3 className="text-sm font-bold text-slate-800">Locker</h3>
+            <div className="rounded-[2.5rem] border-2 border-slate-900 bg-slate-900 p-10 shadow-2xl text-white overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+                <Vault size={160} />
               </div>
-              <p className="text-3xl font-black text-slate-900">{fmt(locker?.balance ?? 0)}</p>
-              <p className="mt-1 text-xs text-slate-400">accumulated balance</p>
+              
+              <div className="mb-10 flex items-center gap-3">
+                <div className="rounded-2xl bg-white/10 p-3 shadow-inner">
+                  <Vault size={24} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Financial Vault</h3>
+                  <p className="text-emerald-400 text-[9px] font-black uppercase tracking-widest mt-1">Accumulated Reserves</p>
+                </div>
+              </div>
 
-              <div className="mt-5 space-y-2">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Amount to deposit to bank"
-                  value={lockerDepositAmt}
-                  onChange={(e) => setLockerDepositAmt(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  placeholder="Reference (optional)"
-                  value={lockerDepositRef}
-                  onChange={(e) => setLockerDepositRef(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
-                />
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={depositLocker}
-                  disabled={busy}
-                >
-                  <Building2 size={14} className="mr-1.5 inline" />
-                  Deposit to Bank
-                </Button>
+              <div className="mb-10">
+                <p className="text-5xl font-black tracking-tighter tabular-nums">{fmt(locker?.balance ?? 0)}</p>
+                <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Vault Liquidity</p>
+              </div>
+
+              <div className="space-y-4 pt-10 border-t border-white/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Commit to Bank Deposit</p>
+                <div className="space-y-3">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Magnitude..."
+                    value={lockerDepositAmt}
+                    onChange={(e) => setLockerDepositAmt(e.target.value)}
+                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:bg-white/10 focus:outline-none transition-all"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reference..."
+                    value={lockerDepositRef}
+                    onChange={(e) => setLockerDepositRef(e.target.value)}
+                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:bg-white/10 focus:outline-none transition-all"
+                  />
+                  <Button
+                    variant="primary"
+                    className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/10 active:scale-95 transition-all"
+                    onClick={depositLocker}
+                    disabled={busy}
+                  >
+                    <Building2 size={18} className="mr-3" />
+                    Dispatch to Bank
+                  </Button>
+                </div>
               </div>
 
               {(locker?.events.length ?? 0) > 0 && (
-                <div className="mt-4 space-y-1">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recent</p>
-                  {locker!.events.slice(0, 6).map((e) => (
-                    <div key={e.id} className="flex justify-between text-xs">
-                      <span className="text-slate-500">{LOCKER_EVENT_LABEL[e.eventType] ?? e.eventType}</span>
-                      <span className={`font-mono font-semibold ${e.eventType === "TRANSFER_IN" ? "text-emerald-600" : "text-red-500"}`}>
-                        {e.eventType === "TRANSFER_IN" ? "+" : "−"}{fmt(e.amount)}
-                      </span>
-                    </div>
-                  ))}
+                <div className="mt-12 space-y-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Vault Activity Log</p>
+                  <div className="space-y-3">
+                    {locker!.events.slice(0, 5).map((e) => (
+                      <div key={e.id} className="flex justify-between items-center py-3 border-b border-white/5">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{LOCKER_EVENT_LABEL[e.eventType] ?? e.eventType}</span>
+                        <span className={`text-sm font-black tabular-nums ${e.eventType === "TRANSFER_IN" ? "text-emerald-400" : "text-rose-400"}`}>
+                          {e.eventType === "TRANSFER_IN" ? "+" : "−"}{fmt(e.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Day status (auto-closed by EOD cron) */}
             {galla?.isClosed && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Day Closed</p>
-                <p className="mt-1 text-2xl font-black text-slate-800">{fmt(galla.countedAmount ?? 0)}</p>
-                <p className="text-xs text-slate-500">closing balance</p>
+              <div className="rounded-[2.5rem] border-2 border-emerald-100 bg-emerald-50 p-10 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-emerald-900">
+                  <ShieldCheck size={120} />
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600 mb-6">Operational Integrity Check</p>
+                <div className="space-y-1">
+                  <p className="text-4xl font-black text-emerald-800 tracking-tighter tabular-nums">{fmt(galla.countedAmount ?? 0)}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Terminal Closing Magnitude</p>
+                </div>
                 {galla.variance && Math.abs(parseFloat(galla.variance)) > 0.01 && (
-                  <p className="mt-2 text-xs font-semibold text-red-600">
-                    Variance: {fmt(galla.variance)}
-                  </p>
+                  <div className="mt-8 rounded-2xl bg-rose-50 border-2 border-rose-100 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-1">Discrepancy Detected</p>
+                    <p className="text-xl font-black text-rose-600 tabular-nums">{fmt(galla.variance)}</p>
+                  </div>
                 )}
               </div>
             )}
@@ -369,15 +412,24 @@ export default function CashManagementPage(): JSX.Element {
   )
 }
 
-function Card({ label, value, green, red, big }: {
-  label: string; value: string; green?: boolean; red?: boolean; big?: boolean
-}): JSX.Element {
+function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any; subValue?: string }): JSX.Element {
+  const tones = {
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    slate: "border-slate-100 bg-slate-50 text-slate-600",
+  }[color]
+
   return (
-    <div className={`rounded-xl border p-4 ${big ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`}>
-      <p className={`text-[10px] font-bold uppercase tracking-wider ${big ? "text-slate-400" : "text-slate-400"}`}>{label}</p>
-      <p className={`mt-1 text-xl font-black ${big ? "text-white" : green ? "text-emerald-600" : red ? "text-red-500" : "text-slate-800"}`}>
-        {value}
-      </p>
+    <div className={`rounded-[2.5rem] border-2 p-8 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+      <div className="flex justify-between items-start mb-6">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
+        <div className="rounded-2xl bg-white/50 p-3 shadow-inner">
+          <Icon size={24} />
+        </div>
+      </div>
+      <p className="text-3xl font-black tracking-tighter tabular-nums">{value}</p>
+      {subValue && <p className="mt-4 text-[10px] font-black uppercase tracking-widest opacity-60">{subValue}</p>}
     </div>
   )
 }
@@ -394,39 +446,49 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
   busy: boolean
   accentColor: "blue" | "purple"
 }): JSX.Element {
-  const borderClass = accentColor === "blue" ? "border-blue-200 focus:border-blue-400" : "border-purple-200 focus:border-purple-400"
-  const btnBg = accentColor === "blue" ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"
-
+  const accent = accentColor === "blue" ? "indigo" : "indigo" // Standardization
+  
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        {icon}
-        <p className="text-sm font-bold text-slate-800">{title}</p>
+    <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-10 shadow-sm transition-all hover:shadow-lg">
+      <div className="mb-8 flex items-center gap-4">
+        <div className="rounded-2xl bg-slate-50 p-3 shadow-inner text-slate-400">
+          {icon}
+        </div>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">{title}</h3>
+          <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-1">Magnitude Dispatch</p>
+        </div>
       </div>
-      <div className="space-y-2">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="Amount…"
-          value={amountValue}
-          onChange={(e) => onAmountChange(e.target.value)}
-          className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${borderClass}`}
-        />
-        <input
-          type="text"
-          placeholder="Reference (optional)"
-          value={refValue}
-          onChange={(e) => onRefChange(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
-        />
-        <button
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Disbursement Magnitude</p>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Enter magnitude..."
+            value={amountValue}
+            onChange={(e) => onAmountChange(e.target.value)}
+            className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-xl font-black text-slate-800 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all shadow-inner"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Audit Reference (Optional)</p>
+          <input
+            type="text"
+            placeholder="Define identity..."
+            value={refValue}
+            onChange={(e) => onRefChange(e.target.value)}
+            className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-base font-black text-slate-800 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all shadow-inner"
+          />
+        </div>
+        <Button
           onClick={onSubmit}
           disabled={busy}
-          className={`w-full rounded-lg px-3 py-2 text-sm font-bold text-white transition disabled:opacity-50 ${btnBg}`}
+          className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-slate-900/10 active:scale-95 transition-all mt-4"
         >
           {buttonLabel}
-        </button>
+        </Button>
       </div>
     </div>
   )
