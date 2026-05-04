@@ -18,7 +18,7 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const bills = await prisma.bill.findMany({
-      where: { status: { in: ["COMMITTED", "VOIDED"] } },
+      where: { status: { in: ["COMMITTED", "TAB_SETTLED", "TAB_FORCE_SETTLED", "VOIDED"] } },
       include: {
         operator: { select: { name: true } },
         clerk: { select: { name: true } },

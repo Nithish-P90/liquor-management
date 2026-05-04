@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { requireApiAuth, parseJsonBody, jsonOk, withApiError } from "@/lib/api/handler"
+import { requireApiAuth, parseJsonBody, jsonOk, withApiError, apiError } from "@/lib/api/handler"
 import { prisma } from "@/lib/platform/prisma"
 import { voidBill } from "@/lib/domains/billing/bill"
 
@@ -16,7 +16,8 @@ export async function POST(req: Request): Promise<Response> {
   if (body instanceof Response) return body
 
   return withApiError(async () => {
-    const actorId = parseInt(auth.user?.id ?? "0", 10)
+    const actorId = parseInt(auth.user?.id ?? "", 10)
+    if (!actorId || isNaN(actorId)) return apiError("Invalid session", 401)
     await prisma.$transaction(
       (tx) => voidBill(tx, { billId: body.billId, reason: body.reason, actorId }),
       { timeout: 30000 },

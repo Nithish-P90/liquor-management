@@ -33,7 +33,7 @@ export async function POST(req: Request): Promise<Response> {
       data: {
         productSizeId,
         adjustmentType: "CORRECTION",
-        quantityBottles: Math.abs(quantityBottles),
+        quantityBottles,
         reason,
         adjustmentDate: parseDateParam(todayDateString()),
         createdById: staffId,

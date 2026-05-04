@@ -90,3 +90,7 @@ export function postReturn(body: {
 }): Promise<Result<{ billNumber: string }>> {
   return post("/api/pos/bills/return", body)
 }
+
+export function postVoid(billId: number, reason: string): Promise<Result<{ ok: boolean }>> {
+  return post("/api/pos/bills/void", { billId, reason })
+}

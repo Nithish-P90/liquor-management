@@ -575,7 +575,7 @@ export async function settleTab(
 
   await tx.bill.update({
     where: { id: params.billId },
-    data: { status: BillStatus.COMMITTED },
+    data: { status: BillStatus.TAB_SETTLED },
   })
 
   for (const payment of params.payments) {

@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
-import { postCommit, postOpenTab, postAddToTab, postSettleTab, postReturn, postCompute, type PricedCart } from "./api-client"
+import { postCommit, postOpenTab, postAddToTab, postSettleTab, postReturn, postCompute, postVoid, type PricedCart } from "./api-client"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -547,6 +547,18 @@ export default function PosPage(): JSX.Element {
 
   function refreshRecent(): void {
     fetch("/api/pos/recent-bills").then((r) => r.json()).then(setRecentBills).catch(() => {})
+  }
+
+  async function handleVoidBill(billId: number, billNumber: string): Promise<void> {
+    const reason = window.prompt(`Void reason for ${billNumber}:`)
+    if (!reason?.trim()) return
+    setLoading(true)
+    const result = await postVoid(billId, reason.trim())
+    setLoading(false)
+    if (!result.ok) { showToast(result.error, false); return }
+    showToast(`${billNumber} voided`, true)
+    setShowRecent(false)
+    refreshRecent()
   }
 
   const localTotal = cartTotal(cart)
@@ -1177,7 +1189,15 @@ export default function PosPage(): JSX.Element {
                   <div className="flex items-center justify-between mt-6 pt-3 border-t border-slate-50">
                     <span className="text-xl font-black text-slate-900">{fmt(b.netCollectible)}</span>
                     <div className="flex gap-2">
-                      {/* Void functionality removed per user request */}
+                      {b.status === "COMMITTED" && (
+                        <button
+                          onClick={() => handleVoidBill(b.id, b.billNumber)}
+                          disabled={loading}
+                          className="text-[10px] font-black uppercase tracking-widest text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          Void
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
