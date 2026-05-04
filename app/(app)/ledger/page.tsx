@@ -50,10 +50,10 @@ export default function LedgerPage(): JSX.Element {
   const days = useMemo(() => generateDateRange(from, to), [from, to])
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-12">
-      <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8 border-b-2 border-slate-100 pb-10">
+    <main className="min-h-screen bg-[#f8fafc] p-6 lg:p-5">
+      <header className="mb-5 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b-2 border-slate-100 pb-10">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 flex items-center gap-4">
+          <h1 className="text-xl font-black tracking-tight text-slate-900 flex items-center gap-4">
             <div className="rounded-2xl bg-slate-900 p-3 text-white shadow-xl shadow-slate-900/10">
               <BarChart3 size={32} />
             </div>
@@ -97,7 +97,7 @@ export default function LedgerPage(): JSX.Element {
         {days.length > 0 ? (
           days.map(day => <DailyAccordion key={day} date={day} />)
         ) : (
-          <div className="flex flex-col h-48 items-center justify-center rounded-3xl border-4 border-slate-100 border-dashed text-slate-400 gap-3">
+          <div className="flex flex-col h-48 items-center justify-center rounded-xl border-4 border-slate-100 border-dashed text-slate-400 gap-3">
             <AlertCircle size={32} />
             <p className="text-sm font-black uppercase tracking-widest">No transaction data for this range</p>
           </div>
@@ -152,10 +152,10 @@ function DailyAccordion({ date }: { date: string }) {
   const summary = data?.summary || (data?.billCount !== undefined ? data : null)
 
   return (
-    <div className={`rounded-3xl border-2 transition-all duration-300 ${isExpanded ? 'border-slate-900 shadow-2xl bg-white scale-[1.01] z-10' : 'border-slate-100 shadow-sm bg-white hover:border-indigo-200'}`}>
+    <div className={`rounded-xl border-2 transition-all duration-300 ${isExpanded ? 'border-slate-900 shadow-2xl bg-white scale-[1.01] z-10' : 'border-slate-100 shadow-sm bg-white hover:border-indigo-200'}`}>
       <button 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex flex-col md:flex-row items-start md:items-center justify-between p-8 focus:outline-none"
+        className="w-full flex flex-col md:flex-row items-start md:items-center justify-between p-4 focus:outline-none"
       >
         <div className="flex items-center gap-6">
           <div className={`p-4 rounded-2xl transition-all duration-500 shadow-inner ${isExpanded ? 'bg-indigo-600 text-white rotate-12 scale-110' : 'bg-slate-50 text-slate-400'}`}>
@@ -167,12 +167,12 @@ function DailyAccordion({ date }: { date: string }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-10 mt-6 md:mt-0">
+        <div className="flex items-center gap-5 mt-6 md:mt-0">
           {!isExpanded && !hasFetchedOnce && (
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 animate-pulse">Load Audit Data</span>
           )}
           {summary && !isExpanded && (
-            <div className="flex gap-8">
+            <div className="flex gap-4">
               <div className="text-right">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bills</p>
                 <p className="text-lg font-black text-slate-900">{summary.billCount}</p>
@@ -190,8 +190,8 @@ function DailyAccordion({ date }: { date: string }) {
       </button>
 
       {isExpanded && (
-        <div className="p-8 pt-0 border-t-2 border-slate-50 mt-2">
-          <div className="mt-8 mb-10 flex flex-wrap gap-3">
+        <div className="p-4 pt-0 border-t-2 border-slate-50 mt-2">
+          <div className="mt-4 mb-5 flex flex-wrap gap-3">
             {[
               { key: "overview", label: "Executive Summary", icon: BarChart3 },
               { key: "bills", label: "Transaction Feed", icon: Receipt },
@@ -242,7 +242,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
     if (!summary) return <div>No data for this period.</div>
 
     return (
-      <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
+      <div className="space-y-5 animate-in fade-in zoom-in-95 duration-500">
         {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard title="Transactions" value={summary.billCount} icon={Receipt} color="text-slate-900" bg="bg-white" accent="indigo" />
@@ -251,11 +251,11 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
           <MetricCard title="Net Settlement" value={fmt(summary.netCollectible)} icon={Vault} color="text-emerald-700" bg="bg-emerald-50/50" accent="emerald" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Revenue Breakdown & Clerks */}
-          <div className="lg:col-span-1 space-y-10">
-            <div className="rounded-3xl border-2 border-slate-50 bg-white p-8 shadow-sm">
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8 px-1">Revenue Segmentation</h3>
+          <div className="lg:col-span-1 space-y-5">
+            <div className="rounded-xl border-2 border-slate-50 bg-white p-4 shadow-sm">
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 px-1">Revenue Segmentation</h3>
               <div className="space-y-5">
                 {summary.byMode && Object.entries(summary.byMode).map(([mode, amount]) => (
                   <div key={mode} className="flex justify-between items-center pb-4 border-b-2 border-slate-50">
@@ -274,8 +274,8 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
               </div>
             </div>
 
-            <div className="rounded-3xl border-2 border-slate-50 bg-white p-8 shadow-sm">
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8 flex items-center gap-2"><Users size={16}/> Operator Efficiency</h3>
+            <div className="rounded-xl border-2 border-slate-50 bg-white p-4 shadow-sm">
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2"><Users size={16}/> Operator Efficiency</h3>
               <div className="space-y-6">
                 {clerks?.length > 0 ? clerks.map((c: Row, i: number) => (
                   <div key={i} className="flex justify-between items-center group">
@@ -285,7 +285,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
                     </div>
                     <span className="text-lg font-black text-emerald-600 tabular-nums">{fmt(c._sum.netCollectible)}</span>
                   </div>
-                )) : <div className="text-center py-8 text-[11px] font-black uppercase tracking-widest text-slate-300">No Operator Data</div>}
+                )) : <div className="text-center py-3 text-[11px] font-black uppercase tracking-widest text-slate-300">No Operator Data</div>}
               </div>
             </div>
           </div>
@@ -304,7 +304,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
                       </div>
                       <span className="text-sm font-black text-emerald-600 whitespace-nowrap">{fmt(s.totalRevenue)}</span>
                     </div>
-                  )) : <p className="text-xs font-medium text-slate-400 text-center py-10">No sales</p>}
+                  )) : <p className="text-xs font-medium text-slate-400 text-center py-4">No sales</p>}
                 </div>
               </div>
 
@@ -319,7 +319,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
                       </div>
                       <span className="text-sm font-black text-red-500 whitespace-nowrap">{fmt(e.amount)}</span>
                     </div>
-                  )) : <p className="text-xs font-medium text-slate-400 text-center py-10">No expenses</p>}
+                  )) : <p className="text-xs font-medium text-slate-400 text-center py-4">No expenses</p>}
                 </div>
               </div>
             </div>
@@ -348,7 +348,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
                        </tr>
                      ))}
                      {!bills?.length && (
-                       <tr><td colSpan={4} className="px-6 py-8 text-center text-xs font-medium text-slate-400">No recent transactions</td></tr>
+                       <tr><td colSpan={4} className="px-6 py-3 text-center text-xs font-medium text-slate-400">No recent transactions</td></tr>
                      )}
                    </tbody>
                  </table>
@@ -405,7 +405,7 @@ function LedgerView({ view, data }: { view: View; data: any }): JSX.Element {
       <div className="space-y-6">
         <div className="inline-block rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-1">Total Expenses</p>
-          <p className="text-3xl font-black text-red-600">{fmt(data.total)}</p>
+          <p className="text-lg font-black text-red-600">{fmt(data.total)}</p>
         </div>
         <DataTable
           headers={["Date", "Particulars", "Category", "Amount"]}
@@ -488,21 +488,21 @@ function MetricCard({ title, value, icon: Icon, color = "text-slate-900", bg = "
   const accentColor = accentMap[accent as keyof typeof accentMap] || "text-slate-400"
 
   return (
-    <div className={`rounded-3xl border-2 border-slate-50 ${bg} p-8 shadow-sm flex flex-col justify-between h-40 transition-all hover:shadow-xl hover:-translate-y-1`}>
+    <div className={`rounded-xl border-2 border-slate-50 ${bg} p-4 shadow-sm flex flex-col justify-between h-40 transition-all hover:shadow-xl hover:-translate-y-1`}>
       <div className="flex justify-between items-start">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{title}</p>
         <div className={`p-2.5 rounded-2xl bg-slate-50 ${accentColor} shadow-inner`}>
           <Icon size={20} />
         </div>
       </div>
-      <p className={`text-3xl font-black tracking-tight tabular-nums ${color}`}>{value}</p>
+      <p className={`text-lg font-black tracking-tight tabular-nums ${color}`}>{value}</p>
     </div>
   )
 }
 
 function DataTable({ headers, data, renderRow }: { headers: string[], data: any[], renderRow: (item: any, index: number) => JSX.Element }) {
   return (
-    <div className="rounded-3xl border-2 border-slate-50 bg-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border-2 border-slate-50 bg-white overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-left whitespace-nowrap">
           <thead className="bg-slate-100/50 text-[11px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-50">
@@ -514,7 +514,7 @@ function DataTable({ headers, data, renderRow }: { headers: string[], data: any[
           </thead>
           <tbody className="divide-y-2 divide-slate-50">
             {data?.length > 0 ? data.map(renderRow) : (
-              <tr><td colSpan={headers.length} className="px-6 py-12 text-center text-xs font-medium text-slate-400">No records found for the selected period.</td></tr>
+              <tr><td colSpan={headers.length} className="px-6 py-5 text-center text-xs font-medium text-slate-400">No records found for the selected period.</td></tr>
             )}
           </tbody>
         </table>

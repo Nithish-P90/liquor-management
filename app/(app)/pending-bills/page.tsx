@@ -73,7 +73,7 @@ export default function Page(): JSX.Element {
 
   return (
     <PageShell title="Account Tabs" subtitle="Review and reconcile active credit dispatches and unsettled customer sessions.">
-      <div className="mb-10 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
+      <div className="mb-5 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
         <div className="flex-1 min-w-[280px] relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
           <input
@@ -96,7 +96,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="mb-5 grid grid-cols-1 gap-6 md:grid-cols-3">
         <StatCard label="Active Sessions" value={String(filtered.length)} color="indigo" icon={Activity} />
         <StatCard label="Outstanding Exposure" value={fmt(totalPending)} color="emerald" icon={IndianRupee} />
         <StatCard label="Registry Action" value="SETTLE IN POS" color="slate" icon={Search} />
@@ -109,16 +109,16 @@ export default function Page(): JSX.Element {
       )}
 
       {loading && filtered.length === 0 ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Open Registries…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Open Registries…</div>
       ) : filtered.length === 0 ? (
-        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+        <div className="py-3 text-center border-4 border-slate-50 border-dashed rounded-xl">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">All sessions currently reconciled</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {filtered.map((b) => (
-            <div key={b.id} className="rounded-[2.5rem] border-2 border-slate-50 bg-white p-8 shadow-sm hover:shadow-xl transition-all group">
-              <div className="flex flex-wrap items-start justify-between gap-6 mb-8">
+            <div key={b.id} className="rounded-xl border-2 border-slate-50 bg-white p-4 shadow-sm hover:shadow-xl transition-all group">
+              <div className="flex flex-wrap items-start justify-between gap-6 mb-4">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <span className="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white font-mono tracking-wider">{b.billNumber}</span>
@@ -141,13 +141,13 @@ export default function Page(): JSX.Element {
                     </div>
                   </div>
                 </div>
-                <div className="bg-emerald-50 rounded-[2rem] p-8 border-2 border-emerald-100/50 flex flex-col items-end">
+                <div className="bg-emerald-50 rounded-[2rem] p-4 border-2 border-emerald-100/50 flex flex-col items-end">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-2">Aggregate Due</p>
-                  <p className="text-4xl font-black text-emerald-700 tracking-tighter tabular-nums">{fmt(b.netCollectible)}</p>
+                  <p className="text-xl font-black text-emerald-700 tracking-tighter tabular-nums">{fmt(b.netCollectible)}</p>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border-2 border-slate-50">
+              <div className="overflow-hidden rounded-xl border-2 border-slate-50">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b-2 border-slate-50">
                     <tr>
@@ -167,8 +167,8 @@ export default function Page(): JSX.Element {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-8 flex justify-end">
-                <a href={`/pos?resume=${b.id}`} className="rounded-2xl bg-slate-900 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-white hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95">
+              <div className="mt-4 flex justify-end">
+                <a href={`/pos?resume=${b.id}`} className="rounded-2xl bg-slate-900 px-4 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-white hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95">
                   Resume Registry Session
                 </a>
               </div>
@@ -189,14 +189,14 @@ function StatCard({ label, value, color, icon: Icon }: { label: string; value: s
   }[color]
 
   return (
-    <div className={`rounded-3xl border-2 p-8 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+    <div className={`rounded-xl border-2 p-4 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
       <div className="flex justify-between items-start mb-4">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
         <div className="rounded-xl bg-white/50 p-2 shadow-inner">
           <Icon size={18} />
         </div>
       </div>
-      <p className="text-3xl font-black tracking-tight tabular-nums">{value}</p>
+      <p className="text-lg font-black tracking-tight tabular-nums">{value}</p>
     </div>
   )
 }

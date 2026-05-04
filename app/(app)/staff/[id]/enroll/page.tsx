@@ -259,7 +259,7 @@ export default function FaceEnrollPage(): JSX.Element {
       )}
 
       {submitStatus === "done" ? (
-        <div className="flex flex-col items-center gap-6 py-16">
+        <div className="flex flex-col items-center gap-6 py-6">
           <CheckCircle className="text-emerald-500" size={64} />
           <div className="text-center">
             <p className="text-2xl font-black text-slate-900 mb-2">Enrollment Complete</p>
@@ -272,7 +272,7 @@ export default function FaceEnrollPage(): JSX.Element {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Camera */}
           <div>
             <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-[4/3] shadow-xl">

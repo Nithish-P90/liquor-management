@@ -180,7 +180,7 @@ export default function StaffPage(): JSX.Element {
 
   return (
     <PageShell title="Staff Directory" subtitle="Manage employee profiles, access credentials, and payroll configurations.">
-      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+      <div className="mb-5 flex justify-between items-center border-b-2 border-slate-50 pb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Roster</h2>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Enterprise Access Control</p>
@@ -207,13 +207,13 @@ export default function StaffPage(): JSX.Element {
       )}
 
       {loading ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Staff Data…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Staff Data…</div>
       ) : staffList.length === 0 ? (
-        <div className="rounded-3xl border-4 border-slate-50 border-dashed bg-slate-50/30 p-20 text-center">
+        <div className="rounded-xl border-4 border-slate-50 border-dashed bg-slate-50/30 p-4 text-center">
           <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">No active staff entries found</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>
@@ -321,17 +321,17 @@ function StaffForm({
   isModal?: boolean
 }) {
   const cls = isModal
-    ? "w-full rounded-3xl bg-white p-10 shadow-2xl scale-100 animate-in zoom-in-95 duration-300"
-    : "mb-10 rounded-3xl border-2 border-slate-100 bg-white p-8 shadow-sm animate-in slide-in-from-top-4 duration-500"
+    ? "w-full rounded-xl bg-white p-5 shadow-2xl scale-100 animate-in zoom-in-95 duration-300"
+    : "mb-5 rounded-xl border-2 border-slate-100 bg-white p-4 shadow-sm animate-in slide-in-from-top-4 duration-500"
 
   return (
     <form onSubmit={onSubmit} className={cls}>
-      <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 mb-8 flex items-center justify-between">
+      <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 mb-4 flex items-center justify-between">
         {title}
         {isModal && <button type="button" onClick={onCancel} className="text-slate-400 hover:text-slate-900"><Plus className="rotate-45" size={24}/></button>}
       </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <Field label="Personnel Name">
           <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder="Full identity" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-base font-black text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none transition-all" autoFocus />
@@ -352,7 +352,7 @@ function StaffForm({
       </div>
 
       {/* Payroll */}
-      <div className="border-2 border-slate-50 rounded-3xl p-8 mb-8 bg-slate-50/50">
+      <div className="border-2 border-slate-50 rounded-xl p-4 mb-4 bg-slate-50/50">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-2"><Banknote size={14} /> Payroll Configuration</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Field label="Remuneration Model">
@@ -379,7 +379,7 @@ function StaffForm({
       </div>
 
       {/* Shift */}
-      <div className="border-2 border-slate-50 rounded-3xl p-8 mb-10 bg-slate-50/50">
+      <div className="border-2 border-slate-50 rounded-xl p-4 mb-5 bg-slate-50/50">
         <div className="flex items-center justify-between mb-6">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><Clock size={14} /> Operational Shift</p>
           <label className="flex items-center gap-3 cursor-pointer group">
@@ -418,8 +418,8 @@ function StaffForm({
       </div>
 
       <div className="flex gap-4 justify-end">
-        <Button type="button" variant="ghost" onClick={onCancel} className="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600">Cancel</Button>
-        <Button type="submit" variant="primary" disabled={submitting} className="px-10 py-4 text-sm font-black uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all">
+        <Button type="button" variant="ghost" onClick={onCancel} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600">Cancel</Button>
+        <Button type="submit" variant="primary" disabled={submitting} className="px-5 py-4 text-sm font-black uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all">
           {submitting ? "Processing…" : submitLabel}
         </Button>
       </div>

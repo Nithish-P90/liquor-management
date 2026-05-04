@@ -178,7 +178,7 @@ export default function OpeningInventoryPage(): JSX.Element {
   if (sessionStatus?.session) {
     return (
       <PageShell title="Opening Stock" subtitle="View the opening balance for the current inventory session.">
-        <div className="max-w-5xl mx-auto mt-8 space-y-6">
+        <div className="max-w-5xl mx-auto mt-4 space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
@@ -232,7 +232,7 @@ export default function OpeningInventoryPage(): JSX.Element {
                 ))}
                 {!openingItems.length && (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-slate-400 font-medium">
+                    <td colSpan={4} className="px-6 py-3 text-center text-slate-400 font-medium">
                       No opening stock rows found for this session.
                     </td>
                   </tr>
@@ -319,7 +319,7 @@ export default function OpeningInventoryPage(): JSX.Element {
   if (sessionStatus?.rolloverStatus === "no_history") {
     return (
       <PageShell title="Opening Stock" subtitle="Bootstrap inventory for day one.">
-        <div className="max-w-4xl mx-auto mt-8">
+        <div className="max-w-4xl mx-auto mt-4">
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
             <p className="text-sm font-bold text-blue-900">First-Time Setup</p>
             <p className="text-sm text-blue-700 mt-1">Enter the opening stock for your products. These values become the baseline for today&apos;s sales.</p>
@@ -409,7 +409,7 @@ export default function OpeningInventoryPage(): JSX.Element {
   // Loading or other state
   return (
     <PageShell title="Opening Stock" subtitle="Set the initial stock position for the store.">
-      <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm max-w-2xl mt-8 text-center mx-auto">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-2xl mt-4 text-center mx-auto">
         <p className="text-slate-500">{loading ? "Loading..." : "Checking session status..."}</p>
       </div>
     </PageShell>

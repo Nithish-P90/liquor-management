@@ -79,7 +79,7 @@ export default function Page(): JSX.Element {
 
   return (
     <PageShell title="Sales Ledger" subtitle="Real-time transaction feed of committed and voided dispatches.">
-      <div className="mb-8 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
+      <div className="mb-4 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
         <div className="flex-1 min-w-[280px] relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
           <input
@@ -123,7 +123,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-6 md:grid-cols-4">
         <StatCard label="Total Dispatches" value={String(totals.count)} color="slate" icon={Receipt} />
         <StatCard label="Settled Bills" value={String(totals.committedCount)} color="indigo" icon={Activity} />
         <StatCard label="Gross Revenue" value={fmt(totals.gross)} color="emerald" icon={TrendingUp} />
@@ -137,11 +137,11 @@ export default function Page(): JSX.Element {
       )}
 
       {loading && filtered.length === 0 ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Sales Stream…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Sales Stream…</div>
       ) : filtered.length === 0 ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px] border-4 border-slate-50 border-dashed rounded-3xl">No records matching criteria</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px] border-4 border-slate-50 border-dashed rounded-xl">No records matching criteria</div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 shadow-sm bg-white">
+        <div className="overflow-hidden rounded-xl border-2 border-slate-50 shadow-sm bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-[11px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-50">
               <tr>
@@ -203,14 +203,14 @@ function StatCard({ label, value, color, icon: Icon }: { label: string; value: s
   }[color]
 
   return (
-    <div className={`rounded-3xl border-2 p-8 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+    <div className={`rounded-xl border-2 p-4 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
       <div className="flex justify-between items-start mb-4">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
         <div className="rounded-xl bg-white/50 p-2 shadow-inner">
           <Icon size={18} />
         </div>
       </div>
-      <p className="text-3xl font-black tracking-tight tabular-nums">{value}</p>
+      <p className="text-lg font-black tracking-tight tabular-nums">{value}</p>
     </div>
   )
 }

@@ -412,11 +412,11 @@ export default function AttendancePage(): JSX.Element {
 
   return (
     <PageShell title="Attendance Kiosk" subtitle="Fast face verification for clock in and clock out.">
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-10 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5 items-start">
 
         {/* ── Camera Panel ── */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border-2 border-slate-100 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="flex-1">
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Step 1 · Select identity from roster</p>
@@ -479,7 +479,7 @@ export default function AttendancePage(): JSX.Element {
           </div>
 
           {/* Video */}
-          <div className="relative rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl aspect-[4/3] border-4 border-white ring-8 ring-slate-100">
+          <div className="relative rounded-xl overflow-hidden bg-slate-900 shadow-2xl aspect-[4/3] border-4 border-white ring-8 ring-slate-100">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -510,7 +510,7 @@ export default function AttendancePage(): JSX.Element {
 
             {/* Status bar */}
             {scanState === "ready" && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-8 pb-8 pt-16">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-8 pt-16">
                 <p className="text-white text-base font-black text-center tracking-[0.1em] uppercase">{statusMsg}</p>
               </div>
             )}
@@ -621,16 +621,16 @@ export default function AttendancePage(): JSX.Element {
 
           {/* Stats bar */}
           <div className="grid grid-cols-3 gap-6">
-            <div className="rounded-[2rem] border-2 border-emerald-100 bg-emerald-50 p-8 text-center shadow-sm">
-              <p className="text-5xl font-black text-emerald-700 tracking-tighter tabular-nums">{presentCount}</p>
+            <div className="rounded-[2rem] border-2 border-emerald-100 bg-emerald-50 p-4 text-center shadow-sm">
+              <p className="text-2xl font-black text-emerald-700 tracking-tighter tabular-nums">{presentCount}</p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500 mt-3">Active Duty</p>
             </div>
-            <div className="rounded-[2rem] border-2 border-slate-100 bg-slate-50 p-8 text-center shadow-sm">
-              <p className="text-5xl font-black text-slate-600 tracking-tighter tabular-nums">{outCount}</p>
+            <div className="rounded-[2rem] border-2 border-slate-100 bg-slate-50 p-4 text-center shadow-sm">
+              <p className="text-2xl font-black text-slate-600 tracking-tighter tabular-nums">{outCount}</p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-3">Released</p>
             </div>
-            <div className="rounded-[2rem] border-2 border-rose-100 bg-rose-50 p-8 text-center shadow-sm">
-              <p className="text-5xl font-black text-rose-600 tracking-tighter tabular-nums">{absentCount}</p>
+            <div className="rounded-[2rem] border-2 border-rose-100 bg-rose-50 p-4 text-center shadow-sm">
+              <p className="text-2xl font-black text-rose-600 tracking-tighter tabular-nums">{absentCount}</p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-400 mt-3">Pending</p>
             </div>
           </div>
@@ -651,7 +651,7 @@ export default function AttendancePage(): JSX.Element {
 
             <div className="divide-y-2 divide-slate-50 max-h-[75vh] overflow-y-auto">
               {roster.length === 0 ? (
-                <p className="px-6 py-12 text-sm font-bold text-slate-400 text-center uppercase tracking-widest">No staff data synced.</p>
+                <p className="px-6 py-5 text-sm font-bold text-slate-400 text-center uppercase tracking-widest">No staff data synced.</p>
               ) : (
                 roster.map((r) => (
                   <div

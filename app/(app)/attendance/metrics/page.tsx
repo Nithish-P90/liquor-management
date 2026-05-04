@@ -114,7 +114,7 @@ export default function AttendanceMetricsPage(): JSX.Element {
   return (
     <PageShell title="Attendance Metrics" subtitle="Monthly attendance, punctuality, weekend policy, and payroll.">
       {/* Month Navigator */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <button
           onClick={() => setMonth(prevMonth(month))}
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
@@ -139,7 +139,7 @@ export default function AttendanceMetricsPage(): JSX.Element {
       {!loading && metrics.length > 0 && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <SummaryCard icon={<Calendar size={18} />} label="Total Attendance" value={`${totalPresent} days`} color="indigo" />
             <SummaryCard icon={<Clock size={18} />} label="Late Arrivals" value={String(totalLate)} color={totalLate > 0 ? "amber" : "emerald"} />
             <SummaryCard
@@ -337,7 +337,7 @@ export default function AttendanceMetricsPage(): JSX.Element {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center py-16">
+        <div className="flex items-center justify-center py-6">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600" />
         </div>
       )}

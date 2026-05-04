@@ -52,7 +52,7 @@ export default function InventoryCatalogPage(): JSX.Element {
 
   return (
     <PageShell title="Inventory Catalog" subtitle="Browse the live product list and current stock snapshot.">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mt-8 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mt-4 overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-800">Live Inventory</h2>
@@ -90,7 +90,7 @@ export default function InventoryCatalogPage(): JSX.Element {
             ))}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
+                <td colSpan={5} className="px-6 py-3 text-center text-slate-400 font-medium">
                   No inventory rows found.
                 </td>
               </tr>

@@ -768,7 +768,7 @@ export default function PosPage(): JSX.Element {
         {/* Cart Lines */}
         <div className="flex-1 overflow-auto bg-slate-50 no-scrollbar">
           {cart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4 p-8">
+            <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4 p-4">
               <ShoppingCart size={64} className="opacity-20 mb-2" />
               <p className="text-sm font-bold uppercase tracking-widest">Cart is empty</p>
             </div>
@@ -808,7 +808,7 @@ export default function PosPage(): JSX.Element {
           {/* Totals Banner - Compact */}
           <div className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors border-t-2 border-slate-900" onClick={() => setCart([])}>
             <span className="text-sm font-black uppercase tracking-widest text-slate-500">Total Due</span>
-            <span className="text-4xl font-black text-slate-900 tracking-tighter">{pricingLoading ? "..." : fmt(total)}</span>
+            <span className="text-xl font-black text-slate-900 tracking-tighter">{pricingLoading ? "..." : fmt(total)}</span>
           </div>
 
           {/* Payment Tenders - Massive for Usability */}
@@ -955,7 +955,7 @@ export default function PosPage(): JSX.Element {
                         onChange={(e) => setCashReceived(e.target.value)}
                         ref={cashReceivedRef}
                         placeholder="0.00"
-                        className="w-full text-2xl font-black rounded-xl border-2 border-slate-300 bg-white px-10 py-3 text-slate-900 focus:border-amber-500 focus:ring-0 focus:outline-none transition-colors"
+                        className="w-full text-2xl font-black rounded-xl border-2 border-slate-300 bg-white px-5 py-3 text-slate-900 focus:border-amber-500 focus:ring-0 focus:outline-none transition-colors"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-white">Received</span>
                     </div>
@@ -987,7 +987,7 @@ export default function PosPage(): JSX.Element {
                           step="0.01"
                           value={payment[mode]}
                           onChange={(e) => setPayment((p) => ({ ...p, [mode]: e.target.value }))}
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-8 py-2 text-base font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-colors"
+                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-base font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-colors"
                         />
                       </div>
                     </div>
@@ -1067,7 +1067,7 @@ export default function PosPage(): JSX.Element {
       {showTabs && (
         <Modal title="Open Tabs" onClose={() => setShowTabs(false)}>
           {openTabs.length === 0 ? (
-            <div className="py-8 text-center text-slate-400">
+            <div className="py-3 text-center text-slate-400">
               <Library size={48} className="mx-auto mb-3 opacity-20" />
               <p className="text-sm font-bold uppercase tracking-widest">No open tabs</p>
             </div>
@@ -1101,7 +1101,7 @@ export default function PosPage(): JSX.Element {
         <Modal title={`Settle Tab: ${showTabSettle.billNumber}`} onClose={() => setShowTabSettle(null)}>
           <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-6 text-center">
             <p className="text-sm font-bold uppercase text-slate-400 tracking-widest mb-1">Amount Due</p>
-            <p className="text-4xl font-black text-emerald-600">{fmt(showTabSettle.netCollectible)}</p>
+            <p className="text-xl font-black text-emerald-600">{fmt(showTabSettle.netCollectible)}</p>
           </div>
           
           <div className="space-y-4 mb-6">
@@ -1117,7 +1117,7 @@ export default function PosPage(): JSX.Element {
                     value={payment[mode]}
                     onChange={(e) => setPayment((p) => ({ ...p, [mode]: e.target.value }))}
                     placeholder="0.00"
-                    className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-10 py-3 text-lg font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-5 py-3 text-lg font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -1141,7 +1141,7 @@ export default function PosPage(): JSX.Element {
       {showRecent && (
         <Modal title="Recent Bills" onClose={() => setShowRecent(false)}>
           {recentBills.length === 0 ? (
-            <div className="py-8 text-center text-slate-400">
+            <div className="py-3 text-center text-slate-400">
               <Clock size={48} className="mx-auto mb-3 opacity-20" />
               <p className="text-sm font-bold uppercase tracking-widest">No recent bills</p>
             </div>
@@ -1287,7 +1287,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-0">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in transition-all" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-2xl border border-slate-100 bg-white p-6 md:p-8 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 transition-all">
+      <div className="relative w-full max-w-lg rounded-2xl border border-slate-100 bg-white p-6 md:p-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 transition-all">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">{title}</h2>
           <button 

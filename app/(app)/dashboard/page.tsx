@@ -117,7 +117,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No data yet</td>
+                      <td colSpan={4} className="px-5 py-4 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No data yet</td>
                     </tr>
                   )}
                 </tbody>
@@ -204,7 +204,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
                   </div>
                 </div>
               )) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-8 text-center">
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-3 text-center">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Normal Operations</p>
                 </div>
               )}

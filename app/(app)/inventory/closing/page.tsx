@@ -69,7 +69,7 @@ export default function ClosingInventoryPage(): JSX.Element {
   if (!sessionId) {
     return (
       <PageShell title="Physical Count (Closing)" subtitle="Start a new physical count session.">
-        <div className="bg-white p-8 rounded-xl border border-slate-200 text-center max-w-lg shadow-sm mx-auto mt-10">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 text-center max-w-lg shadow-sm mx-auto mt-10">
           <h2 className="text-xl font-black text-slate-800 mb-2">Begin Count Session</h2>
           <p className="text-slate-500 mb-6 text-sm">Lock the inventory state and begin recording physical bottle counts for the end-of-day process.</p>
           <Button onClick={handleStart} variant="primary" disabled={loading} className="w-full py-3">

@@ -86,23 +86,23 @@ export default function ClearancePage(): JSX.Element {
   return (
     <PageShell title="Liquidation Registry" subtitle="Manage high-velocity clearance pricing for near-expiry or slow-moving article variants.">
       {toast && (
-        <div className={`mb-8 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+        <div className={`mb-4 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+      <div className="mb-5 flex justify-between items-center border-b-2 border-slate-50 pb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Clearance Stream</h2>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Strategic Pricing Management</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} variant="primary" className="flex items-center gap-3 px-8 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="flex items-center gap-3 px-4 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
           <Plus size={18} /> Initiate Clearance
         </Button>
       </div>
 
       {showCreate && (
-        <div className="mb-10 rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm animate-in slide-in-from-top-4 duration-500">
+        <div className="mb-5 rounded-xl border-2 border-slate-100 bg-white p-4 shadow-sm animate-in slide-in-from-top-4 duration-500">
           <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">Initialize New Pricing Module</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
@@ -123,21 +123,21 @@ export default function ClearancePage(): JSX.Element {
               </div>
             ))}
           </div>
-          <div className="mt-8 flex gap-4">
-            <Button onClick={handleCreate} className="rounded-2xl px-10 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl">Activate Batch</Button>
+          <div className="mt-4 flex gap-4">
+            <Button onClick={handleCreate} className="rounded-2xl px-5 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl">Activate Batch</Button>
             <Button variant="ghost" onClick={() => setShowCreate(false)} className="rounded-2xl px-6 py-4 font-black uppercase tracking-widest text-[11px] text-slate-400">Cancel</Button>
           </div>
         </div>
       )}
 
       {loading ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Liquidation Data…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Liquidation Data…</div>
       ) : batches.length === 0 ? (
-        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+        <div className="py-3 text-center border-4 border-slate-50 border-dashed rounded-xl">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No active clearance sessions</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>

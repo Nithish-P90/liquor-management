@@ -75,10 +75,10 @@ export default function InventoryPage(): JSX.Element {
   }, [])
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] p-8 lg:p-12">
-      <header className="mb-12 flex items-center justify-between border-b-2 border-slate-100 pb-10">
+    <main className="min-h-screen bg-[#f8fafc] p-4 lg:p-5">
+      <header className="mb-5 flex items-center justify-between border-b-2 border-slate-100 pb-10">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">Inventory Management</h1>
+          <h1 className="text-xl font-black tracking-tight text-slate-900">Inventory Management</h1>
           <p className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
             Real-time Stock Control & Article Catalog
           </p>
@@ -94,12 +94,12 @@ export default function InventoryPage(): JSX.Element {
       </header>
 
       {/* Tabs */}
-      <div className="mb-10 flex gap-4">
+      <div className="mb-5 flex gap-4">
         {(["stock", "products"] as const).filter(t => t === "stock" || isAdmin).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-2xl px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 ${
+            className={`rounded-2xl px-5 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 ${
               tab === t ? "bg-slate-900 text-white shadow-slate-900/20" : "bg-white text-slate-500 border-2 border-slate-100 hover:border-indigo-300 hover:text-indigo-600"
             }`}
           >
@@ -198,7 +198,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       )}
 
       {/* Summary pills */}
-      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
         <MetricCard label="Total Article SKUs" value={String(totalSkus)} color="indigo" icon={Package} />
         <MetricCard 
           label="Low Stock Exposure" 
@@ -216,7 +216,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       </div>
 
       {/* Filters */}
-      <div className="mb-8 flex flex-wrap gap-4 items-center border-b-2 border-slate-50 pb-8">
+      <div className="mb-4 flex flex-wrap gap-4 items-center border-b-2 border-slate-50 pb-8">
         <div className="flex-1 min-w-[300px] relative group">
           <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
           <input
@@ -240,20 +240,20 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border-2 border-slate-50 bg-white shadow-sm">
         {loading && rows.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Live Stock Registry…</div>
+          <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Live Stock Registry…</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-sm">
               <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
                 <tr>
-                  <th className="px-10 py-5 text-left">Article Profile</th>
-                  <th className="px-10 py-5 text-left">Identity Codes</th>
-                  <th className="px-10 py-5 text-right">MAGNITUDE</th>
-                  <th className="px-10 py-5 text-right">Audit Metrics</th>
-                  <th className="px-10 py-5 text-right">Live Inventory</th>
-                  {isAdmin && <th className="px-10 py-5 text-center">Manage</th>}
+                  <th className="px-5 py-5 text-left">Article Profile</th>
+                  <th className="px-5 py-5 text-left">Identity Codes</th>
+                  <th className="px-5 py-5 text-right">MAGNITUDE</th>
+                  <th className="px-5 py-5 text-right">Audit Metrics</th>
+                  <th className="px-5 py-5 text-right">Live Inventory</th>
+                  {isAdmin && <th className="px-5 py-5 text-center">Manage</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -269,7 +269,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 .map(([cat, catRows]) => (
                   <React.Fragment key={cat}>
                     <tr className="bg-slate-900 border-y-2 border-slate-900">
-                      <td colSpan={isAdmin ? 6 : 5} className="px-10 py-4">
+                      <td colSpan={isAdmin ? 6 : 5} className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <Package size={14} className="text-emerald-400" />
                           <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-white">
@@ -287,32 +287,32 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
                         return (
                           <tr key={row.productSizeId} className={`group transition-colors border-b-2 border-slate-50 ${isOut ? "bg-rose-50/30" : isLow ? "bg-amber-50/30" : "hover:bg-slate-50"}`}>
-                            <td className="px-10 py-6">
+                            <td className="px-5 py-6">
                               <p className="font-black text-slate-900 text-base tracking-tight">{row.name}</p>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.sizeMl}ML</span>
                               </div>
                             </td>
-                            <td className="px-10 py-6">
+                            <td className="px-5 py-6">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KSBCL / UPC</p>
                               <div className="flex flex-col gap-1">
                                 <code className="text-xs font-black text-slate-700">{row.ksbclItemCode ?? row.itemCode ?? "—"}</code>
                                 <code className="text-[10px] font-bold text-slate-400">{row.barcode ?? "—"}</code>
                               </div>
                             </td>
-                            <td className="px-10 py-6 text-right">
+                            <td className="px-5 py-6 text-right">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">MRP / PRICE</p>
                               <p className="text-xs text-slate-400 line-through font-bold">{fmt(row.mrp)}</p>
                               <p className="text-base font-black text-slate-900">{fmt(row.sellingPrice)}</p>
                             </td>
-                            <td className="px-10 py-6 text-right">
+                            <td className="px-5 py-6 text-right">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">OPEN / SOLD</p>
                               <p className="text-sm font-black text-slate-700 tabular-nums">{row.openingBottles} <span className="text-slate-300 mx-1">/</span> <span className="text-rose-500">{row.soldBottles}</span></p>
                             </td>
 
                             {isEditing ? (
                               <>
-                                <td className="px-10 py-6">
+                                <td className="px-5 py-6">
                                   <div className="flex items-center justify-end gap-2">
                                     <div className="flex flex-col gap-1">
                                       <label className="text-[8px] font-black text-slate-400 uppercase">Cases</label>
@@ -344,7 +344,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               </>
                             ) : (
                               <>
-                                <td className="px-10 py-6 text-right">
+                                <td className="px-5 py-6 text-right">
                                   <div className="flex items-center justify-end gap-6">
                                     <div className="text-right">
                                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CASES / EXTRA</p>
@@ -359,7 +359,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                   </div>
                                 </td>
                                 {isAdmin && (
-                                  <td className="px-10 py-6 text-center">
+                                  <td className="px-5 py-6 text-center">
                                     <button onClick={() => startEdit(row)} className="rounded-2xl border-2 border-slate-100 p-3.5 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm active:scale-95">
                                       <Pencil size={18} />
                                     </button>
@@ -374,7 +374,7 @@ function StockView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 ))}
                 {!loading && rows.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 11 : 10} className="px-5 py-12 text-center text-sm text-slate-400">
+                    <td colSpan={isAdmin ? 11 : 10} className="px-5 py-5 text-center text-sm text-slate-400">
                       No products found.
                     </td>
                   </tr>
@@ -500,7 +500,7 @@ function ProductsView(): JSX.Element {
               ))}
               {!loading && products.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-slate-400">No products found.</td>
+                  <td colSpan={5} className="px-5 py-5 text-center text-sm text-slate-400">No products found.</td>
                 </tr>
               )}
             </tbody>
@@ -705,14 +705,14 @@ function MetricCard({ label, value, color, icon: Icon, subValue }: { label: stri
   }[color]
 
   return (
-    <div className={`rounded-[2.5rem] border-2 p-10 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+    <div className={`rounded-xl border-2 p-5 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
       <div className="flex justify-between items-start mb-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
         <div className="rounded-2xl bg-white/50 p-3 shadow-inner">
           <Icon size={24} />
         </div>
       </div>
-      <p className="text-5xl font-black tracking-tighter tabular-nums">{value}</p>
+      <p className="text-2xl font-black tracking-tighter tabular-nums">{value}</p>
       {subValue && <p className="mt-4 text-[10px] font-black uppercase tracking-widest opacity-60">{subValue}</p>}
     </div>
   )

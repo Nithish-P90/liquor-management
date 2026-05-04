@@ -61,31 +61,31 @@ export default function IndentsPage(): JSX.Element {
   return (
     <PageShell title="Procurement Registry" subtitle="Manage KSBCL digital indents, review automated item parsing, and reconcile inventory arrival.">
       {toast && (
-        <div className={`mb-8 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+        <div className={`mb-4 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="mb-10 flex justify-between items-center border-b-2 border-slate-50 pb-8">
+      <div className="mb-5 flex justify-between items-center border-b-2 border-slate-50 pb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Indent Stream</h2>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Stock Acquisition Audit</p>
         </div>
         <Link href="/indents/upload">
-          <Button variant="primary" className="flex items-center gap-3 px-8 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
+          <Button variant="primary" className="flex items-center gap-3 px-4 py-4 rounded-2xl shadow-xl shadow-slate-900/10 font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all">
             <Plus size={18} /> Upload Indent PDF
           </Button>
         </Link>
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Procurement Data…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Procurement Data…</div>
       ) : indents.length === 0 ? (
-        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+        <div className="py-3 text-center border-4 border-slate-50 border-dashed rounded-xl">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">No procurement records found</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>

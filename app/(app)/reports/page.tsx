@@ -140,7 +140,7 @@ export default function ReportsPage(): JSX.Element {
 
   return (
     <PageShell title="Business Intelligence" subtitle="Generate strategic operational reports and enterprise audit logs.">
-      <div className="mb-8 flex flex-wrap gap-3 border-b-2 border-slate-50 pb-8">
+      <div className="mb-4 flex flex-wrap gap-3 border-b-2 border-slate-50 pb-8">
         {Object.entries(REPORTS).map(([key, r]) => (
           <button
             key={key}
@@ -156,7 +156,7 @@ export default function ReportsPage(): JSX.Element {
         ))}
       </div>
 
-      <div className="mb-10 flex flex-wrap items-center gap-6 bg-white border-2 border-slate-100 p-4 rounded-3xl shadow-sm">
+      <div className="mb-5 flex flex-wrap items-center gap-6 bg-white border-2 border-slate-100 p-4 rounded-xl shadow-sm">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3 pl-2">
             <Calendar size={18} className="text-slate-400" />
@@ -178,7 +178,7 @@ export default function ReportsPage(): JSX.Element {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <Button onClick={runReport} disabled={loading} className="rounded-2xl px-8 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-indigo-600/10">
+          <Button onClick={runReport} disabled={loading} className="rounded-2xl px-4 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-indigo-600/10">
             {loading ? "..." : "Compile Report"}
           </Button>
           {rows.length > 0 && (
@@ -196,7 +196,7 @@ export default function ReportsPage(): JSX.Element {
       )}
 
       {rows.length > 0 ? (
-        <div className="overflow-hidden rounded-3xl border-2 border-slate-50 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border-2 border-slate-50 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 border-b-2 border-slate-50">
               <tr>
@@ -217,7 +217,7 @@ export default function ReportsPage(): JSX.Element {
           </table>
         </div>
       ) : (
-        <div className="py-24 text-center border-4 border-slate-50 border-dashed rounded-[3rem]">
+        <div className="py-3 text-center border-4 border-slate-50 border-dashed rounded-xl">
           <div className="flex flex-col items-center gap-4 text-slate-400">
             <BarChart3 size={48} className="opacity-20" />
             <p className="text-[11px] font-black uppercase tracking-[0.2em]">Select analytical module and compile</p>

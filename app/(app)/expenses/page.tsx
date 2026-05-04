@@ -52,7 +52,7 @@ function MetricCard({
         {icon}
       </div>
       <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-3xl font-black text-slate-900 tracking-tight">{value}</p>
+      <p className="mt-1 text-lg font-black text-slate-900 tracking-tight">{value}</p>
     </div>
   )
 }
@@ -147,7 +147,7 @@ export default function ExpensesPage(): JSX.Element {
 
   return (
     <PageShell title="Expenses & Payouts" subtitle="Record and audit daily business expenditures and overheads.">
-      <div className="space-y-10">
+      <div className="space-y-5">
         {toast && (
           <div className={`rounded-xl border-2 px-6 py-4 text-sm font-bold animate-in fade-in slide-in-from-top-2 ${toast.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`}>
             {toast.msg}
@@ -162,8 +162,8 @@ export default function ExpensesPage(): JSX.Element {
           <MetricCard icon={<CalendarDays size={22} />} label="Latest Voucher" value={latestDate ?? "—"} accent="indigo" />
         </section>
 
-        <section className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_380px] items-start">
-          <div className="space-y-8">
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px] items-start">
+          <div className="space-y-4">
             {/* ── Filters ── */}
             <div className="rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-end gap-6">
@@ -182,7 +182,7 @@ export default function ExpensesPage(): JSX.Element {
                 <Button 
                   onClick={() => setShowAdd((open) => !open)}
                   variant={showAdd ? "secondary" : "primary"}
-                  className="rounded-2xl px-8 py-4 text-sm font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                  className="rounded-2xl px-4 py-4 text-sm font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                 >
                   {showAdd ? <X size={20} className="mr-2" /> : <Plus size={20} className="mr-2" />}
                   {showAdd ? "Close Form" : "New Entry"}
@@ -203,12 +203,12 @@ export default function ExpensesPage(): JSX.Element {
               </div>
 
               {loading ? (
-                <div className="px-6 py-16 text-center">
+                <div className="px-6 py-6 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 mx-auto" />
                   <p className="mt-4 text-sm font-bold text-slate-400 uppercase tracking-widest">Syncing with ledger…</p>
                 </div>
               ) : expenses.length === 0 ? (
-                <div className="px-6 py-16 text-center">
+                <div className="px-6 py-6 text-center">
                   <AlertCircle className="mx-auto mb-4 text-slate-200" size={48} />
                   <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No transactions found for this range</p>
                 </div>
@@ -244,7 +244,7 @@ export default function ExpensesPage(): JSX.Element {
           {/* ── Entry Sidebar ── */}
           <aside className="sticky top-6">
             <div className={`rounded-2xl border-2 bg-white p-6 shadow-xl transition-all duration-300 ${showAdd ? "border-slate-900 opacity-100" : "border-slate-100 opacity-80"}`}>
-              <div className="mb-8">
+              <div className="mb-4">
                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Record Expense</h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Instant Voucher Entry</p>
               </div>
@@ -290,7 +290,7 @@ export default function ExpensesPage(): JSX.Element {
                         step="0.01"
                         value={form.amount}
                         onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                        className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-12 py-3.5 text-xl font-black text-rose-600 focus:border-rose-400 focus:bg-white focus:outline-none transition-all"
+                        className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-3.5 text-xl font-black text-rose-600 focus:border-rose-400 focus:bg-white focus:outline-none transition-all"
                         placeholder="0.00"
                       />
                     </div>
@@ -310,8 +310,8 @@ export default function ExpensesPage(): JSX.Element {
                   </div>
                 </div>
               ) : (
-                <div className="py-12 text-center">
-                  <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-300">
+                <div className="py-5 text-center">
+                  <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-xl bg-slate-50 text-slate-300">
                     <Plus size={32} />
                   </div>
                   <p className="text-sm font-bold text-slate-400 uppercase leading-relaxed px-6">

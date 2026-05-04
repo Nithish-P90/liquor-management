@@ -64,7 +64,7 @@ export default function SettingsPage(): JSX.Element {
 
   return (
     <PageShell title="Global Configuration" subtitle="Define application-wide operational variables, regulatory thresholds, and system identities.">
-      <div className="mb-12 border-b-2 border-slate-50 pb-8">
+      <div className="mb-5 border-b-2 border-slate-50 pb-8">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Environment</h2>
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Administrative Variable Control</p>
       </div>
@@ -75,11 +75,11 @@ export default function SettingsPage(): JSX.Element {
       )}
 
       {loading ? (
-        <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Environment Variables…</div>
+        <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Syncing Environment Variables…</div>
       ) : (
-        <form onSubmit={handleSave} className="max-w-3xl rounded-[2.5rem] border-2 border-slate-100 bg-white p-10 shadow-sm">
-          <div className="space-y-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <form onSubmit={handleSave} className="max-w-3xl rounded-xl border-2 border-slate-100 bg-white p-5 shadow-sm">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {keys.map((k) => (
                 <div key={k.key} className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">{k.label}</label>
@@ -95,8 +95,8 @@ export default function SettingsPage(): JSX.Element {
             </div>
           </div>
 
-          <div className="mt-12 pt-10 border-t-2 border-slate-50 flex justify-end">
-            <Button type="submit" variant="primary" disabled={saving} className="rounded-2xl px-12 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-slate-900/10 active:scale-95 transition-all">
+          <div className="mt-5 pt-10 border-t-2 border-slate-50 flex justify-end">
+            <Button type="submit" variant="primary" disabled={saving} className="rounded-2xl px-5 py-4 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-slate-900/10 active:scale-95 transition-all">
               {saving ? "Deploying Updates…" : "Commit Changes"}
             </Button>
           </div>

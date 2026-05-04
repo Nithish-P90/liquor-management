@@ -225,7 +225,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <div className="mb-10 grid gap-8 lg:grid-cols-[1fr_380px] items-start">
+      <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_380px] items-start">
         <section className="rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm space-y-6">
           <div className="flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-6">
             <div className="flex-1 min-w-[250px] relative">
@@ -274,9 +274,9 @@ export default function Page(): JSX.Element {
           )}
 
           {loadingItems && filtered.length === 0 ? (
-            <div className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Syncing Items…</div>
+            <div className="py-5 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Syncing Items…</div>
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No entries match filters</div>
+            <div className="py-5 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No entries match filters</div>
           ) : (
             <div className="overflow-hidden rounded-2xl border-2 border-slate-50 shadow-sm">
               <table className="w-full text-sm">
@@ -325,7 +325,7 @@ export default function Page(): JSX.Element {
           )}
         </section>
 
-        <section className="sticky top-6 rounded-2xl border-2 border-slate-900 bg-white p-8 shadow-2xl space-y-8 animate-in slide-in-from-right-4 duration-500">
+        <section className="sticky top-6 rounded-2xl border-2 border-slate-900 bg-white p-4 shadow-2xl space-y-4 animate-in slide-in-from-right-4 duration-500">
           <div>
             <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">
               {form.id ? "Edit Item" : "Create Item"}
@@ -424,7 +424,7 @@ export default function Page(): JSX.Element {
         </section>
       </div>
 
-      <section className="rounded-3xl border-2 border-slate-100 bg-white p-8 shadow-sm space-y-8">
+      <section className="rounded-xl border-2 border-slate-100 bg-white p-4 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center gap-6 border-b-2 border-slate-50 pb-8">
           <div>
             <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Revenue Segmentation</h2>
@@ -471,9 +471,9 @@ export default function Page(): JSX.Element {
         </div>
 
         {loadingMetrics && !metrics ? (
-          <div className="py-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Processing Audit Logs…</div>
+          <div className="py-6 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Processing Audit Logs…</div>
         ) : !metrics ? (
-          <div className="py-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No analytics for selected range</div>
+          <div className="py-6 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No analytics for selected range</div>
         ) : (
           <div className="overflow-hidden rounded-2xl border-2 border-slate-50">
             <table className="w-full text-sm">

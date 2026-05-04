@@ -234,7 +234,7 @@ export default function CashManagementPage(): JSX.Element {
   return (
     <PageShell title="Galla Reconciliation" subtitle="Live cash register tracking, locker transfers, and bank settlement audit.">
       {toast && (
-        <div className={`mb-8 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-slate-50 border-slate-200 text-slate-700" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
+        <div className={`mb-4 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-slate-50 border-slate-200 text-slate-700" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
           {toast.msg}
         </div>
       )}
@@ -242,13 +242,13 @@ export default function CashManagementPage(): JSX.Element {
       {loading ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
 
           {/* ── Column 1: Cash Register ── */}
           <div className="lg:col-span-2 space-y-6">
 
             {/* Balance bar */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-4">
               <MetricCard label="Opening Balance" value={fmt(galla?.openingBalance ?? 0)} color="slate" icon={Vault} />
               <MetricCard label="Total Sales" value={fmt(cashIn)} color="slate" icon={TrendingUp} />
               <MetricCard label="Total Outflows" value={fmt(cashOut)} color="slate" icon={ArrowUpRight} />
@@ -256,15 +256,15 @@ export default function CashManagementPage(): JSX.Element {
             </div>
 
             {/* Transfer actions */}
-            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
-              <div className="border-b-2 border-slate-50 px-8 py-6 bg-slate-50/50 flex items-center justify-between">
+            <div className="rounded-xl border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
+              <div className="border-b-2 border-slate-50 px-4 py-6 bg-slate-50/50 flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transfer Actions</h3>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Move cash to locker or bank</p>
                 </div>
               </div>
               {!galla?.isClosed ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4">
                   {transferCards.map((card) => (
                     <ActionCard
                       key={card.kind}
@@ -281,34 +281,34 @@ export default function CashManagementPage(): JSX.Element {
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-sm text-slate-500">This day is closed, so transfer actions are disabled.</div>
+                <div className="p-4 text-sm text-slate-500">This day is closed, so transfer actions are disabled.</div>
               )}
             </div>
 
             {/* Event log */}
-            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
-              <div className="border-b-2 border-slate-50 px-10 py-8 bg-slate-50/50 flex items-center justify-between">
+            <div className="rounded-xl border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
+              <div className="border-b-2 border-slate-50 px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transaction Log</h3>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">All register events today — {today()}</p>
                 </div>
               </div>
               {!galla?.events.length ? (
-                <div className="py-20 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">No transactions yet today</div>
+                <div className="py-3 text-center text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">No transactions yet today</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500">
                       <tr>
-                        <th className="px-10 py-5">Type</th>
-                        <th className="px-10 py-5">Reference</th>
-                        <th className="px-10 py-5 text-right">Amount</th>
+                        <th className="px-5 py-5">Type</th>
+                        <th className="px-5 py-5">Reference</th>
+                        <th className="px-5 py-5 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y-2 divide-slate-50">
                       {galla.events.map((e) => (
                         <tr key={e.id} className="group hover:bg-slate-50 transition-colors">
-                          <td className="px-10 py-6">
+                          <td className="px-5 py-6">
                             <div className="flex flex-col">
                               <span className={`text-[10px] font-black uppercase tracking-widest ${EVENT_COLOR[e.eventType] ?? "text-slate-600"}`}>
                                 {EVENT_LABEL[e.eventType] ?? e.eventType}
@@ -318,10 +318,10 @@ export default function CashManagementPage(): JSX.Element {
                               </span>
                             </div>
                           </td>
-                          <td className="px-10 py-6">
+                          <td className="px-5 py-6">
                             <span className="text-sm font-black text-slate-500 tracking-tight">{e.reference || "—"}</span>
                           </td>
-                          <td className="px-10 py-6 text-right">
+                          <td className="px-5 py-6 text-right">
                             <span className="text-lg font-black text-slate-900 tabular-nums">{fmt(e.amount)}</span>
                           </td>
                         </tr>
@@ -337,12 +337,12 @@ export default function CashManagementPage(): JSX.Element {
           <div className="space-y-6">
 
             {/* Locker balance */}
-            <div className="rounded-[2.5rem] border-2 border-slate-900 bg-slate-900 p-10 shadow-2xl text-white overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+            <div className="rounded-xl border-2 border-slate-900 bg-slate-900 p-5 shadow-2xl text-white overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-5 opacity-5 pointer-events-none">
                 <Vault size={160} />
               </div>
               
-              <div className="mb-10 flex items-center gap-3">
+              <div className="mb-5 flex items-center gap-3">
                 <div className="rounded-2xl bg-white/10 p-3 shadow-inner">
                   <Vault size={24} className="text-emerald-400" />
                 </div>
@@ -352,12 +352,12 @@ export default function CashManagementPage(): JSX.Element {
                 </div>
               </div>
 
-              <div className="mb-10">
-                <p className="text-5xl font-black tracking-tighter tabular-nums">{fmt(locker?.balance ?? 0)}</p>
+              <div className="mb-5">
+                <p className="text-2xl font-black tracking-tighter tabular-nums">{fmt(locker?.balance ?? 0)}</p>
                 <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Balance</p>
               </div>
 
-              <div className="space-y-4 pt-10 border-t border-white/10 mb-10">
+              <div className="space-y-4 pt-10 border-t border-white/10 mb-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Send to Bank</p>
                 <div className="space-y-3">
                   <input
@@ -389,7 +389,7 @@ export default function CashManagementPage(): JSX.Element {
               </div>
 
               {(locker?.events.length ?? 0) > 0 && (
-                <div className="mt-12 space-y-4">
+                <div className="mt-5 space-y-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Recent Activity</p>
                   <div className="space-y-3">
                     {locker!.events.slice(0, 5).map((e) => (
@@ -407,17 +407,17 @@ export default function CashManagementPage(): JSX.Element {
 
             {/* Day status (auto-closed by EOD cron) */}
             {galla?.isClosed && (
-              <div className="rounded-[2.5rem] border-2 border-emerald-100 bg-emerald-50 p-10 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none text-emerald-900">
+              <div className="rounded-xl border-2 border-emerald-100 bg-emerald-50 p-5 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-5 opacity-5 pointer-events-none text-emerald-900">
                   <ShieldCheck size={120} />
                 </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600 mb-6">Day Closed</p>
                 <div className="space-y-1">
-                  <p className="text-4xl font-black text-emerald-800 tracking-tighter tabular-nums">{fmt(galla.countedAmount ?? 0)}</p>
+                  <p className="text-xl font-black text-emerald-800 tracking-tighter tabular-nums">{fmt(galla.countedAmount ?? 0)}</p>
                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Closing Balance</p>
                 </div>
                 {galla.variance && Math.abs(parseFloat(galla.variance)) > 0.01 && (
-                  <div className="mt-8 rounded-2xl bg-rose-50 border-2 border-rose-100 p-5">
+                  <div className="mt-4 rounded-2xl bg-rose-50 border-2 border-rose-100 p-5">
                     <p className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-1">Discrepancy Detected</p>
                     <p className="text-xl font-black text-rose-600 tabular-nums">{fmt(galla.variance)}</p>
                   </div>
@@ -440,14 +440,14 @@ function MetricCard({ label, value, color, icon: Icon, subValue }: { label: stri
   }[color]
 
   return (
-    <div className={`rounded-[2.5rem] border-2 p-8 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
+    <div className={`rounded-xl border-2 p-4 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${tones}`}>
       <div className="flex justify-between items-start mb-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{label}</p>
         <div className="rounded-2xl bg-white/50 p-3 shadow-inner">
           <Icon size={24} />
         </div>
       </div>
-      <p className="text-3xl font-black tracking-tighter tabular-nums">{value}</p>
+      <p className="text-lg font-black tracking-tighter tabular-nums">{value}</p>
       {subValue && <p className="mt-4 text-[10px] font-black uppercase tracking-widest opacity-60">{subValue}</p>}
     </div>
   )
@@ -465,8 +465,8 @@ function ActionCard({ icon, title, amountValue, onAmountChange, refValue, onRefC
   busy: boolean
 }): JSX.Element {
   return (
-    <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-10 shadow-sm transition-all hover:shadow-lg">
-      <div className="mb-8 flex items-center gap-4">
+    <div className="rounded-xl border-2 border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-lg">
+      <div className="mb-4 flex items-center gap-4">
         <div className="rounded-2xl bg-slate-50 p-3 shadow-inner text-slate-400">
           {icon}
         </div>

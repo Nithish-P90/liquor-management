@@ -151,7 +151,7 @@ export default function IndentDetailPage(): JSX.Element {
   if (loading) {
     return (
       <PageShell title="Indent" subtitle="">
-        <div className="py-12 text-center text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">
+        <div className="py-5 text-center text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">
           Loading…
         </div>
       </PageShell>
