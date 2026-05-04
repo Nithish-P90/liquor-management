@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { Search, Plus, Pencil, RefreshCw, Package, ChevronDown, X, Check, AlertTriangle } from "lucide-react"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -672,7 +672,7 @@ function ProductModal({
   )
 }
 
-function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any; subValue?: string }): JSX.Element {
+function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: React.ElementType; subValue?: string }): JSX.Element {
   const tones = {
     emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
     indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",

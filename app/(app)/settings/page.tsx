@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, ShieldCheck, Database, Sliders, Globe } from "lucide-react"
 
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"

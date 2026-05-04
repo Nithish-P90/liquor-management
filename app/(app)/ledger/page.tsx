@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useCallback, useEffect, useState, useMemo } from "react"
-import { BarChart3, Calendar, Download, Receipt, TrendingUp, Users, Package, AlertCircle, FileText, ArrowUpRight, Activity, Vault, ChevronDown, ChevronUp } from "lucide-react"
+import { BarChart3, Calendar, Download, Receipt, TrendingUp, Users, Package, AlertCircle, FileText, ArrowUpRight, Activity, Vault, ChevronDown } from "lucide-react"
 
 type View = "overview" | "bills" | "voids" | "expenses" | "top-sellers" | "clerks" | "audit"
 

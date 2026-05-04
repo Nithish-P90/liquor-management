@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, Search, Activity, FileText, CheckCircle2 } from "lucide-react"
+import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { PageShell } from "@/components/PageShell"

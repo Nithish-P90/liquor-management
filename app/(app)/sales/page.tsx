@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 
 import { Receipt, TrendingUp, IndianRupee, Activity, Search, Users } from "lucide-react"
 
@@ -194,7 +194,7 @@ export default function Page(): JSX.Element {
   )
 }
 
-function StatCard({ label, value, color, icon: Icon }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: any }): JSX.Element {
+function StatCard({ label, value, color, icon: Icon }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: React.ElementType }): JSX.Element {
   const tones = {
     emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
     indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",

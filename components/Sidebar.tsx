@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
@@ -21,8 +21,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  LogOut,
-  UserCircle
+  LogOut
 } from "lucide-react"
 
 type AppRole = "ADMIN" | "CASHIER"
@@ -35,7 +34,7 @@ type SidebarProps = {
 type NavItem = {
   href: string
   label: string
-  icon: any
+  icon: React.ElementType
   adminOnly?: boolean
 }
 

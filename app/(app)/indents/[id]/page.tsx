@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
 import { useParams } from "next/navigation"
@@ -37,19 +37,7 @@ export default function IndentDetailPage(): JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [posItems, setPosItems] = useState<{kind: string; item: any}[]>([])
 
-  useEffect(() => {
-    fetchIndent()
-    fetchPosItems()
-  }, [id])
-
-  async function fetchPosItems() {
-    try {
-      const res = await fetch("/api/pos/items")
-      if (res.ok) setPosItems(await res.json())
-    } catch {}
-  }
-
-  async function fetchIndent() {
+  const fetchIndent = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -61,7 +49,12 @@ export default function IndentDetailPage(): JSX.Element {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    fetchIndent()
+    fetch("/api/pos/items").then(r => r.ok ? r.json() : []).then(setPosItems).catch(() => {})
+  }, [fetchIndent])
 
   async function handleMapItem(itemId: number, sizeId: number) {
     try {

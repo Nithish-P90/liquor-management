@@ -1,11 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as faceapi from "face-api.js"
 import { nanoid } from "nanoid"
 import { PageShell } from "@/components/PageShell"
 import { Button } from "@/components/ui/Button"
-import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Activity, Scan } from "lucide-react"
+import { UserCheck, UserX, Clock, Loader2, Camera, Shield, UserRoundCheck, UserRoundX, ChevronDown, Activity, Scan, Sparkles, CircleCheckBig, ShieldAlert, Play, StopCircle, ScanFace } from "lucide-react"
 
 type StaffRow = { id: number; name: string; role: string; faceEnrolled: boolean; faceSampleCount: number }
 
@@ -36,10 +36,42 @@ type FaceProfile = {
 
 type ScanState = "loading" | "ready" | "scanning" | "error"
 
+type DetectionMode = "HIGH_ACCURACY" | "FAST"
+
 function euclideanDist(a: Float32Array, b: number[]): number {
   let s = 0
   for (let i = 0; i < a.length; i++) { const d = a[i] - (b[i] ?? 0); s += d * d }
   return Math.sqrt(s)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function confidenceFromDistance(distance: number, threshold: number): number {
+  if (threshold <= 0) return 0
+  return clamp(1 - distance / threshold, 0, 1)
+}
+
+function faceCoverage(video: HTMLVideoElement, box?: { width: number; height: number } | null): number {
+  if (!box) return 0
+  const frameArea = video.videoWidth * video.videoHeight
+  if (frameArea <= 0) return 0
+  return (box.width * box.height) / frameArea
+}
+
+function pickBestDetection<T extends { detection: { score: number; box: { width: number; height: number } } }>(detections: T[]): T | null {
+  let best: T | null = null
+  let bestScore = -Infinity
+  for (const detection of detections) {
+    const area = detection.detection.box.width * detection.detection.box.height
+    const score = detection.detection.score * 0.75 + area * 0.00001
+    if (score > bestScore) {
+      bestScore = score
+      best = detection
+    }
+  }
+  return best
 }
 
 export default function AttendancePage(): JSX.Element {
@@ -57,9 +89,12 @@ export default function AttendancePage(): JSX.Element {
   const [staffOptions, setStaffOptions] = useState<StaffRow[]>([])
   const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null)
   const [selectedFaceMatch, setSelectedFaceMatch] = useState<{ confidence: number } | null>(null)
+  const [matchStreak, setMatchStreak] = useState(0)
   const [enrolledCount, setEnrolledCount] = useState(0)
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
+  const [captureActive, setCaptureActive] = useState(false)
+  const [detectionMode, setDetectionMode] = useState<DetectionMode>("HIGH_ACCURACY")
   const [isAdmin, setIsAdmin] = useState(false)
   const [loadingAction, setLoadingAction] = useState<"CLOCK_IN" | "CLOCK_OUT" | null>(null)
   const [manualReason, setManualReason] = useState("")
@@ -71,8 +106,17 @@ export default function AttendancePage(): JSX.Element {
     async function init(): Promise<void> {
       try {
         setStatusMsg("Loading face models…")
-        await faceapi.nets.tinyFaceDetector.loadFromUri("/models")
-        await faceapi.nets.faceLandmark68TinyNet.loadFromUri("/models")
+        // Prefer high-accuracy detection for the kiosk; fall back to the tiny
+        // detector only if the larger model set is unavailable.
+        try {
+          await faceapi.nets.ssdMobilenetv1.loadFromUri("/models")
+          await faceapi.nets.faceLandmark68Net.loadFromUri("/models")
+          setDetectionMode("HIGH_ACCURACY")
+        } catch {
+          await faceapi.nets.tinyFaceDetector.loadFromUri("/models")
+          await faceapi.nets.faceLandmark68TinyNet.loadFromUri("/models")
+          setDetectionMode("FAST")
+        }
         await faceapi.nets.faceRecognitionNet.loadFromUri("/models")
 
         const [sessionRes, profilesRes] = await Promise.all([
@@ -94,7 +138,7 @@ export default function AttendancePage(): JSX.Element {
         if (!mountedRef.current) return
         setModelsLoaded(true)
         setScanState("ready")
-        setStatusMsg("Select a staff member to start live face verification.")
+        setStatusMsg("Select a staff member, then start live verification.")
       } catch (e) {
         if (!mountedRef.current) return
         setScanState("error")
@@ -182,14 +226,18 @@ export default function AttendancePage(): JSX.Element {
   const selectedStaffName = selectedStaff?.name ?? null
   const selectedProfile = selectedStaffId != null ? profilesRef.current.find((profile) => profile.staffId === selectedStaffId) ?? null : null
   const selectedDayStatus = selectedStaffId != null ? dayState[selectedStaffId] ?? null : null
+  const canStartCapture = !!selectedStaffId && !!selectedProfile && modelsLoaded && !cameraActive
 
   useEffect(() => {
     if (selectedStaffId == null) {
       setSelectedFaceMatch(null)
+      setMatchStreak(0)
       return
     }
     setSelectedFaceMatch(null)
-    setStatusMsg(modelsLoaded ? "Camera ready. Face verification will lock to the selected staff member." : "Loading face models…")
+    setMatchStreak(0)
+    setCaptureActive(false)
+    setStatusMsg(modelsLoaded ? "Ready to verify the selected staff member." : "Loading face models…")
   }, [modelsLoaded, selectedStaffId, selectedStaffName])
 
   const canClockIn = !selectedDayStatus?.hasClockIn && !selectedDayStatus?.hasClockOut
@@ -210,6 +258,7 @@ export default function AttendancePage(): JSX.Element {
       }
       if (mountedRef.current) {
         setCameraActive(true)
+        setCaptureActive(true)
         setStatusMsg(profile ? `Camera ready for ${profile.staffName}. Hold still for a live face match.` : "Selected staff has no enrolled face profile.")
       }
     } catch (e) {
@@ -225,14 +274,16 @@ export default function AttendancePage(): JSX.Element {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setCameraActive(false)
+    setCaptureActive(false)
+    setMatchStreak(0)
   }
 
   useEffect(() => {
     if (!modelsLoaded || selectedStaffId == null) return
-    if (!cameraActive) {
+    if (captureActive && !cameraActive) {
       void startCamera()
     }
-  }, [cameraActive, modelsLoaded, selectedStaffId, startCamera])
+  }, [captureActive, cameraActive, modelsLoaded, selectedStaffId, startCamera])
 
   async function submitPunch(eventType: "CLOCK_IN" | "CLOCK_OUT", method: "FACE" | "MANUAL_OVERRIDE", confidenceScore?: number): Promise<void> {
     if (!selectedStaffId) return
@@ -270,13 +321,14 @@ export default function AttendancePage(): JSX.Element {
 
   // ── Continuous face scan loop ─────────────────────────────────────────────
   useEffect(() => {
-    if (scanState !== "ready" || !cameraActive || !selectedProfile) return
+    if (scanState !== "ready" || !cameraActive || !captureActive || !selectedProfile) return
 
     let cancelled = false
     scanningRef.current = true
 
     async function loop(): Promise<void> {
-      const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.45 })
+      const tinyOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 640, scoreThreshold: 0.55 })
+      const ssdOpts = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.72 })
 
       while (!cancelled) {
         const video = videoRef.current
@@ -288,12 +340,15 @@ export default function AttendancePage(): JSX.Element {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let det: any = null
         try {
-          const raw = await faceapi.detectSingleFace(video, opts).withFaceLandmarks(true).withFaceDescriptor()
-          det = raw ?? null
+          const raw = detectionMode === "HIGH_ACCURACY"
+            ? await faceapi.detectAllFaces(video, ssdOpts).withFaceLandmarks().withFaceDescriptors()
+            : await faceapi.detectAllFaces(video, tinyOpts).withFaceLandmarks(true).withFaceDescriptors()
+          det = pickBestDetection(raw ?? [])
         } catch { /* continue */ }
 
         if (!det) {
           setStatusMsg("No face detected. Keep the selected staff member in frame.")
+          setMatchStreak(0)
           await delay(200)
           continue
         }
@@ -305,21 +360,38 @@ export default function AttendancePage(): JSX.Element {
           continue
         }
 
+        const faceBox = det.detection?.box
+        const coverage = faceCoverage(video, faceBox)
+
+        if (coverage < 0.05) {
+          setMatchStreak(0)
+          setSelectedFaceMatch(null)
+          setStatusMsg("Move closer so the face fills more of the frame.")
+          await delay(250)
+          continue
+        }
+
         setStatusMsg(`Matching ${profile.staffName}…`)
 
-        const threshold = Math.min(0.6, Math.max(0.35, profile.threshold))
+        const threshold = Math.min(0.54, Math.max(0.34, profile.threshold))
         const dist = euclideanDist(det!.descriptor, profile.descriptor as number[])
-        const confidence = Math.max(0, Math.min(1, 1 - dist / threshold))
+        const confidence = confidenceFromDistance(dist, threshold)
 
         if (dist > threshold) {
           setSelectedFaceMatch(null)
+          setMatchStreak(0)
           setStatusMsg("Face mismatch. Keep the selected staff member in view.")
           await delay(1200)
           continue
         }
 
+        const nextStreak = matchStreak + 1
+        setMatchStreak(nextStreak)
         setSelectedFaceMatch({ confidence })
-        setStatusMsg(`Matched ${profile.staffName}. Choose check in or check out.`)
+        setStatusMsg(`Matched ${profile.staffName}. Hold steady to confirm.`)
+        if (nextStreak >= 3 && confidence >= 0.7) {
+          setStatusMsg(`Confirmed ${profile.staffName}. Choose check in or check out.`)
+        }
         await delay(1000)
       }
     }
@@ -328,26 +400,61 @@ export default function AttendancePage(): JSX.Element {
     return () => { cancelled = true; scanningRef.current = false }
   }, [cameraActive, fetchRoster, scanState, selectedProfile, selectedStaffName])
 
-  const presentCount = roster.filter((r) => r.status === "IN").length
-  const absentCount = roster.filter((r) => r.status === "ABSENT").length
-  const outCount = roster.filter((r) => r.status === "OUT").length
+  const presentCount = useMemo(() => roster.filter((r) => r.status === "IN").length, [roster])
+  const absentCount = useMemo(() => roster.filter((r) => r.status === "ABSENT").length, [roster])
+  const outCount = useMemo(() => roster.filter((r) => r.status === "OUT").length, [roster])
+  const matchReady = !!selectedFaceMatch && matchStreak >= 3 && selectedFaceMatch.confidence >= 0.7
 
   return (
-    <PageShell title="Deployment Terminal" subtitle="Biometric verification kiosk for real-time workforce synchronization and shift reconciliation.">
+    <PageShell title="Attendance Kiosk" subtitle="Fast face verification for clock in and clock out.">
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-10 items-start">
 
         {/* ── Camera Panel ── */}
         <div className="lg:col-span-3 space-y-6">
           <div className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
-            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="flex-1">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Authenticate Personnel Identity</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Step 1 · Select identity</p>
                 <div className="relative group">
                   <UserRoundCheck className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
                   <select
                     value={selectedStaffId ?? ""}
                     onChange={(e) => {
                       const next = e.target.value ? Number(e.target.value) : null
+              <div className="flex flex-col gap-3 md:min-w-[260px]">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <ScanFace size={16} className="text-indigo-500" />
+                    {detectionMode === "HIGH_ACCURACY" ? "High accuracy detection" : "Fast detection"}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Choose a person first, then start the camera. The kiosk will confirm the face over multiple frames before enabling actions.
+                  </p>
+                  {selectedStaffId && !selectedProfile && (
+                    <p className="mt-2 text-xs font-semibold text-amber-600">
+                      This staff member has no face profile yet. Ask an admin to enroll their face.
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="primary"
+                    className="w-full justify-center gap-2 py-4 font-black uppercase tracking-[0.12em]"
+                    disabled={!canStartCapture}
+                    onClick={() => void startCamera()}
+                  >
+                    <Play size={15} /> Start camera
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-center gap-2 py-4 font-black uppercase tracking-[0.12em]"
+                    disabled={!cameraActive}
+                    onClick={stopCamera}
+                  >
+                    <StopCircle size={15} /> Stop
+                  </Button>
+                </div>
+              </div>
                       setSelectedStaffId(next)
                       setSelectedFaceMatch(null)
                       if (!next) stopCamera()
@@ -393,7 +500,7 @@ export default function AttendancePage(): JSX.Element {
             {!cameraActive && scanState !== "error" && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900/80 text-center p-6">
                 <Camera className="text-slate-400" size={42} />
-                <p className="text-slate-300 text-sm font-semibold">Select a staff member to start live face verification.</p>
+                <p className="text-slate-300 text-sm font-semibold">Select a staff member, then press Start camera.</p>
               </div>
             )}
 
@@ -439,11 +546,21 @@ export default function AttendancePage(): JSX.Element {
                 </div>
               </div>
 
+              <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${matchReady ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                {matchReady ? (
+                  <span className="flex items-center gap-2"><CircleCheckBig size={15} /> Face confirmed. Actions unlocked.</span>
+                ) : selectedFaceMatch ? (
+                  <span className="flex items-center gap-2"><Sparkles size={15} /> Matching… hold steady to confirm the face.</span>
+                ) : (
+                  <span className="flex items-center gap-2"><ShieldAlert size={15} /> No confirmed match yet.</span>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Button
                   variant="primary"
                   className="w-full justify-center gap-3 py-5 text-lg font-black uppercase tracking-[0.15em] shadow-lg shadow-emerald-900/10 active:scale-95 transition-all"
-                  disabled={!selectedFaceMatch || !canClockIn || loadingAction !== null}
+                  disabled={!matchReady || !canClockIn || loadingAction !== null}
                   onClick={() => void submitPunch("CLOCK_IN", "FACE", selectedFaceMatch?.confidence)}
                 >
                   <UserRoundCheck size={24} /> {loadingAction === "CLOCK_IN" ? "Syncing…" : "Check In"}
@@ -451,7 +568,7 @@ export default function AttendancePage(): JSX.Element {
                 <Button
                   variant="secondary"
                   className="w-full justify-center gap-3 py-5 text-lg font-black uppercase tracking-[0.15em] shadow-lg border-2 border-slate-200 active:scale-95 transition-all"
-                  disabled={!selectedFaceMatch || !canClockOut || loadingAction !== null}
+                  disabled={!matchReady || !canClockOut || loadingAction !== null}
                   onClick={() => void submitPunch("CLOCK_OUT", "FACE", selectedFaceMatch?.confidence)}
                 >
                   <UserRoundX size={24} /> {loadingAction === "CLOCK_OUT" ? "Syncing…" : "Check Out"}
@@ -460,7 +577,7 @@ export default function AttendancePage(): JSX.Element {
 
               {selectedFaceMatch && (
                 <p className="text-sm font-semibold text-emerald-700 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
-                  Face matched. Confidence {(selectedFaceMatch.confidence * 100).toFixed(0)}%.
+                  Confidence {(selectedFaceMatch.confidence * 100).toFixed(0)}% · streak {matchStreak}/3.
                 </p>
               )}
 
