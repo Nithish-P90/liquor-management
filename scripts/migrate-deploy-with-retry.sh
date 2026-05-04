@@ -12,18 +12,27 @@ DELAY_SECONDS=${DELAY_SECONDS:-5}
 # ---------------------------------------------------------------------------
 resolve_failed_migrations() {
   local output="$1"
+  # P3009: prior run left a FAILED record — extract name from "The `<name>` migration..." line
   if echo "$output" | grep -q "P3009"; then
-    # Extract every migration name reported as failed
     while IFS= read -r line; do
       migration=$(echo "$line" | sed -n "s/.*The \`\(.*\)\` migration.*/\1/p")
       if [[ -n "$migration" ]]; then
-        echo "Resolving failed migration as applied: $migration"
+        echo "Resolving P3009 failed migration as applied: $migration"
         npx prisma migrate resolve --applied "$migration"
       fi
     done <<< "$output"
-    return 0  # resolved — caller should retry
+    return 0
   fi
-  return 1  # not a P3009 error — nothing resolved
+  # P3018: migration failed mid-run (e.g. schema already exists) — extract from "Migration name: <name>" line
+  if echo "$output" | grep -q "P3018"; then
+    migration=$(echo "$output" | grep "Migration name:" | sed -n "s/.*Migration name: \(.*\)/\1/p" | tr -d '[:space:]')
+    if [[ -n "$migration" ]]; then
+      echo "Resolving P3018 failed migration as applied: $migration"
+      npx prisma migrate resolve --applied "$migration"
+      return 0
+    fi
+  fi
+  return 1  # unrecognised error — nothing resolved
 }
 
 attempt=1
