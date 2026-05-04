@@ -398,6 +398,7 @@ export default function AttendancePage(): JSX.Element {
 
     loop()
     return () => { cancelled = true; scanningRef.current = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraActive, fetchRoster, scanState, selectedProfile, selectedStaffName])
 
   const presentCount = useMemo(() => roster.filter((r) => r.status === "IN").length, [roster])

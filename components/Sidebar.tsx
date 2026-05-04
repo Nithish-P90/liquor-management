@@ -19,8 +19,6 @@ import {
   PlusSquare, 
   ShieldCheck, 
   Settings,
-  ChevronLeft,
-  ChevronRight,
   LogOut
 } from "lucide-react"
 
