@@ -1320,7 +1320,7 @@ async function main() {
   // Use dynamic require since we're in a CommonJS-compatible tsx context
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { ensureDailyRollover } = await import(
-    "/Users/nithishp/Mahavishnu liquor manager/liquor-management/lib/domains/inventory/rollover.ts"
+    "../lib/domains/inventory/rollover"
   ) as { ensureDailyRollover: () => Promise<string> }
 
   const rolloverStatus = await ensureDailyRollover()
