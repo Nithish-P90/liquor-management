@@ -91,13 +91,17 @@ function cleanItemName(raw: string): string {
 
 // Detect if a trimmed line (or line tail) is the 7-number data row:
 // rate  indentCbs  indentBtls  indentAmount  cnfCbs  cnfBtls  cnfAmount
-const DATA_7_RE = /(\d+\.\d+)\s+(\d+)\s+(\d+)\s+(\d+\.?\d*)\s+(\d+)\s+(\d+)\s+(\d+\.?\d*)\s*$/
+// Accepts whole numbers (1650) and decimals (1650.00), with or without commas.
+const NUM = /\d[\d,]*(?:\.\d+)?/
+const DATA_7_RE = new RegExp(
+  `(${NUM.source})\\s+(${NUM.source})\\s+(${NUM.source})\\s+(${NUM.source})\\s+(${NUM.source})\\s+(${NUM.source})\\s+(${NUM.source})\\s*$`
+)
 
 function matchDataLine(line: string): RegExpExecArray | null {
   const m = DATA_7_RE.exec(line.trim())
   if (!m) return null
-  // Rate (first number) is always hundreds/thousands of rupees per case
-  if (parseNum(m[1]) < 100) return null
+  // Rate must be at least 50 ₹/case to avoid matching small reference numbers
+  if (parseNum(m[1]) < 50) return null
   return m
 }
 
@@ -149,7 +153,9 @@ export async function parseKsbclPdf(buffer: Buffer): Promise<ParsedIndent> {
   }
 
   if (dataHits.length === 0) {
-    warnings.push("No table rows parsed — PDF format may not match KSBCL template")
+    // Include a snippet of the extracted text so format differences are visible
+    const snippet = tableText.slice(0, 300).replace(/\n/g, " ↵ ")
+    warnings.push(`No table rows parsed — PDF format may not match KSBCL template. First 300 chars of table section: "${snippet}"`)
     return {
       indentNumber, invoiceNumber, retailerId, retailerName, indentDate,
       totalRationedItems, totalIndentValue: 0, totalConfirmedValue: 0,
