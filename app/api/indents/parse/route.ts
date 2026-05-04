@@ -18,15 +18,13 @@ export async function POST(req: Request): Promise<Response> {
     const parsed = await parseKsbclPdf(buffer)
     const matches = await matchVariants(parsed.items)
 
-    // Store or update the indent record
-    const existing = await prisma.indent.findUnique({
-      where: { indentNumber: parsed.indentNumber || `UNKNOWN-${Date.now()}` },
-    })
-
     const indentNumber = parsed.indentNumber || `UNKNOWN-${Date.now()}`
+    const existing = await prisma.indent.findUnique({ where: { indentNumber } })
+
     let indentId: number
 
     if (existing) {
+      // Re-parse: update header only, keep existing items unless none exist
       await prisma.indent.update({
         where: { id: existing.id },
         data: {
@@ -54,18 +52,18 @@ export async function POST(req: Request): Promise<Response> {
       })
       indentId = indent.id
 
-      // Create indent items from matches
       for (const match of matches) {
         await prisma.indentItem.create({
           data: {
             indentId,
-            productId: match.productId ?? 1,
-            productSizeId: match.productSizeId ?? 1,
+            productId: match.productId ?? undefined,
+            productSizeId: match.productSizeId ?? undefined,
             ksbclItemCode: match.parsedItem.ksbclItemCode,
-            rawItemName: match.parsedItem.itemName,
-            parseConfidence: match.confidence,
+            rawItemName: match.parsedItem.rawItemName || match.parsedItem.itemName,
+            parseConfidence: 1.0,
             mappingConfidence: match.confidence,
             isNewItem: match.isNewItem,
+            isRationed: match.parsedItem.isRationed,
             ratePerCase: match.parsedItem.ratePerCase,
             indentCases: match.parsedItem.indentCases,
             indentBottles: match.parsedItem.indentBottles,

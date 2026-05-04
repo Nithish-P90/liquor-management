@@ -78,6 +78,19 @@ function fmt(v: string | number): string {
   return "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2 })
 }
 
+function cardTone(kind: "slate" | "emerald" | "rose" | "indigo"): string {
+  switch (kind) {
+    case "emerald":
+      return "border-slate-200 bg-slate-50 text-emerald-700"
+    case "rose":
+      return "border-slate-200 bg-slate-50 text-rose-700"
+    case "indigo":
+      return "border-slate-200 bg-slate-50 text-indigo-700"
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-600"
+  }
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -221,7 +234,7 @@ export default function CashManagementPage(): JSX.Element {
   return (
     <PageShell title="Galla Reconciliation" subtitle="Live cash register tracking, locker transfers, and bank settlement audit.">
       {toast && (
-        <div className={`mb-8 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-emerald-50 border-emerald-100 text-emerald-800" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
+        <div className={`mb-8 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-slate-50 border-slate-200 text-slate-700" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
           {toast.msg}
         </div>
       )}
@@ -229,7 +242,7 @@ export default function CashManagementPage(): JSX.Element {
       {loading ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
 
           {/* ── Column 1: Cash Register ── */}
           <div className="lg:col-span-2 space-y-6">
@@ -237,30 +250,10 @@ export default function CashManagementPage(): JSX.Element {
             {/* Balance bar */}
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
               <MetricCard label="Opening Balance" value={fmt(galla?.openingBalance ?? 0)} color="slate" icon={Vault} />
-              <MetricCard label="Accumulated (Sales)" value={fmt(cashIn)} color="emerald" icon={TrendingUp} />
-              <MetricCard label="Disbursements (Out)" value={fmt(cashOut)} color="rose" icon={ArrowUpRight} />
+              <MetricCard label="Accumulated (Sales)" value={fmt(cashIn)} color="slate" icon={TrendingUp} />
+              <MetricCard label="Disbursements (Out)" value={fmt(cashOut)} color="slate" icon={ArrowUpRight} />
               <MetricCard label="Live Galla Balance" value={fmt(galla?.balance ?? 0)} color="indigo" icon={Vault} subValue="Real-time Counter Cash" />
             </div>
-
-            {/* Transfer actions */}
-            {!galla?.isClosed && (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-10">
-                {transferCards.map((card) => (
-                  <ActionCard
-                    key={card.kind}
-                    icon={card.icon}
-                    title={card.title}
-                    amountValue={card.amountValue}
-                    onAmountChange={card.onAmountChange}
-                    refValue={card.refValue}
-                    onRefChange={card.onRefChange}
-                    buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO VAULT" : "SETTLE TO BANK"}
-                    onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
-                    busy={busy}
-                  />
-                ))}
-              </div>
-            )}
 
             {/* Event log */}
             <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
@@ -313,6 +306,36 @@ export default function CashManagementPage(): JSX.Element {
           {/* ── Column 2: Locker + Close Day ── */}
           <div className="space-y-6">
 
+            {/* Transfer actions */}
+            <div className="rounded-[2.5rem] border-2 border-slate-50 bg-white shadow-sm overflow-hidden">
+              <div className="border-b-2 border-slate-50 px-8 py-6 bg-slate-50/50 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900">Transfer Actions</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Locker and bank dispatch controls</p>
+                </div>
+              </div>
+              {!galla?.isClosed ? (
+                <div className="grid grid-cols-1 gap-6 p-8">
+                  {transferCards.map((card) => (
+                    <ActionCard
+                      key={card.kind}
+                      icon={card.icon}
+                      title={card.title}
+                      amountValue={card.amountValue}
+                      onAmountChange={card.onAmountChange}
+                      refValue={card.refValue}
+                      onRefChange={card.onRefChange}
+                      buttonLabel={card.kind === "LOCKER" ? "TRANSFER TO VAULT" : "SETTLE TO BANK"}
+                      onSubmit={() => transfer(card.kind, card.amountValue, card.refValue)}
+                      busy={busy}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-sm text-slate-500">This day is closed, so transfer actions are disabled.</div>
+              )}
+            </div>
+
             {/* Locker balance */}
             <div className="rounded-[2.5rem] border-2 border-slate-900 bg-slate-900 p-10 shadow-2xl text-white overflow-hidden relative">
               <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
@@ -334,8 +357,8 @@ export default function CashManagementPage(): JSX.Element {
                 <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Vault Liquidity</p>
               </div>
 
-              <div className="space-y-4 pt-10 border-t border-white/10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Commit to Bank Deposit</p>
+              <div className="space-y-4 pt-10 border-t border-white/10 mb-10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Locker Deposit</p>
                 <div className="space-y-3">
                   <input
                     type="number"
@@ -344,18 +367,18 @@ export default function CashManagementPage(): JSX.Element {
                     placeholder="Magnitude..."
                     value={lockerDepositAmt}
                     onChange={(e) => setLockerDepositAmt(e.target.value)}
-                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:bg-white/10 focus:outline-none transition-all"
+                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-slate-400/50 focus:bg-white/10 focus:outline-none transition-all"
                   />
                   <input
                     type="text"
                     placeholder="Reference..."
                     value={lockerDepositRef}
                     onChange={(e) => setLockerDepositRef(e.target.value)}
-                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:bg-white/10 focus:outline-none transition-all"
+                    className="w-full rounded-2xl border-2 border-white/10 bg-white/5 px-6 py-4 text-base font-black text-white placeholder:text-slate-600 focus:border-slate-400/50 focus:bg-white/10 focus:outline-none transition-all"
                   />
                   <Button
                     variant="primary"
-                    className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/10 active:scale-95 transition-all"
+                    className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-black/10 active:scale-95 transition-all"
                     onClick={depositLocker}
                     disabled={busy}
                   >
@@ -410,9 +433,9 @@ export default function CashManagementPage(): JSX.Element {
 
 function MetricCard({ label, value, color, icon: Icon, subValue }: { label: string; value: string; color: "emerald" | "indigo" | "rose" | "slate"; icon: React.ElementType; subValue?: string }): JSX.Element {
   const tones = {
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    emerald: "border-slate-200 bg-slate-50 text-slate-700",
     indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
-    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    rose: "border-slate-200 bg-slate-50 text-slate-700",
     slate: "border-slate-100 bg-slate-50 text-slate-600",
   }[color]
 

@@ -4,27 +4,98 @@
 
 :root {
   --background: #f8fafc;
-  --foreground: #0f172a;
+  --foreground: #111827;
   --surface: #ffffff;
   --surface-2: #f1f5f9;
-  --border: #e2e8f0;
+  --border: #dbe4ee;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: radial-gradient(circle at 10% 10%, #ffffff 0%, #f8fafc 55%, #eef2ff 100%);
   color: var(--foreground);
   font-family: var(--font-source-sans), sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
   border-color: var(--border);
 }
 
+::selection {
+  background: rgba(79, 70, 229, 0.18);
+  color: var(--text-primary);
+}
+
+@layer base {
+  body {
+    @apply text-slate-800;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-slate-900;
+    letter-spacing: -0.02em;
+  }
+
+  p, li, label, td, th, span {
+    color: var(--text-secondary);
+  }
+
+  button, a, input, select, textarea {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  input, select, textarea {
+    @apply text-slate-900 placeholder:text-slate-400;
+  }
+}
+
+@keyframes soft-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes soft-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-soft-fade-in {
+  animation: soft-fade-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-soft-pop {
+  animation: soft-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @layer components {
   .field-label {
-    @apply block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1;
+    @apply block text-sm font-bold uppercase tracking-wider text-slate-600 mb-1;
   }
   .field-input {
-    @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all;
   }
 }

@@ -23,14 +23,15 @@ export async function POST(
   const indentId = parseInt(params.id, 10)
 
   try {
-    const size = await prisma.productSize.findUnique({
-      where: { id: productSizeId },
-      select: { productId: true },
-    })
+    const [size, item] = await Promise.all([
+      prisma.productSize.findUnique({ where: { id: productSizeId }, select: { productId: true, ksbclItemCode: true } }),
+      prisma.indentItem.findUnique({ where: { id: indentItemId, indentId }, select: { ksbclItemCode: true } }),
+    ])
     if (!size) return apiError("Product size not found", 404)
+    if (!item) return apiError("Indent item not found", 404)
 
     await prisma.indentItem.update({
-      where: { id: indentItemId, indentId },
+      where: { id: indentItemId },
       data: {
         productSizeId,
         productId: size.productId,
@@ -38,6 +39,14 @@ export async function POST(
         isNewItem: false,
       },
     })
+
+    // Persist the KSBCL code on ProductSize so future imports auto-match
+    if (item.ksbclItemCode && !size.ksbclItemCode) {
+      await prisma.productSize.update({
+        where: { id: productSizeId },
+        data: { ksbclItemCode: item.ksbclItemCode },
+      })
+    }
 
     return Response.json({ ok: true })
   } catch {

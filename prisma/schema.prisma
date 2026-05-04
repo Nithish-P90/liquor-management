@@ -194,8 +194,8 @@ model Indent {
 model IndentItem {
   id                Int         @id @default(autoincrement())
   indentId          Int
-  productId         Int
-  productSizeId     Int
+  productId         Int?
+  productSizeId     Int?
   ratePerCase       Decimal     @db.Decimal(10, 2)
   isRationed        Boolean     @default(false)
   indentCases       Int
@@ -212,8 +212,8 @@ model IndentItem {
   receivedCases     Int         @default(0)
   receivedBottles   Int         @default(0)
   indent            Indent      @relation(fields: [indentId], references: [id])
-  product           Product     @relation(fields: [productId], references: [id])
-  productSize       ProductSize @relation(fields: [productSizeId], references: [id])
+  product           Product?    @relation(fields: [productId], references: [id])
+  productSize       ProductSize? @relation(fields: [productSizeId], references: [id])
 }
 
 model Receipt {

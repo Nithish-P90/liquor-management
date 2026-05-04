@@ -8,18 +8,18 @@ type PageShellProps = {
 
 export function PageShell({ title, subtitle, children }: PageShellProps): JSX.Element {
   return (
-    <main className="min-h-screen bg-[#f8fafc] p-4 lg:p-6">
-      <header className="mb-5 flex items-end justify-between border-b border-slate-200 pb-4">
+    <main className="min-h-screen bg-[#f8fafc] p-5 lg:p-8">
+      <header className="mb-6 flex items-end justify-between border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-slate-900">{title}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{title}</h1>
           {subtitle && (
-            <p className="mt-1 flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-slate-600 uppercase tracking-[0.18em]">
               {subtitle}
             </p>
           )}
         </div>
       </header>
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm animate-soft-fade-in">
         {children}
       </section>
     </main>
