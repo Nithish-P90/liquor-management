@@ -59,28 +59,23 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar({ name, role }: SidebarProps): JSX.Element {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const collapsed = !isHovered
   const items = NAV_ITEMS.filter((item) => (item.adminOnly ? role === "ADMIN" : true))
 
   return (
     <aside 
       id="app-sidebar" 
-      className={`relative flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-500 ease-in-out ${collapsed ? "w-24" : "w-72"}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`relative flex h-screen flex-col border-r-2 border-slate-100 bg-white transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${collapsed ? "w-24" : "w-80 shadow-2xl z-[100]"}`}
     >
-      {/* Collapse Toggle */}
-      <button 
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-4 top-12 z-50 flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-100 bg-white text-slate-400 shadow-xl transition-all hover:border-slate-900 hover:text-slate-900 active:scale-90"
-      >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
-
       <div className={`px-6 py-12 transition-all duration-500 ${collapsed ? "items-center px-4" : ""}`}>
         <div className={`flex flex-col ${collapsed ? "items-center" : ""}`}>
-          <p className={`text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 transition-opacity duration-300 ${collapsed ? "opacity-0 h-0" : "opacity-100 mb-2"}`}>
+          <p className={`text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 transition-all duration-500 ${collapsed ? "opacity-0 -translate-y-2 h-0" : "opacity-100 mb-2 translate-y-0"}`}>
             Operations Console
           </p>
-          <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-500 ${collapsed ? "text-sm pb-1" : "text-2xl pb-2"}`}>
+          <h1 className={`font-black tracking-tighter text-slate-900 border-b-4 border-slate-900 transition-all duration-700 ${collapsed ? "text-sm pb-1" : "text-3xl pb-2"}`}>
             {collapsed ? "MV" : "MAHAVISHNU"}
           </h1>
         </div>
