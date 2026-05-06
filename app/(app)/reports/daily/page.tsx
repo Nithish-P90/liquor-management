@@ -102,28 +102,132 @@ export default function Page(): JSX.Element {
   )
 }
 
+type ClerkEntry = {
+  name?: string
+  clerkId?: number | null
+  billCount?: number
+  _count?: { id?: number }
+  net?: string | number
+  _sum?: { netCollectible?: string | number }
+}
+
+type AttendanceSummary = { present?: number; absent?: number; notes?: string }
+
+type DailySummary = {
+  billCount?: number
+  grossTotal?: string | number
+  discountTotal?: string | number
+  netCollectible?: string | number
+  ownerRevenue?: string | number
+  cashFlow?: Record<string, string | number>
+  gallaOpening?: string | number
+  lockerOpening?: string | number
+  lockerClosing?: string | number
+  gallaClosing?: string | number
+  clerks?: ClerkEntry[]
+  expensesTotal?: string | number
+  expenses?: { total?: string | number }
+  stockOpening?: string | number
+  stockClosing?: string | number
+  attendance?: AttendanceSummary
+}
+
 function DailyView({ view, data }: { view: View; data: unknown }): JSX.Element {
   if (!data) return <p className="text-sm text-slate-500">No data.</p>
 
   if (view === "summary") {
-    const d = data as { billCount: number; grossTotal: string; discountTotal: string; netCollectible: string; ownerRevenue: string; thirdPartyTotal: string; byMode: Record<string, string> }
+    const d = data as DailySummary
+
+    // Quick summary cards
     const cards = [
-      { label: "Bills", value: String(d.billCount) },
-      { label: "Gross", value: fmt(d.grossTotal) },
-      { label: "Discounts", value: fmt(d.discountTotal) },
-      { label: "Total Collected", value: fmt(d.netCollectible) },
+      { label: "Bills", value: String(d.billCount ?? 0) },
+      { label: "Gross", value: fmt(d.grossTotal ?? 0) },
+      { label: "Discounts", value: fmt(d.discountTotal ?? 0) },
+      { label: "Total Collected", value: fmt(d.netCollectible ?? 0) },
       { label: "Owner Revenue", value: fmt(d.ownerRevenue ?? 0), highlight: true },
-      { label: "Third-Party", value: fmt(d.thirdPartyTotal ?? 0) },
-      ...Object.entries(d.byMode ?? {}).map(([mode, amount]) => ({ label: mode, value: fmt(amount) })),
     ]
+
+    // Cash flow statement (graceful keys)
+    const cf = d.cashFlow ?? {}
+
     return (
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.label} className={`rounded-xl border p-4 ${'highlight' in c && c.highlight ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{c.label}</p>
-            <p className={`mt-1 text-xl font-extrabold ${'highlight' in c && c.highlight ? 'text-emerald-700' : 'text-slate-900'}`}>{c.value}</p>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {cards.map((c) => (
+            <div key={c.label} className={`rounded-xl border p-4 ${'highlight' in c && c.highlight ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{c.label}</p>
+              <p className={`mt-1 text-xl font-extrabold ${'highlight' in c && c.highlight ? 'text-emerald-700' : 'text-slate-900'}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Cash flow statement</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Galla opening</td><td className="py-2 text-right font-semibold">{fmt(cf.gallaOpening ?? d.gallaOpening ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Galla transfers to locker</td><td className="py-2 text-right font-semibold">{fmt(cf.toLocker ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Galla transfers to bank</td><td className="py-2 text-right font-semibold">{fmt(cf.toBank ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Locker transfers (to bank)</td><td className="py-2 text-right font-semibold">{fmt(cf.lockerToBank ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Locker opening</td><td className="py-2 text-right font-semibold">{fmt(cf.lockerOpening ?? d.lockerOpening ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Locker closing</td><td className="py-2 text-right font-semibold">{fmt(cf.lockerClosing ?? d.lockerClosing ?? 0)}</td></tr>
+                <tr className="border-t border-slate-100"><td className="py-2 text-slate-600">Galla closing</td><td className="py-2 text-right font-semibold">{fmt(cf.gallaClosing ?? d.gallaClosing ?? 0)}</td></tr>
+              </tbody>
+            </table>
           </div>
-        ))}
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Clerk-wise sales</h3>
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Clerk</th>
+                  <th className="px-4 py-3">Bills</th>
+                  <th className="px-4 py-3 text-right">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(d.clerks ?? []).map((c: ClerkEntry, i: number) => (
+                  <tr key={i} className="border-t border-slate-200">
+                    <td className="px-4 py-3 text-slate-700">{c.name ?? `Clerk ${c.clerkId ?? '—'}`}</td>
+                    <td className="px-4 py-3 text-slate-700">{c.billCount ?? c._count?.id ?? 0}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(c.net ?? c._sum?.netCollectible ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Expenses</h3>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total expenses</p>
+            <p className="mt-1 text-2xl font-extrabold text-red-600">{fmt(d.expensesTotal ?? d.expenses?.total ?? 0)}</p>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">Stock</h3>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-600">Opening stock value: <span className="font-semibold text-slate-900">{fmt(d.stockOpening ?? 0)}</span></p>
+              <p className="text-sm text-slate-600">Closing stock value: <span className="font-semibold text-slate-900">{fmt(d.stockClosing ?? 0)}</span></p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">Attendance</h3>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-600">Present: <span className="font-semibold text-slate-900">{d.attendance?.present ?? '—'}</span></p>
+              <p className="text-sm text-slate-600">Absent: <span className="font-semibold text-slate-900">{d.attendance?.absent ?? '—'}</span></p>
+              <p className="text-sm text-slate-600">Notes: <span className="font-semibold text-slate-900">{d.attendance?.notes ?? '—'}</span></p>
+            </div>
+          </div>
+        </section>
       </div>
     )
   }
