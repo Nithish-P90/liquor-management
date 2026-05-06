@@ -46,16 +46,32 @@ export async function POST(req: Request): Promise<Response> {
   const { expDate, particulars, category, categoryId, amount } = parsed.data
 
   try {
-    const expense = await prisma.expenditure.create({
-      data: {
-        expDate: parseDateParam(expDate),
-        particulars,
-        category: category ?? "OTHER",
-        categoryId: categoryId ?? null,
-        amount,
-        recordedById: parseInt(authResult.id, 10),
-      },
-      include: { categoryRef: { select: { name: true } } },
+    const expense = await prisma.$transaction(async (tx) => {
+      const recordedById = parseInt(authResult.id, 10)
+      const created = await tx.expenditure.create({
+        data: {
+          expDate: parseDateParam(expDate),
+          particulars,
+          category: category ?? "OTHER",
+          categoryId: categoryId ?? null,
+          amount,
+          recordedById,
+        },
+        include: { categoryRef: { select: { name: true } } },
+      })
+
+      // Audit trail for expense creation
+      await tx.auditEvent.create({
+        data: {
+          actorId: recordedById,
+          eventType: "EXPENSE_CREATED",
+          entity: "Expenditure",
+          entityId: created.id,
+          afterSnapshot: { particulars, amount: amount.toString(), category: created.category },
+        },
+      })
+
+      return created
     })
     return Response.json(expense, { status: 201 })
   } catch {

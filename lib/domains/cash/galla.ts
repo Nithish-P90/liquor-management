@@ -33,21 +33,36 @@ export async function emitGallaEvent(
     reference?: string
     billId?: number
     expenditureId?: number
+    actorId?: number  // for audit trail
   },
 ): Promise<void> {
   const day = await getOrCreateGallaDay(tx, params.businessDate)
   if (day.isClosed) return
 
+  const amount = new Prisma.Decimal(params.amount.toString())
   await tx.gallaEvent.create({
     data: {
       gallaDayId: day.id,
       eventType: params.eventType,
-      amount: new Prisma.Decimal(params.amount.toString()),
+      amount,
       reference: params.reference,
       billId: params.billId,
       expenditureId: params.expenditureId,
     },
   })
+
+  // Audit trail for galla event (if actorId provided)
+  if (params.actorId) {
+    await tx.auditEvent.create({
+      data: {
+        actorId: params.actorId,
+        eventType: "GALLA_EVENT",
+        entity: "GallaDay",
+        entityId: day.id,
+        afterSnapshot: { eventType: params.eventType, amount: amount.toString(), reference: params.reference },
+      },
+    })
+  }
 }
 
 export async function computeGallaBalance(
@@ -100,6 +115,17 @@ export async function closeGallaDay(
       isClosed: true,
       closedAt: new Date(),
       closedById,
+    },
+  })
+
+  // Audit trail for galla day closure
+  await tx.auditEvent.create({
+    data: {
+      actorId: closedById,
+      eventType: "GALLA_CLOSED",
+      entity: "GallaDay",
+      entityId: gallaDayId,
+      afterSnapshot: { closingBalance: computed.toString(), countedAmount: counted.toString(), variance: variance.toString() },
     },
   })
 
