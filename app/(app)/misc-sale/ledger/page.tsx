@@ -109,7 +109,7 @@ export default function Page(): JSX.Element {
   }, [miscLines])
 
   return (
-    <PageShell title="Misc Sales Ledger" subtitle="Derived from committed bill lines (sourceType=MISC).">
+    <PageShell title="Misc Sales Ledger">
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <label className="text-sm font-semibold text-slate-600">From</label>

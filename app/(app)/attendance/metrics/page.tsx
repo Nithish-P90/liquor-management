@@ -112,7 +112,7 @@ export default function AttendanceMetricsPage(): JSX.Element {
   const staffWithViolations = metrics.filter((m) => m.weekendDaysMissed > 0).length
 
   return (
-    <PageShell title="Attendance Metrics" subtitle="Monthly attendance, punctuality, weekend policy, and payroll.">
+    <PageShell title="Attendance Metrics">
       {/* Month Navigator */}
       <div className="mb-4 flex items-center justify-between">
         <button

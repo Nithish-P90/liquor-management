@@ -72,7 +72,7 @@ export default function Page(): JSX.Element {
   }, [filtered])
 
   return (
-    <PageShell title="Account Tabs" subtitle="Review and reconcile active credit dispatches and unsettled customer sessions.">
+    <PageShell title="Account Tabs">
       <div className="mb-5 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
         <div className="flex-1 min-w-[280px] relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />

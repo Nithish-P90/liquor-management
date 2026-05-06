@@ -57,10 +57,10 @@ export default function LedgerPage(): JSX.Element {
             <div className="rounded-2xl bg-slate-900 p-3 text-white shadow-xl shadow-slate-900/10">
               <BarChart3 size={32} />
             </div>
-            Daily Financial Ledger
+            Daily Ledger
           </h1>
           <p className="mt-3 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">
-            Enterprise Financial Audit Trail
+            
           </p>
         </div>
 

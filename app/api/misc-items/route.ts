@@ -1,7 +1,7 @@
 import { MiscCategory } from "@prisma/client"
 import { z } from "zod"
 
-import { requireAdmin } from "@/lib/api-auth"
+import { requireAdmin, requireSession } from "@/lib/api-auth"
 import { parseJsonBody, apiError, jsonOk } from "@/lib/api/handler"
 import { prisma } from "@/lib/platform/prisma"
 import { createMiscItem, listMiscItems } from "@/lib/domains/catalog/misc-items"
@@ -19,7 +19,7 @@ const itemSchema = z.object({
 })
 
 export async function GET(): Promise<Response> {
-  const authResult = await requireAdmin()
+  const authResult = await requireSession()
   if (authResult instanceof Response) return authResult
 
   try {

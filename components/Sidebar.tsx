@@ -37,11 +37,11 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "Terminal", icon: ShoppingBag },
   { href: "/ledger", label: "Ledger", icon: BarChart3, adminOnly: true },
   { href: "/sales", label: "Sales Log", icon: Receipt },
-  { href: "/indents", label: "Procurement", icon: Package, adminOnly: true },
+  { href: "/indents", label: "KSBCL Indent", icon: Package },
   { href: "/clearance", label: "Clearance", icon: Tags, adminOnly: true },
   { href: "/inventory", label: "Inventory", icon: Package, adminOnly: true },
   { href: "/staff", label: "Staff", icon: Users, adminOnly: true },
@@ -50,7 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/cash/close", label: "Settlement", icon: CreditCard },
   { href: "/expenses", label: "Payouts", icon: TrendingUp },
   { href: "/misc-sale", label: "Misc Goods", icon: PlusSquare },
-  { href: "/clerks", label: "Clerks", icon: ShieldCheck, adminOnly: true },
+  { href: "/clerks", label: "Clerks", icon: ShieldCheck },
   { href: "/reports", label: "Analytics", icon: BarChart3, adminOnly: true },
   { href: "/settings", label: "Control", icon: Settings, adminOnly: true },
 ]

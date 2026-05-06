@@ -114,6 +114,10 @@ export default function Page(): JSX.Element {
     setMetricsError(null)
     try {
       const res = await fetch(`/api/misc-items/metrics?from=${from}&to=${to}`, { cache: "no-store" })
+      if (res.status === 401 || res.status === 403) {
+        setMetrics(null)
+        return
+      }
       if (!res.ok) throw new Error("Failed to load misc sales metrics")
       const data = (await res.json()) as MiscSalesMetrics
       setMetrics(data)
@@ -210,7 +214,7 @@ export default function Page(): JSX.Element {
   }, [fetchItems, form, resetForm])
 
   return (
-    <PageShell title="Misc Sales" subtitle="Manage misc items and review the revenue split that is separated later in reports.">
+    <PageShell title="Misc Sales">
       <div className="mb-6 rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-4 text-slate-500">
           <div className="rounded-xl bg-slate-50 p-3">

@@ -161,7 +161,7 @@ export default function UploadPage(): JSX.Element {
 
   if (!result) {
     return (
-      <PageShell title="Upload KSBCL Indent" subtitle="Parse, verify, and save a KSBCL indent PDF as a pending procurement record.">
+      <PageShell title="Upload KSBCL Indent">
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
@@ -209,7 +209,7 @@ export default function UploadPage(): JSX.Element {
   // For now show a "Go to Review" flow since items need to be re-fetched with DB IDs.
 
   return (
-    <PageShell title="Verify Indent" subtitle={`${parsed.indentNumber} — review all items before confirming procurement record`}>
+    <PageShell title="Verify Indent">
       {/* Header card */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[

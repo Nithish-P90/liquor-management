@@ -70,7 +70,7 @@ export default function ClerksPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Clerk Management" subtitle="Configure sales attribution for POS operators and monitor individual throughput.">
+    <PageShell title="Clerk Management">
       <div className="mb-5 flex justify-between items-center border-b-2 border-slate-50 pb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Roster</h2>

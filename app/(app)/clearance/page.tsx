@@ -84,7 +84,7 @@ export default function ClearancePage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Liquidation Registry" subtitle="Manage high-velocity clearance pricing for near-expiry or slow-moving article variants.">
+    <PageShell title="Liquidation Registry">
       {toast && (
         <div className={`mb-4 rounded-2xl border-2 px-6 py-4 text-sm font-black uppercase tracking-widest animate-in slide-in-from-top-4 ${toast.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
           {toast.msg}

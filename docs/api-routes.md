@@ -20,7 +20,7 @@ The registry test fails when a route file, path, or HTTP method drifts from the 
 | `/api/products/[id]` | `PATCH`, `DELETE` | `admin` | `catalog` | high | Updates product metadata and sizes, or deletes an unused product. |
 | `/api/products/[id]/barcode` | `PATCH` | `admin` | `catalog` | medium | Assigns or updates the barcode for a product size. |
 | `/api/admin/products/import` | `POST` | `admin` | `catalog` | high | Imports products and sizes from an uploaded workbook. |
-| `/api/misc-items` | `GET`, `POST` | `admin` | `catalog` | high | Lists misc items or creates a misc item used by POS. |
+| `/api/misc-items` | `GET`, `POST` | `session` | `catalog` | high | Lists misc items for signed-in users or creates a misc item used by POS; writes remain admin-only. |
 | `/api/misc-items/[id]` | `PATCH` | `admin` | `catalog` | high | Updates a misc item used by POS. |
 | `/api/misc-items/metrics` | `GET` | `admin` | `catalog` | medium | Summarizes misc sales revenue split for a date range. |
 | `/api/attendance/metrics` | `GET` | `admin` | `attendance` | medium | Returns attendance metrics for a month and optional staff filter. |

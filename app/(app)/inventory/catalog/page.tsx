@@ -51,7 +51,7 @@ export default function InventoryCatalogPage(): JSX.Element {
   const isAdmin = currentUser?.role === "ADMIN"
 
   return (
-    <PageShell title="Inventory Catalog" subtitle="Browse the live product list and current stock snapshot.">
+    <PageShell title="Inventory Catalog">
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm mt-4 overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>

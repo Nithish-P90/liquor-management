@@ -177,7 +177,7 @@ export default function OpeningInventoryPage(): JSX.Element {
 
   if (sessionStatus?.session) {
     return (
-      <PageShell title="Opening Stock" subtitle="View the opening balance for the current inventory session.">
+      <PageShell title="Opening Stock">
         <div className="max-w-5xl mx-auto mt-4 space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -318,7 +318,7 @@ export default function OpeningInventoryPage(): JSX.Element {
   // No history — show bootstrap form
   if (sessionStatus?.rolloverStatus === "no_history") {
     return (
-      <PageShell title="Opening Stock" subtitle="Bootstrap inventory for day one.">
+      <PageShell title="Opening Stock">
         <div className="max-w-4xl mx-auto mt-4">
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
             <p className="text-sm font-bold text-blue-900">First-Time Setup</p>
@@ -408,7 +408,7 @@ export default function OpeningInventoryPage(): JSX.Element {
 
   // Loading or other state
   return (
-    <PageShell title="Opening Stock" subtitle="Set the initial stock position for the store.">
+    <PageShell title="Opening Stock">
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-2xl mt-4 text-center mx-auto">
         <p className="text-slate-500">{loading ? "Loading..." : "Checking session status..."}</p>
       </div>

@@ -55,7 +55,7 @@ export default function Page(): JSX.Element {
   )
 
   return (
-    <PageShell title="Daily Report" subtitle="Date-scoped ledger views (admin).">
+    <PageShell title="Daily Report">
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <label className="text-sm font-semibold text-slate-600">Business date</label>

@@ -69,7 +69,7 @@ export default function Page(): JSX.Element {
   }, [data])
 
   return (
-    <PageShell title="Cash Register" subtitle="Review real-time galla balance and chronological audit trail of cash movements.">
+    <PageShell title="Cash Register">
       <div className="mb-4 flex flex-wrap items-center gap-4 border-b-2 border-slate-50 pb-8">
         <div className="flex items-center gap-4 bg-white border-2 border-slate-100 p-2 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3 px-3 border-r-2 border-slate-100">

@@ -411,7 +411,7 @@ export default function AttendancePage(): JSX.Element {
   const matchReady = !!selectedFaceMatch
 
   return (
-    <PageShell title="Attendance Kiosk" subtitle="Fast face verification for clock in and clock out.">
+    <PageShell title="Attendance Kiosk">
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5 items-start">
 
         {/* ── Camera Panel ── */}
@@ -447,9 +447,6 @@ export default function AttendancePage(): JSX.Element {
                     <ScanFace size={16} className="text-indigo-500" />
                     {detectionMode === "HIGH_ACCURACY" ? "High accuracy detection" : "Fast detection"}
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    Choose a person first, then start the camera. The kiosk will confirm the face over multiple frames before enabling actions.
-                  </p>
                   {selectedStaffId && !selectedProfile && (
                     <p className="mt-2 text-xs font-semibold text-amber-600">
                       This staff member has no face profile yet. Ask an admin to enroll their face.

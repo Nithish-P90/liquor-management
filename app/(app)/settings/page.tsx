@@ -63,7 +63,7 @@ export default function SettingsPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Global Configuration" subtitle="Define application-wide operational variables, regulatory thresholds, and system identities.">
+    <PageShell title="Global Configuration">
       <div className="mb-5 border-b-2 border-slate-50 pb-8">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Environment</h2>
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Administrative Variable Control</p>

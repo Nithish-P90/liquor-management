@@ -179,7 +179,7 @@ export default function StaffPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Staff Directory" subtitle="Manage employee profiles, access credentials, and payroll configurations.">
+    <PageShell title="Staff Directory">
       <div className="mb-5 flex justify-between items-center border-b-2 border-slate-50 pb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Roster</h2>

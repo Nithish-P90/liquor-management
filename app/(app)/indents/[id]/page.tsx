@@ -150,7 +150,7 @@ export default function IndentDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <PageShell title="Indent" subtitle="">
+      <PageShell title="Indent">
         <div className="py-5 text-center text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">
           Loading…
         </div>
@@ -160,7 +160,7 @@ export default function IndentDetailPage(): JSX.Element {
 
   if (error || !indent) {
     return (
-      <PageShell title="Indent" subtitle="">
+      <PageShell title="Indent">
         <p className="text-sm text-rose-600 font-bold">{error || "Not found"}</p>
       </PageShell>
     )
@@ -173,10 +173,7 @@ export default function IndentDetailPage(): JSX.Element {
   const warnings = (indent.parseWarnings as string[] | null) ?? []
 
   return (
-    <PageShell
-      title={indent.indentNumber}
-      subtitle={`${indent.retailerName} • ${indent.indentDate?.slice(0, 10)}`}
-    >
+    <PageShell title={indent.indentNumber}>
       {toast && (
         <div className={`mb-4 rounded-lg border px-4 py-3 text-xs font-bold animate-in slide-in-from-top-2 ${
           toast.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"

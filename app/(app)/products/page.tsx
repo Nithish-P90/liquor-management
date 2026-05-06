@@ -90,7 +90,7 @@ export default function ProductsPage(): JSX.Element {
   const productCount = useMemo(() => products.length, [products])
 
   return (
-    <PageShell title="Products" subtitle="Import your existing workbook, then manually replace KSBCL pending item codes.">
+    <PageShell title="Products">
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or item code" />

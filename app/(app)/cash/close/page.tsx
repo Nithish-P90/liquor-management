@@ -220,7 +220,7 @@ export default function CashManagementPage(): JSX.Element {
   ]
 
   return (
-    <PageShell title="Galla Reconciliation" subtitle="Live cash register tracking, locker transfers, and bank settlement audit.">
+    <PageShell title="Galla Reconciliation">
       {toast && (
         <div className={`mb-4 rounded-2xl px-6 py-4 text-sm font-black uppercase tracking-widest border-2 transition-all animate-in slide-in-from-top-4 ${toast.ok ? "bg-slate-50 border-slate-200 text-slate-700" : "bg-rose-50 border-rose-100 text-rose-800"}`}>
           {toast.msg}

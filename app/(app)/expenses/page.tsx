@@ -146,7 +146,7 @@ export default function ExpensesPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Expenses & Payouts" subtitle="Record and audit daily business expenditures and overheads.">
+    <PageShell title="Expenses & Payouts">
       <div className="space-y-5">
         {toast && (
           <div className={`rounded-xl border-2 px-6 py-4 text-sm font-bold animate-in fade-in slide-in-from-top-2 ${toast.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`}>

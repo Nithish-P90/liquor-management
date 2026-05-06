@@ -1,34 +1,43 @@
 "use client"
 
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { FormEvent, useMemo, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/Button"
-import { Input } from "@/components/ui/Input"
+
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
 
 export default function LoginPage(): JSX.Element {
   const router = useRouter()
   const [pin, setPin] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    // Auto-focus input for keyboard-only flow
-    inputRef.current?.focus()
+  const maskedPin = useMemo(() => "•".repeat(pin.length), [pin])
 
-    // Keep focus even if clicking elsewhere
-    const handleFocus = () => inputRef.current?.focus()
-    window.addEventListener("click", handleFocus)
-    return () => window.removeEventListener("click", handleFocus)
-  }, [])
+  function appendDigit(digit: string): void {
+    if (pin.length >= 4 || loading) return
+    setPin((prev) => `${prev}${digit}`)
+    setError(null)
+  }
+
+  function clearOne(): void {
+    if (loading) return
+    setPin((prev) => prev.slice(0, -1))
+  }
+
+  function clearAll(): void {
+    if (loading) return
+    setPin("")
+    setError(null)
+  }
 
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault()
 
-    if (!/^\d{4,6}$/.test(pin)) {
-      setError("Enter a 4-6 digit PIN")
+    if (!/^\d{4}$/.test(pin)) {
+      setError("Enter a 4-digit PIN")
       return
     }
 
@@ -44,8 +53,6 @@ export default function LoginPage(): JSX.Element {
 
     if (!result || result.error) {
       setError("Invalid PIN")
-      setPin("")
-      inputRef.current?.focus()
       return
     }
 
@@ -54,55 +61,44 @@ export default function LoginPage(): JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">POS Login</h1>
-          <p className="mt-2 text-sm text-slate-600">Scan or type PIN to start session</p>
-        </div>
+        <h1 className="text-xl font-semibold text-slate-900">Staff Login</h1>
+        <p className="mt-1 text-sm text-slate-600">Enter your 4-digit POS PIN</p>
 
-        <form onSubmit={submit} className="space-y-6">
-          <div className="relative">
-            <Input
-              ref={inputRef}
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete="one-time-code"
-              value={pin}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, "").slice(0, 6)
-                setPin(val)
-                if (val.length === 4 || val.length === 6) {
-                  // Optional: could auto-submit here, but manual Enter is safer for keyboard
-                }
-              }}
-              className="h-16 text-center text-4xl tracking-[0.5em] focus-visible:ring-2 focus-visible:ring-indigo-500"
-              placeholder="••••"
-              disabled={loading}
-              autoFocus
-            />
-            {error ? (
-              <p className="absolute -bottom-6 left-0 w-full text-center text-xs font-medium text-red-500">
-                {error}
-              </p>
-            ) : null}
+        <form onSubmit={submit} className="mt-6 space-y-4">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-4 text-center text-2xl tracking-[0.3em] text-slate-900">
+            {maskedPin || "----"}
           </div>
 
-          <div className="pt-2">
-            <Button
-              type="submit"
-              size="lg"
-              className="h-12 w-full text-lg font-semibold"
-              disabled={loading || pin.length < 4}
-            >
-              {loading ? "Verifying..." : "ENTER"}
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+          <div className="grid grid-cols-3 gap-2">
+            {DIGITS.map((digit) => (
+              <Button
+                key={digit}
+                type="button"
+                variant="secondary"
+                onClick={() => appendDigit(digit)}
+                disabled={loading || pin.length >= 4}
+              >
+                {digit}
+              </Button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="ghost" onClick={clearOne} disabled={loading || pin.length === 0}>
+              Backspace
+            </Button>
+            <Button type="button" variant="ghost" onClick={clearAll} disabled={loading || pin.length === 0}>
+              Clear
             </Button>
           </div>
 
-          <div className="text-center text-[10px] text-slate-400">
-            KEYBOARD ONLY • PRESS ENTER TO LOGIN
-          </div>
+          <Button type="submit" className="w-full" disabled={loading || pin.length !== 4}>
+            {loading ? "Signing in..." : "Sign In"}
+          </Button>
         </form>
       </div>
     </div>

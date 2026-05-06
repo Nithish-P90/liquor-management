@@ -139,7 +139,7 @@ export default function ReportsPage(): JSX.Element {
   }
 
   return (
-    <PageShell title="Business Intelligence" subtitle="Generate strategic operational reports and enterprise audit logs.">
+    <PageShell title="Business Intelligence">
       <div className="mb-4 flex flex-wrap gap-3 border-b-2 border-slate-50 pb-8">
         {Object.entries(REPORTS).map(([key, r]) => (
           <button

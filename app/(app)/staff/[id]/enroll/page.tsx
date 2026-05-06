@@ -248,10 +248,7 @@ export default function FaceEnrollPage(): JSX.Element {
   const progressPct = Math.min(100, Math.round((samples.length / TOTAL_SAMPLES) * 100))
 
   return (
-    <PageShell
-      title="Face Enrollment"
-      subtitle={staff ? `Enrolling: ${staff.name} (${staff.role})` : "Loading…"}
-    >
+    <PageShell title="Face Enrollment">
       {loadError && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 font-medium">
           {loadError}
